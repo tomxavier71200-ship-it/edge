@@ -1,0 +1,62 @@
+name: ios-test-build
+
+# An unsigned iPhone build of a work-in-progress branch, for sideloading onto
+# a test device (Sideloadly / AltStore) from a machine that is not a Mac.
+#
+# Deliberately NOT the release pipeline (build.yml): no version guards, no
+# GitHub Release, no AltStore source — the .ipa is only attached to the run as
+# a downloadable artifact. Needs no secrets: with no GoogleService-Info.plist
+# the Xcode build phase writes an inert placeholder, and .env is left blank.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['whoop-ui']
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Same pin as build.yml — verified against this codebase.
+          flutter-version: '3.41.6'
+
+      - name: Write blank .env
+        run: |
+          echo "COMPANION_URL=" > .env
+          echo "BACKEND_URL=" >> .env
+
+      - name: Install flutterfire (required by Crashlytics Xcode build phase)
+        run: dart pub global activate flutterfire_cli 1.4.0
+
+      - run: flutter pub get
+
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign --dart-define-from-file=.env
+
+      # Same reason as build.yml: a Watch companion cannot survive a per-user
+      # free-account resign, so the .ipa would not install with it inside.
+      - name: Strip Watch companion
+        run: rm -rf "build/ios/iphoneos/Runner.app/Watch"
+
+      - name: Package unsigned IPA
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -R Runner.app Payload/Runner.app
+          zip -qr -y "$GITHUB_WORKSPACE/openstrap-edge-test-unsigned.ipa" Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openstrap-edge-test-ipa
+          path: openstrap-edge-test-unsigned.ipa
+          retention-days: 14
