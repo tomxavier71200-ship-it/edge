@@ -854,6 +854,16 @@ enum FrameRoute {
 /// CONCURRENTLY with the queued drain, i.e. two handlers racing on the same
 /// drain controller (one snapshots an empty buffer and can ACK before the
 /// other's commit is durable). Metadata now always takes the queue.
+///
+/// Type-47 historical records take it too, WHATEVER characteristic they were
+/// reassembled on. A record off a non-data role used to be ingested inline,
+/// i.e. ahead of every marker still waiting in the queue — so it was tallied
+/// into (and committed under) whichever burst the queue had open, not the one
+/// the band sent it in. That surplus can cover a genuinely lost frame in the
+/// open burst, whose HISTORY_END then passes the count gate and trims the lost
+/// record from flash; and the burst the record really belonged to comes up one
+/// short. Queueing keeps it in arrival order behind the markers, exactly like
+/// the non-data count members above.
 class FrameRoutePolicy {
   const FrameRoutePolicy._();
 
@@ -868,7 +878,7 @@ class FrameRoutePolicy {
     bool offloadActive = false,
   }) {
     if (isMetadata) return FrameRoute.serializedQueue;
-    if (isHistorical && isDataRole) return FrameRoute.serializedQueue;
+    if (isHistorical) return FrameRoute.serializedQueue;
     if (isBurstCountMember && offloadActive) {
       return FrameRoute.immediateAndCount;
     }

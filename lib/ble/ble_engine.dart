@@ -4883,8 +4883,9 @@ class BleEngine {
       }
       // Same shared path as the queued offload drain — plausibility gate,
       // frontier bump, drop counter and storage enqueue all live in ONE place
-      // (see _ingestHistoricalFrame). This branch is only reached by a
-      // historicalData frame arriving outside the 'data' role queue.
+      // (see _ingestHistoricalFrame). [FrameRoutePolicy] now queues every
+      // historicalData frame whatever its role, so live traffic no longer
+      // reaches this branch; it stays as the direct-processing fallback.
       _armIdleWatchdog(); // a record arrived → the strap is still draining
       _ingestHistoricalFrame(frame);
       return;
@@ -5093,10 +5094,11 @@ class BleEngine {
     Frame frame,
     int counter, {
     required String reason,
+    String? hex,
   }) {
     final archive = ArchiveRecord(
       counter: counter,
-      hex: _innerHex(frame.inner),
+      hex: hex ?? _innerHex(frame.inner),
       packetType: frame.inner.isNotEmpty ? frame.inner[0] : 0,
       capturedAt: DateTime.now().millisecondsSinceEpoch,
       reason: reason,
@@ -5116,6 +5118,26 @@ class BleEngine {
     final vAt = (_session?.entry ?? kWhoopGen4).innerVersionOffset;
     final recType = frame.inner.length > vAt ? frame.inner[vAt] : -1;
     final counter = _counterFromInner(frame.inner);
+    final hex = _innerHex(frame.inner);
+    // A byte-identical copy of a record already seen in this burst window is
+    // not a second record: two distinct records never share a counter and a
+    // timestamp. Letting it through would count it twice toward the gate, and
+    // the gate has no upper bound — so a duplicated frame could stand in for
+    // a genuinely LOST one, pass the count, and have the ACK trim the lost
+    // record from flash. The first copy is already buffered in this burst, so
+    // dropping the second loses nothing. Gen5 only: it exists for the
+    // enforced count gate, and gen4's count stays advisory and untouched.
+    final dedup = _drain;
+    if (dedup != null &&
+        (_session?.entry.burstCountGateEnforced ?? false) &&
+        !dedup.admitBurstFrame(hex)) {
+      if (dedup.duplicateFramesThisBurst == 1) {
+        _log('[SYNC] duplicate historical frame in this burst (counter='
+            '$counter) — dropped, not counted toward the burst gate. Further '
+            'duplicates this burst are counted silently.');
+      }
+      return;
+    }
     // Explicit, observable band-reboot signal — see CounterRegressionDetector.
     // 0 is _counterFromInner's fallback for a too-short frame, not a real
     // counter value, so it's excluded to avoid a false regression report.
@@ -5146,7 +5168,7 @@ class BleEngine {
       if (r16 != null && d != null && d.supportsSafeTrim) {
         d.onEcgRawPacket(
           EcgRawPacket(
-            hex: _innerHex(frame.inner),
+            hex: hex,
             deviceId: LocalDb.kPrimaryDeviceId,
             sequence: r16.sequence,
             strapSeconds: r16.strapSeconds,
@@ -5321,6 +5343,26 @@ class BleEngine {
         frame,
         counter,
         reason: 'undecodable_rec_v$recType',
+        hex: hex,
+      );
+      return;
+    }
+    // A record that decoded but carries NO TIME (unix 0 — gen5's header reads
+    // the u32 verbatim and nothing rejects it) has nowhere to land: every
+    // durable 1 Hz table is keyed by rec_ts, `_queueDecodedOneHz` refuses a
+    // record without one, and `raw_records` no longer exists to hold the bytes
+    // (it is dropped on every open). Banked as a decoded record it counted as
+    // durable progress, the ACK trimmed it, and all that survived was a
+    // `samples` stub at epoch 0 — the bytes existed nowhere. RecordGate cannot
+    // catch it: it admits untimed records by design. Archive the bytes whole
+    // instead; that is real progress (never a plausibility drop) and a burst
+    // count member exactly like an undecodable record. Never re-timed.
+    if (sample.tsEpoch <= 0) {
+      _archiveHistoricalFrame(
+        frame,
+        counter,
+        reason: 'untimed_rec_v$recType',
+        hex: hex,
       );
       return;
     }
@@ -5345,13 +5387,14 @@ class BleEngine {
       // They are NOT re-timed later: the offset-and-snap salvage that used to
       // promise it would collapse 300 one-second records onto one rec_ts (see
       // sync_policy.dart), so it is gone. The day keeps an honest hole.
-      _archiveHistoricalFrame(frame, counter, reason: kGateDroppedReason);
+      _archiveHistoricalFrame(frame, counter,
+          reason: kGateDroppedReason, hex: hex);
       return;
     }
     final raw = RawRecord(
       counter: counter,
       packetType: pt,
-      hex: _innerHex(frame.inner),
+      hex: hex,
       capturedAt: DateTime.now().millisecondsSinceEpoch,
       recTs: sample.tsEpoch > 0 ? sample.tsEpoch : null,
     );
@@ -5928,9 +5971,18 @@ class BleEngine {
     required int? batchId,
     required int? expected,
     required int droppedThisBurst,
+    required Map<String, Object?> accounting,
   }) async {
     // Store what did arrive, without the token.
+    final committedRows = d.bufferedDurableRows;
     final durable = await d.commit(null);
+    // The per-token row below records this burst as INCOMPLETE: received and
+    // committed as far as they got, never acknowledged.
+    final burstAccounting = <String, Object?>{
+      ...accounting,
+      'committed': durable ? committedRows : 0,
+      'acknowledged': false,
+    };
     if (!durable) {
       _log('[SYNC] short-count burst ALSO failed to commit — bouncing the '
           'link so the next session retries from a clean batch.');
@@ -5978,6 +6030,7 @@ class BleEngine {
               'actual_burst_packets': d.currentBurstTrafficCount,
               'dropped_this_burst': droppedThisBurst,
               'attempts': d.consecutiveValidationFailures,
+              'burst_accounting': burstAccounting,
             },
           ));
       await _endHistoryTaskWithAbort(
@@ -6020,6 +6073,7 @@ class BleEngine {
               'actual_burst_packets': d.currentBurstTrafficCount,
               'dropped_this_burst': droppedThisBurst,
               'attempts': d.consecutiveValidationFailures,
+              'burst_accounting': burstAccounting,
             },
           ));
       await _endHistoryTaskWithAbort(
@@ -6046,6 +6100,7 @@ class BleEngine {
             'actual_burst_packets': d.currentBurstTrafficCount,
             'dropped_this_burst': droppedThisBurst,
             'attempts': d.consecutiveValidationFailures,
+            'burst_accounting': burstAccounting,
           },
         ));
   }
@@ -6056,7 +6111,17 @@ class BleEngine {
     required _Session session,
     required String tokenHex,
     required int? batchId,
+    Map<String, Object?>? accounting,
   }) async {
+    // Every refusal leaves the burst un-acknowledged; its per-token row says so
+    // alongside what was received and decoded (see burstAccounting).
+    final burstAccounting = accounting == null
+        ? null
+        : <String, Object?>{
+            'committed': 0,
+            ...accounting,
+            'acknowledged': false,
+          };
     switch (verdict) {
       case TrimAckVerdict.send:
         return;
@@ -6075,7 +6140,8 @@ class BleEngine {
         // The idle watchdog abandoned this burst's buffered records. Persist
         // anything that arrived since (dedup-safe) but WITHOUT the token, so
         // the trim cursor never claims a chunk we threw away.
-        await d.commit(null);
+        final lateRows = d.bufferedDurableRows;
+        final lateDurable = await d.commit(null);
         _log(
           '[SYNC] HISTORY_END token=$tokenHex terminates a DISCARDED burst '
           '(its open chunk was abandoned un-committed) — NOT ACKing, so the '
@@ -6087,7 +6153,15 @@ class BleEngine {
           kind: 'historical_batch',
           status: 'trim_refused',
           lastError: 'discarded_burst',
-          metaPatch: {'batch_id': batchId, 'records': d.records},
+          metaPatch: {
+            'batch_id': batchId,
+            'records': d.records,
+            if (burstAccounting != null)
+              'burst_accounting': {
+                ...burstAccounting,
+                'committed': lateDurable ? lateRows : 0,
+              },
+          },
         ));
         return;
       case TrimAckVerdict.blockedBurstShortfall:
@@ -6110,7 +6184,11 @@ class BleEngine {
           kind: 'historical_batch',
           status: 'trim_refused',
           lastError: 'burst_shortfall_retry',
-          metaPatch: {'batch_id': batchId, 'records': d.records},
+          metaPatch: {
+            'batch_id': batchId,
+            'records': d.records,
+            'burst_accounting': ?burstAccounting,
+          },
         ));
         return;
       case TrimAckVerdict.blockedCommitFailed:
@@ -6128,7 +6206,11 @@ class BleEngine {
           kind: 'historical_batch',
           status: 'commit_failed',
           lastError: 'durable_commit_failed',
-          metaPatch: {'batch_id': batchId, 'records': d.records},
+          metaPatch: {
+            'batch_id': batchId,
+            'records': d.records,
+            'burst_accounting': ?burstAccounting,
+          },
         ));
         // Bounce rather than retry in place: a commit that failed on a large
         // batch (the observed production OOM inside commitSyncBatch) only gets
@@ -6166,6 +6248,7 @@ class BleEngine {
             'records': d.records,
             'no_durable_refuse_streak': _noDurableProgress.refusals,
             'no_durable_remedy_cycles': _noDurableProgress.remedies,
+            'burst_accounting': ?burstAccounting,
           },
         ));
         if (runRemedy && !_sessionIsStale(session)) {
@@ -6321,6 +6404,13 @@ class BleEngine {
       // or the durable cursor: a stale session must not be written to at all,
       // and a poisoned burst's records are already gone — there is nothing
       // this token may legitimately trim.
+      final expected = m.expectedPacketCount;
+      // Records the plausibility gate silently rejected THIS burst (stale/
+      // wandering-clock block — by design, "neither stored nor counted",
+      // see RecordGate.admit) DO reach onUndecodableRecord as
+      // kGateDroppedReason archives, but that path deliberately skips the
+      // burst count for them, so they never entered currentBurstPacketCount.
+      final droppedThisBurst = _recordGate.dropped - _burstDroppedAtStart;
       final preVerdict = TrimAckPolicy.evaluate(
         sessionCurrent: !_sessionIsStale(session),
         burstDiscarded: d.burstDiscarded,
@@ -6333,16 +6423,13 @@ class BleEngine {
           session: session,
           tokenHex: tokenHex,
           batchId: m.batchId,
+          accounting: d.burstAccounting(
+            expected: expected,
+            droppedThisBurst: droppedThisBurst,
+          ),
         );
         return;
       }
-      final expected = m.expectedPacketCount;
-      // Records the plausibility gate silently rejected THIS burst (stale/
-      // wandering-clock block — by design, "neither stored nor counted",
-      // see RecordGate.admit) DO reach onUndecodableRecord as
-      // kGateDroppedReason archives, but that path deliberately skips the
-      // burst count for them, so they never entered currentBurstPacketCount.
-      final droppedThisBurst = _recordGate.dropped - _burstDroppedAtStart;
       // Read before validateBurst, which zeroes the counter on a pass — this is
       // the attempt number, and the slack, the gate actually judged this burst
       // under.
@@ -6379,6 +6466,13 @@ class BleEngine {
               receivedTrafficCount: d.currentBurstTrafficCount,
               droppedThisBurst: droppedThisBurst,
             );
+      // Snapshot BEFORE any commit empties the buffer: every exit below
+      // writes it to this token's ledger row with its own committed /
+      // acknowledged outcome, so an incomplete burst is on record as one.
+      final accounting = d.burstAccounting(
+        expected: expected,
+        droppedThisBurst: droppedThisBurst,
+      );
       // THE COUNT GATE. A short burst must NOT be acknowledged.
       //
       // This was advisory-only because the band's count semantics were unknown,
@@ -6432,6 +6526,7 @@ class BleEngine {
           batchId: m.batchId,
           expected: expected,
           droppedThisBurst: droppedThisBurst,
+          accounting: accounting,
         );
         return;
       } else if (gateEnforced) {
@@ -6508,7 +6603,8 @@ class BleEngine {
         'dropped_this_burst=$droppedThisBurstForLog '
         'durable_buffered=${d.bufferedRecords}+${d.bufferedArchives}'
         '+${d.bufferedEcgRaw} '
-        'recTs=${r == null ? "none" : "${r.$1}..${r.$2}"}',
+        'recTs=${r == null ? "none" : "${r.$1}..${r.$2}"} '
+        'accounting=${jsonEncode(accounting)}',
       );
       // Non-trimmable wiring (no onCommit): unbuffered fire-and-forget cannot
       // prove durability before ACK. Production always sets onCommitBatch.
@@ -6537,11 +6633,14 @@ class BleEngine {
           session: session,
           tokenHex: tokenHex,
           batchId: m.batchId,
+          accounting: accounting,
         );
         return;
       }
       _successfulBursts++;
       _mergeValidatedBurst(d);
+      // What this commit is about to make durable — "committed" once it says so.
+      final committedRows = d.bufferedDurableRows;
       // SAFE-TRIM INVARIANT: persist decoded+raw AND the continuation cursor
       // DURABLY (one transaction) BEFORE the ACK. The band trims its flash only
       // once the ACK is link-layer confirmed, so a crash before the ACK
@@ -6576,6 +6675,11 @@ class BleEngine {
           session: session,
           tokenHex: tokenHex,
           batchId: m.batchId,
+          accounting: {
+            ...accounting,
+            'committed': durable ? committedRows : 0,
+            'acknowledged': false,
+          },
         );
         return;
       }
@@ -6617,6 +6721,11 @@ class BleEngine {
             'batch_id': m.batchId,
             'records': d.records,
             'ack_failures': failCount,
+            'burst_accounting': {
+              ...accounting,
+              'committed': committedRows,
+              'acknowledged': false,
+            },
           },
         ));
         final quarantined = _chunkFailures.shouldQuarantine(tokenHex);
@@ -6709,6 +6818,14 @@ class BleEngine {
         metaPatch: {
           'batch_id': m.batchId,
           'records': d.records,
+          'burst_accounting': {
+            ...accounting,
+            'committed': committedRows,
+            'acknowledged': true,
+            // The gate passed on the doc-05 slack, not on a complete burst:
+            // the band has now trimmed frames we never counted.
+            'passed_on_slack': gateEnforced && shortfall > 0,
+          },
         },
       ));
       _noteStored(); // a banked batch → schedule a (debounced) derive
@@ -8372,6 +8489,63 @@ class DrainController {
   int get bufferedArchives => _archives.length;
   int get bufferedEcgRaw => _ecgRaw.length;
 
+  // Inner hex of every type-47 frame admitted in the current burst window, so
+  // a byte-identical repeat is recognised (see [admitBurstFrame]). Bounded by
+  // one burst: cleared at every HISTORY_START ([rearm]) and whenever the open
+  // chunk is thrown away ([discardOpenChunk]), so a re-sent frame is buffered
+  // again rather than mistaken for one we still hold.
+  final Set<String> _burstFrameKeys = <String>{};
+
+  /// Byte-identical type-47 repeats dropped in the current burst window.
+  int duplicateFramesThisBurst = 0;
+
+  /// Whether [hex] is the first copy of this frame in the current burst
+  /// window. A repeat is counted in [duplicateFramesThisBurst] and must be
+  /// neither buffered nor tallied: the band counted the record once.
+  bool admitBurstFrame(String hex) {
+    if (_burstFrameKeys.add(hex)) return true;
+    duplicateFramesThisBurst++;
+    return false;
+  }
+
+  /// This burst's integrity ledger at its HISTORY_END, before the commit:
+  /// what the band said it sent, what we received, and what each received
+  /// frame became. Kept apart on purpose — "received", "decoded", "committed"
+  /// and "acknowledged" are different facts, and the caller adds the last two
+  /// once they are true. Counter continuity is per revision within the burst
+  /// ([BurstStats]); a gap is recorded, never filled.
+  Map<String, Object?> burstAccounting({
+    required int? expected,
+    required int droppedThisBurst,
+  }) {
+    final gateDropped = _archives.length - bufferedProgressArchives;
+    return <String, Object?>{
+      'expected': expected,
+      'received': currentBurstTrafficCount,
+      'received_historical': currentBurstHistoricalPacketCount,
+      'duplicates': duplicateFramesThisBurst,
+      'decoded': _raws.length,
+      'archived': bufferedProgressArchives,
+      'gate_dropped_archived': gateDropped,
+      'gate_dropped': droppedThisBurst,
+      'ecg_raw': _ecgRaw.length,
+      'shortfall': expected == null
+          ? null
+          : burstPacketShortfall(
+              expectedPacketCount: expected,
+              receivedTrafficCount: currentBurstTrafficCount,
+              droppedThisBurst: droppedThisBurst,
+            ),
+      'counter_gaps': burstStats.intraBurstGapCount,
+      'counter_missing': burstStats.intraBurstMissing,
+      'counter_backward': burstStats.intraBurstBackward,
+    };
+  }
+
+  /// Rows the next [commit] would make durable — the "committed" figure once
+  /// that commit reports success.
+  int get bufferedDurableRows => _raws.length + _archives.length + _ecgRaw.length;
+
   /// A raw ECG record for this chunk. Genuine, ACKable progress and a burst
   /// count member (the band counts every type-47 frame it sent). Only the
   /// buffered path exists for it: without [onCommit] there is no transaction
@@ -8625,6 +8799,8 @@ class DrainController {
     _linkDown = false;
     _lastProgressAt = DateTime.now();
     burstStats.reset();
+    _burstFrameKeys.clear();
+    duplicateFramesThisBurst = 0;
     _burstTallyClosed = false;
   }
 
@@ -8708,6 +8884,8 @@ class DrainController {
   /// is cleared only by [beginBurst] — a fresh HISTORY_START from the band.
   void discardOpenChunk() {
     _trimGuard.discardOpenChunk();
+    // What was seen is no longer held, so a re-sent copy must be buffered.
+    _burstFrameKeys.clear();
     if (_raws.isEmpty && _archives.isEmpty && _ecgRaw.isEmpty) return;
     log('discarding ${_raws.length} un-ACKed buffered records + '
         '${_archives.length} archived + ${_ecgRaw.length} raw ECG (idle). '

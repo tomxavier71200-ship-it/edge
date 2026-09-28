@@ -183,15 +183,17 @@ void main() {
       );
     });
 
-    test('a historical frame off a non-data role keeps the immediate fallback',
-        () {
+    test('a historical frame off a non-data role is queued too', () {
+      // OLD BEHAVIOUR: ingested inline, ahead of markers still in the queue,
+      // so it was tallied into whichever burst the queue had open — surplus
+      // that could hide a lost frame there and let its HISTORY_END trim it.
       expect(
         FrameRoutePolicy.route(
           isMetadata: false,
           isHistorical: true,
           isDataRole: false,
         ),
-        FrameRoute.immediate,
+        FrameRoute.serializedQueue,
       );
     });
 
