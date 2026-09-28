@@ -191,24 +191,39 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             Section(l?.readinessDetailWhatWasMissing ?? 'What was missing',
                 _absence(c, p, d.absentDiag!)),
         ] else
-          Surface(
+          // The hero: no card, the ring on the page with light behind it,
+          // sweeping in and counting up once.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: S.x5),
             child: Column(children: [
-              SizedBox(
-                width: 150,
-                height: 150,
-                child: Stack(alignment: Alignment.center, children: [
-                  CustomPaint(
-                    size: const Size(150, 150),
-                    painter: Ring(d.readiness.normalized(100), p.on(band.color),
-                        p.track,
-                        stroke: 14, t: animate(c, 1)),
-                  ),
-                  Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text('${v.round()}', style: F.n48.copyWith(color: p.ink)),
-                    Text(band.label, style: F.cap.copyWith(color: p.ink3)),
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: 1),
+                duration: motion(c, Motion.sweep),
+                curve: Curves.easeOutCubic,
+                builder: (c, t, _) => SizedBox(
+                  width: 210,
+                  height: 210,
+                  child: Stack(alignment: Alignment.center, children: [
+                    CustomPaint(
+                      size: const Size(210, 210),
+                      painter: Ring(d.readiness.normalized(100),
+                          p.on(band.color), p.track,
+                          stroke: Look.ringStroke(16),
+                          t: t,
+                          solid: true,
+                          glow: Look.glow),
+                    ),
+                    Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text('${(v * t).round()}',
+                          style: F.n48.copyWith(color: p.ink, fontSize: 64)),
+                      Text('RECOVERY', style: F.over.copyWith(color: p.ink3)),
+                    ]),
                   ]),
-                ]),
+                ),
               ),
+              const SizedBox(height: S.x4),
+              Text(band.label,
+                  style: F.head.copyWith(color: p.on(band.color))),
             ]),
           ),
 
@@ -242,6 +257,22 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
                       'weeks of nights.',
               icon: LucideIcons.listTree,
             ),
+          ),
+
+        if (d.series.any((v) => v != null))
+          Section(
+            'This week',
+            Surface(child: Builder(builder: (c) {
+              final w = lastDays(d.series, 7);
+              return DayBars(
+                values: w.values,
+                labels: w.labels,
+                max: 100,
+                color: (x) => p.on(readinessBand(x, l).color),
+                fmt: (x) => '${x.round()}',
+                title: 'Recovery',
+              );
+            })),
           ),
 
         // The header used to say "Last 90 days" over a chart of five points.

@@ -197,7 +197,7 @@ class Scrubber extends StatelessWidget {
 /// The base card surface. Elevation, not outline.
 class Surface extends StatelessWidget {
   final Widget child;
-  final EdgeInsets pad;
+  final EdgeInsets? pad;
   final VoidCallback? onTap;
   final Color? color;
   final int elevation;
@@ -206,7 +206,7 @@ class Surface extends StatelessWidget {
   const Surface({
     super.key,
     required this.child,
-    this.pad = const EdgeInsets.all(S.x4),
+    this.pad,
     this.onTap,
     this.color,
     this.elevation = 1,
@@ -221,7 +221,8 @@ class Surface extends StatelessWidget {
       semanticLabel: semanticLabel,
       child: Container(
         width: double.infinity,
-        padding: pad,
+        // Customize → Spacing → Compact tightens every default-padded card.
+        padding: pad ?? EdgeInsets.all(Look.compact ? S.x3 : S.x4),
         decoration: BoxDecoration(
           color: color ?? p.card,
           borderRadius: R.rXl,
@@ -255,7 +256,8 @@ class Section extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(S.x1, S.x5, S.x1, S.x2),
+          padding: EdgeInsets.fromLTRB(
+              S.x1, Look.compact ? S.x3 : S.x5, S.x1, S.x2),
           child: Row(
             // spaceBetween owns the gap, so the action sits on the right edge
             // however short the title is. Previously the title was Expanded

@@ -25,7 +25,8 @@ import '../../data/day_label.dart';
 import '../../data/local_repository.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/metric.dart' show whyFromNote;
-import '../screens/home_screen.dart' show repoOf, monthName;
+import '../screens/home_screen.dart'
+    show repoOf, monthName, denseDays, pointsOf;
 import '../screens/metric_detail.dart' show detailScaffold;
 import '../ui2.dart';
 import 'catalogue.dart' show zonesWhy;
@@ -72,7 +73,16 @@ class DayStrainData {
   /// the screen then says exactly that.
   final String? note;
 
+  /// Today's strain target band from the coach (`coach.strain_target`), or
+  /// null — only ever today's, and only when the coach produced one.
+  final (double, double)? target;
+
+  /// The last weeks of day strain, dense (see `denseDays`), for the 7-day bars.
+  final List<double?> history;
+
   const DayStrainData({
+    this.target,
+    this.history = const [],
     this.day,
     this.curve = const [],
     this.strain,
@@ -136,7 +146,26 @@ class DayStrainData {
         : null;
 
     final hr = s['hr'];
+
+    // The target is about TODAY; a curve that fell back to yesterday gets none.
+    (double, double)? target;
+    if (day != null && dayLabelOf(day) == asked) {
+      try {
+        final coach = (await repo.getToday())['coach'];
+        final t = coach is Map ? coach['strain_target'] : null;
+        if (t is Map && t['low'] is num && t['high'] is num) {
+          target = ((t['low'] as num).toDouble(), (t['high'] as num).toDouble());
+        }
+      } catch (_) {}
+    }
+    List<double?> history = const [];
+    try {
+      history = denseDays(pointsOf(await repo.getChart('strain')), 7);
+    } catch (_) {}
+
     return DayStrainData(
+      target: target,
+      history: history,
       day: day,
       curve: grid,
       strain: (s['strain'] as num?)?.toDouble(),
@@ -216,13 +245,80 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
           const SizedBox(height: S.x8),
           const Center(child: CircularProgressIndicator()),
         ] else ...[
+          if (d.strain != null) _hero(c, p, d),
           ..._trace(p, l, d),
           ..._zones(p, l, d),
+          if (d.history.any((v) => v != null))
+            Section(
+              'This week',
+              Surface(child: Builder(builder: (c) {
+                final w = lastDays(d.history, 7);
+                return DayBars(
+                  values: w.values,
+                  labels: w.labels,
+                  max: 21,
+                  color: (_) => p.on(C.purple),
+                  fmt: (x) => x.toStringAsFixed(1),
+                  title: 'Day strain',
+                );
+              })),
+            ),
           Section(l?.dayStrainInputsSection ?? 'What this is made of',
               _inputs(p, l, d)),
         ],
       ],
       sub: sub,
+    );
+  }
+
+  // ── the gauge: the day's number against its own ceiling and today's target ─
+  Widget _hero(BuildContext c, P p, DayStrainData d) {
+    final s = d.strain!;
+    final tg = d.target;
+    final col = p.on(C.purple);
+    final togo = tg == null ? null : tg.$1 - s;
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x4, bottom: S.x5),
+      child: Column(children: [
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: motion(c, Motion.sweep),
+          curve: Curves.easeOutCubic,
+          builder: (c, t, _) => SizedBox(
+            width: 260,
+            height: 150,
+            child: CustomPaint(
+              painter: HalfGauge(s / 21, col, p.track, p.ink,
+                  t: t,
+                  stroke: Look.ringStroke(16),
+                  glow: Look.glow,
+                  band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21)),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text((s * t).toStringAsFixed(1),
+                      style: F.n48.copyWith(color: p.ink, fontSize: 60)),
+                  Text('OF 21', style: F.over.copyWith(color: p.ink3)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: S.x3),
+        Text(
+          tg == null
+              ? 'No target today'
+              : togo! > 0
+                  ? 'Target ${tg.$1.toStringAsFixed(1)}–${tg.$2.toStringAsFixed(1)} · '
+                      '${togo.toStringAsFixed(1)} to go'
+                  : s > tg.$2
+                      ? 'Above today\'s target of ${tg.$1.toStringAsFixed(1)}–'
+                          '${tg.$2.toStringAsFixed(1)}'
+                      : 'In today\'s target range',
+          textAlign: TextAlign.center,
+          style: F.head.copyWith(color: tg == null ? p.ink3 : p.ink2),
+        ),
+      ]),
     );
   }
 

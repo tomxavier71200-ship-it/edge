@@ -48,6 +48,12 @@ jobs:
       - name: Strip Watch companion
         run: rm -rf "build/ios/iphoneos/Runner.app/Watch"
 
+      # The home-screen widget extension uses an App Group, which a free
+      # Apple ID often cannot sign; a sideload then fails with "No code
+      # signature found". A test copy does not need the widget.
+      - name: Strip app extensions
+        run: rm -rf "build/ios/iphoneos/Runner.app/PlugIns"
+
       - name: Package unsigned IPA
         run: |
           cd build/ios/iphoneos

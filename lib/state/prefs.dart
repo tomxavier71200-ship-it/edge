@@ -76,6 +76,10 @@ class Prefs {
 
   // ── selection keys (one namespace; keep them disjoint) ──────────────────────
   static const String shellTab = 'ui.shell_tab';
+
+  /// Home's section order and visibility — see `homeSections()` in
+  /// ui2/screens/home_screen.dart.
+  static const String homeSections = 'ui.home_sections';
   static const String recapRange = 'ui.recap_range';
   static const String workoutsRange = 'ui.workouts_range';
 

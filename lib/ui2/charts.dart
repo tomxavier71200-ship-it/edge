@@ -589,8 +589,12 @@ class Ring extends CustomPainter {
   /// calibrating" and "this is missing" into one look.
   final bool solid;
 
+  /// A soft halo of the arc's own colour under it (Customize → Ring style →
+  /// Glow). Only on a solid, measured arc — a calibrating ring does not glow.
+  final bool glow;
+
   Ring(this.v, this.color, this.track,
-      {this.stroke = 10, this.t = 1, this.solid = false});
+      {this.stroke = 10, this.t = 1, this.solid = false, this.glow = false});
 
   @override
   void paint(Canvas cv, Size s) {
@@ -607,6 +611,20 @@ class Ring extends CustomPainter {
     );
     final sweep = 2 * pi * v.clamp(0, 1) * t.clamp(0, 1);
     if (sweep <= 0) return;
+    if (glow && solid) {
+      cv.drawArc(
+        Rect.fromCircle(center: c, radius: r),
+        -pi / 2,
+        sweep,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke * 1.6
+          ..strokeCap = StrokeCap.round
+          ..color = color.withValues(alpha: .45)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, stroke * .9),
+      );
+    }
     cv.drawArc(
       Rect.fromCircle(center: c, radius: r),
       -pi / 2,
@@ -630,7 +648,13 @@ class Ring extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant Ring o) =>
-      o.v != v || o.t != t || o.solid != solid || o.color != color;
+      o.v != v ||
+      o.t != t ||
+      o.solid != solid ||
+      o.color != color ||
+      o.glow != glow ||
+      o.stroke != stroke ||
+      o.track != track;
 }
 
 /// A ring made of discrete dashes rather than a continuous arc — for a value
@@ -1284,4 +1308,59 @@ class DayLanes extends CustomPainter {
       o.work != work ||
       o.movement != movement ||
       o.p.dark != p.dark;
+}
+
+/// A half-ring gauge filled left to right to [v] (0…1), with an optional
+/// outline over the [band] (0…1 from, to) — the strain target. The band is
+/// drawn only when given; a gauge with no target does not invent one.
+class HalfGauge extends CustomPainter {
+  final double v, t, stroke;
+  final Color color, track, ink;
+  final (double, double)? band;
+  final bool glow;
+
+  HalfGauge(this.v, this.color, this.track, this.ink,
+      {this.t = 1, this.stroke = 14, this.band, this.glow = false});
+
+  @override
+  void paint(Canvas cv, Size s) {
+    final r = min(s.width / 2, s.height) - stroke;
+    if (r <= 0) return;
+    final c = Offset(s.width / 2, s.height - stroke / 2);
+    final rect = Rect.fromCircle(center: c, radius: r);
+    Paint arc(Color col, double w) => Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w
+      ..strokeCap = StrokeCap.round
+      ..color = col;
+    cv.drawArc(rect, pi, pi, false, arc(track, stroke));
+    final sweep = pi * v.clamp(0.0, 1.0) * t.clamp(0.0, 1.0);
+    if (sweep > 0) {
+      if (glow) {
+        cv.drawArc(
+            rect,
+            pi,
+            sweep,
+            false,
+            arc(color.withValues(alpha: .45), stroke * 1.6)
+              ..maskFilter = MaskFilter.blur(BlurStyle.normal, stroke * .9));
+      }
+      cv.drawArc(rect, pi, sweep, false, arc(color, stroke));
+    }
+    final b = band;
+    if (b != null) {
+      final outer = Rect.fromCircle(center: c, radius: r + stroke * .95);
+      cv.drawArc(outer, pi + pi * b.$1.clamp(0.0, 1.0),
+          pi * (b.$2 - b.$1).clamp(0.0, 1.0), false, arc(ink, 3));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant HalfGauge o) =>
+      o.v != v ||
+      o.t != t ||
+      o.color != color ||
+      o.band != band ||
+      o.glow != glow ||
+      o.track != track;
 }

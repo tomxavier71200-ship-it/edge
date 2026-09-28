@@ -50,13 +50,22 @@ enum ShellDomain {
 class ShellScope extends InheritedWidget {
   final ValueChanged<ShellDomain> select;
 
-  const ShellScope({super.key, required this.select, required super.child});
+  /// The domain on screen. The shell keeps every visited tab alive in an
+  /// [IndexedStack], so a tab that owns something costly while shown (the
+  /// live heart-rate stream) reads this to let go of it while hidden.
+  final ShellDomain current;
+
+  const ShellScope(
+      {super.key,
+      required this.select,
+      required this.current,
+      required super.child});
 
   static ShellScope? maybeOf(BuildContext c) =>
       c.dependOnInheritedWidgetOfExactType<ShellScope>();
 
   @override
-  bool updateShouldNotify(ShellScope old) => false;
+  bool updateShouldNotify(ShellScope old) => old.current != current;
 }
 
 class AppShell extends StatefulWidget {
@@ -110,6 +119,7 @@ class _AppShellState extends State<AppShell> {
     final p = P.of(c);
     return ShellScope(
       select: _select,
+      current: _current,
       child: Scaffold(
         backgroundColor: p.bg,
         // The bar floats: content scrolls on under it, and every tab's list
@@ -241,6 +251,16 @@ class _Tab extends StatelessWidget {
                 letterSpacing: 0,
                 fontWeight: on ? FontWeight.w600 : FontWeight.w500,
               ),
+            ),
+            const SizedBox(height: 3),
+            // The accent mark under the lit tab — the one place the accent
+            // picked in Customize shows on every screen.
+            AnimatedContainer(
+              duration: motion(c, Motion.base),
+              width: on ? 4 : 0,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: on ? p.accent : p.card, shape: BoxShape.circle),
             ),
           ],
         ),

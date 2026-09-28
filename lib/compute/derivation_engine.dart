@@ -1719,7 +1719,13 @@ import 'substrate.dart';
 // withheld — a fabricated-metric bug on `circadian_lifestyle`'s stored
 // output. kAnalyticsPin repinned to analytics main's tip (one commit past
 // PR #75's merge SHA).
-const int kAlgoVersion = 97;
+// 97 → 98 (daytime stress, edge-only orchestration): the day bundle gains a
+// `stress_day` series — the SAME `baevskyStressIndex` the nightly score uses,
+// run per 15-minute wall-clock bin of the whole-day cleaned NN and scored with
+// the same log [20, 600] → 0–100 map (now one shared `_stressScoreOfSi`). Bins
+// too thin for an SI window are `score: null`, never interpolated. The nightly
+// `stress` block is unchanged. kAnalyticsPin/kProtocolPin UNCHANGED.
+const int kAlgoVersion = 98;
 /// The sibling SHAs this version was derived against, asserted against
 /// pubspec.yaml in test/db_serve_version_and_reads_test.dart.
 ///

@@ -198,6 +198,7 @@ const _notComponents = {
   // The shell's More tab: a list of doors that switches tabs through the
   // ShellScope, so it has no meaning outside a live shell.
   'MoreScreen',
+  'CustomizeScreen',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to

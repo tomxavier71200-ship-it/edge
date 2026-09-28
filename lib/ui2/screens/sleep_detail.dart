@@ -163,7 +163,11 @@ class SleepData {
   ///   * [solMin] — sleep-onset latency, and ONLY on a user-set window.
   final double? unobservedMin, awakenings, longestSleepMin, solMin;
 
+  /// Total sleep for the last 7 calendar days, dense, for the week bars.
+  final List<double?> week;
+
   const SleepData({
+    this.week = const [],
     this.day,
     this.days = const [],
     this.night = const {},
@@ -265,7 +269,8 @@ class SleepData {
     // costs three scalar queries and one window query rather than 28 payload
     // decodes.
     final cut = _noonOf(day);
-    final tst = _trailing(await repo.getChart('sleep'), cut);
+    final sleepChart = await repo.getChart('sleep');
+    final tst = _trailing(sleepChart, cut);
     final deep = _trailing(await repo.getChart('deep'), cut);
     // Stored as whole percent; the night's own `efficiency` is 0…1.
     final eff = _trailing(await repo.getChart('efficiency'), cut);
@@ -291,6 +296,7 @@ class SleepData {
       debt: envMetric(debtEnv, debtH == null ? null : debtH * 60, unit: 'min'),
       bedtime:
           envMetric(bedEnv, envValue(bedEnv)?['bedtime_min_of_day'] as num?),
+      week: denseDays(pointsOf(sleepChart), 7),
       tstHistory: tst,
       deepHistory: deep,
       effHistory: eff,
@@ -516,6 +522,25 @@ class _SleepDetailState extends State<SleepDetail> {
       Section(l?.sleepDetailOvernightSection ?? 'Overnight signals',
           _overnight(c, p, d)),
 
+      // ── 6b · THE WEEK ──
+      if (d.week.any((v) => v != null))
+        Section(
+          'Last 7 days',
+          Surface(child: Builder(builder: (c) {
+            final w = lastDays(d.week, 7);
+            return DayBars(
+              values: w.values,
+              labels: w.labels,
+              // The need is the natural ceiling; 10 h when there is none, so a
+              // bar never tops out at a scale nobody set.
+              max: math.max(d.need.value?.toDouble() ?? 600, 600),
+              color: (_) => p.on(C.blue),
+              fmt: hm,
+              title: 'Total sleep',
+            );
+          })),
+        ),
+
       // ── 7 · ONE TAKEAWAY ──
       Section(l?.sleepDetailTonightSection ?? 'Tonight', _tonight(c, p, d)),
 
@@ -545,12 +570,44 @@ class _SleepDetailState extends State<SleepDetail> {
     final watched = (inBed == null || unobserved == null || unobserved <= 0)
         ? null
         : math.max(0, inBed - unobserved);
+    // Sleep performance — time asleep over the coach's need — only for the
+    // newest night. The need is TODAY's figure (debt and strain move it), so
+    // dividing an older night by it would score that night against a need it
+    // never had.
+    final need = d.need.value;
+    final newest = d.days.isNotEmpty && d.day == d.days.first;
+    final perf = (tst == null || need == null || need <= 0 || !newest)
+        ? null
+        : (tst / need * 100).clamp(0, 999).round();
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(hm(tst), style: F.n48.copyWith(color: p.ink)),
-        const SizedBox(height: S.x1),
-        Text(l?.sleepDetailTotalSleep ?? 'Total sleep',
-            style: F.cap.copyWith(color: p.ink3)),
+        if (perf != null) ...[
+          Text('SLEEP PERFORMANCE', style: F.over.copyWith(color: p.ink3)),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: motion(c, Motion.sweep),
+            curve: Curves.easeOutCubic,
+            builder: (c, t, _) => Text('${(perf * t).round()}%',
+                style: F.n48.copyWith(color: p.on(C.blue), fontSize: 64)),
+          ),
+          Text('${hm(tst)} asleep of ${hm(need)} needed',
+              style: F.body.copyWith(color: p.ink2)),
+          const SizedBox(height: S.x3),
+          ClipRRect(
+            borderRadius: R.rPill,
+            child: LinearProgressIndicator(
+              value: (tst! / need!).clamp(0.0, 1.0).toDouble(),
+              minHeight: 8,
+              color: p.on(C.blue),
+              backgroundColor: p.track,
+            ),
+          ),
+        ] else ...[
+          Text(hm(tst), style: F.n48.copyWith(color: p.ink)),
+          const SizedBox(height: S.x1),
+          Text(l?.sleepDetailTotalSleep ?? 'Total sleep',
+              style: F.cap.copyWith(color: p.ink3)),
+        ],
         if (from.isNotEmpty && to.isNotEmpty) ...[
           const SizedBox(height: S.x4),
           Row(children: [

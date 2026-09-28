@@ -153,8 +153,18 @@ class _OpenStrapAppState extends State<OpenStrapApp> with WidgetsBindingObserver
         }
         return const Locale('en');
       },
-      builder: (context, child) =>
-          ThemeSwitchOverlay(key: themeSwitchKey, child: child!),
+      builder: (context, child) {
+        // Customize → Text size multiplies whatever the system asks for.
+        final mq = MediaQuery.of(context);
+        final scaled = Look.textScale == 1
+            ? child!
+            : MediaQuery(
+                data: mq.copyWith(
+                    textScaler: TextScaler.linear(
+                        mq.textScaler.scale(1) * Look.textScale)),
+                child: child!);
+        return ThemeSwitchOverlay(key: themeSwitchKey, child: scaled);
+      },
       navigatorObservers: [TelemetryNavigatorObserver()],
       home: const _Gate(),
     );

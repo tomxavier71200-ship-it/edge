@@ -1110,11 +1110,13 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   //    stress screen reads this {score, si, lf_hf, rmssd, level} block directly.
   final si = stress.present ? stress.value!.si : null;
   final lfhf = hrvF.present ? hrvF.value!.lfhf : null;
-  double? stressScore;
-  if (si != null && si > 0) {
-    final lo = math.log(20), hi = math.log(600);
-    stressScore = (100 * (math.log(si) - lo) / (hi - lo)).clamp(0.0, 100.0);
-  }
+  final stressScore = si == null ? null : _stressScoreOfSi(si);
+  // The same SI, per 15 minutes of the whole day — see [stressPerWindow].
+  final stressDay = stressPerWindow(
+    dayCorrected.nn,
+    dayCorrected.nnTimesMs,
+    d.dayRrTsMs.isEmpty ? 0 : d.dayRrTsMs.first - d.dayRrMs.first,
+  );
   final stressBlock = <String, dynamic>{
     'value': stressScore == null ? '—' : _round(stressScore, 1),
     'score': stressScore == null ? null : _round(stressScore, 1),
@@ -1368,6 +1370,7 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     },
     'wellness': wellness,
     'stress': stressBlock,
+    'stress_day': stressDay,
     'spo2': spo2Block,
     'series': {
       'hr_curve': hrCurve,
@@ -1895,4 +1898,53 @@ Map<String, dynamic> _sleepRuns(DayBundleInput d) {
     'longest_sleep_sec': longest,
     'sol_sec': (forced && leadingObserved) ? firstSleep : null,
   };
+}
+
+/// Baevsky SI → the transparent 0–100 stress score, log-mapped over the
+/// plausible resting SI range [20, 600]. ONE map for the night's score and the
+/// daytime bins, so the two can never disagree about what a given SI means.
+double? _stressScoreOfSi(double si) {
+  if (si <= 0) return null;
+  final lo = math.log(20), hi = math.log(600);
+  return (100 * (math.log(si) - lo) / (hi - lo)).clamp(0.0, 100.0);
+}
+
+/// Daytime stress: the SAME [baevskyStressIndex] the night uses, run over each
+/// 15-minute wall-clock bin of the whole-day cleaned NN, scored with the same
+/// [_stressScoreOfSi]. Orchestration only — no new metric.
+///
+/// A bin with too few clean beats for one SI window, or whose windows all fail
+/// the quantization guard, is `score: null` — never interpolated from its
+/// neighbours. Bins with no beats at all are not emitted, so a gap in wear
+/// stays a gap. `t` is the bin start in epoch seconds.
+List<Map<String, dynamic>> stressPerWindow(
+  List<double> nn,
+  List<double> nnTimes,
+  double epochOffsetMs, {
+  double windowMs = 900000.0,
+  int minBeats = 256,
+}) {
+  if (nn.isEmpty || nn.length != nnTimes.length) return const [];
+  final binsNn = <int, List<double>>{};
+  final binsTs = <int, List<double>>{};
+  for (var i = 0; i < nn.length; i++) {
+    final idx = ((nnTimes[i] + epochOffsetMs) / windowMs).floor();
+    (binsNn[idx] ??= <double>[]).add(nn[i]);
+    (binsTs[idx] ??= <double>[]).add(nnTimes[i]);
+  }
+  final keys = binsNn.keys.toList()..sort();
+  return [
+    for (final k in keys)
+      () {
+        final bin = binsNn[k]!;
+        final m = bin.length >= minBeats
+            ? baevskyStressIndex(bin, nnTimesMs: binsTs[k])
+            : null;
+        final score = m != null && m.present ? _stressScoreOfSi(m.value!.si) : null;
+        return <String, dynamic>{
+          't': (k * windowMs / 1000).round(),
+          'score': score == null ? null : _round(score, 1),
+        };
+      }(),
+  ];
 }

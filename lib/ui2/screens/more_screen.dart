@@ -14,6 +14,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../app_shell.dart';
 import '../grammar.dart';
 import '../profile/alarm.dart';
+import '../profile/customize.dart';
 import '../profile/profile.dart';
 import '../theme.dart';
 import 'calm_breathing.dart';
@@ -30,6 +31,11 @@ class MoreScreen extends StatelessWidget {
     void open(ShellDomain d) => ShellScope.maybeOf(c)?.select(d);
     return ListView(padding: pad, children: [
       const ScreenTitle('More'),
+      settingsGroup(c, 'Make it yours', [
+        SetRow(LucideIcons.slidersHorizontal, C.blue, 'Customize',
+            sub: 'Theme, accent and Home sections',
+            onTap: () => go(c, const CustomizeScreen())),
+      ]),
       settingsGroup(c, 'Track', [
         SetRow(LucideIcons.utensils, C.domFood, 'Nutrition',
             sub: 'Meals, water and calories in',

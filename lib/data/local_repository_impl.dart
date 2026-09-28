@@ -1435,6 +1435,9 @@ class LocalRepositoryImpl extends LocalRepository {
       // both computed in the engine from accel / day-RR.
       'restlessness': b['restlessness'],
       'daytime_hrv': b['daytime_hrv'],
+      // Per-15-minute stress through the day ({t: epoch s, score: 0–100 or
+      // null}). Absent on days derived before kAlgoVersion 98.
+      'stress_day': b['stress_day'] is List ? b['stress_day'] : const [],
     };
   }
 

@@ -123,24 +123,109 @@ class C {
 /// ── SURFACES + LEGIBLE INK ────────────────────────────────────────────────
 ///
 /// Brightness-resolved. `P.of(context)` in every build method.
+/// The dark surface family picked in Customize. Only surfaces change — the
+/// inks do not — and every family's [P.card2] is dark enough that [P.ink3]
+/// still clears 4.5:1 on it (slate, the lightest, measures 4.6:1).
+enum Skin {
+  slate('Slate', [0xFF1B2229, 0xFF28313A, 0xFF303A43, 0xFF38424C, 0xFF3B454F, 0xFF2A343D, 0xFF12171C]),
+  midnight('Midnight', [0xFF0E1319, 0xFF19202A, 0xFF212935, 0xFF2A3340, 0xFF2C3542, 0xFF18202A, 0xFF06080B]),
+  graphite('Graphite', [0xFF1C1C1F, 0xFF28282C, 0xFF313136, 0xFF3A3A40, 0xFF3C3C42, 0xFF2C2C30, 0xFF111113]),
+  ocean('Deep blue', [0xFF0F2031, 0xFF182C40, 0xFF1F3550, 0xFF2A4260, 0xFF2C4563, 0xFF173450, 0xFF07121D]);
+
+  final String label;
+
+  /// bg, card, card2, line, track, bgTop, bgBottom.
+  final List<int> argb;
+  const Skin(this.label, this.argb);
+
+  /// The page fade's ends, for a swatch of this family.
+  Color get top => Color(argb[5]);
+  Color get bottom => Color(argb[6]);
+}
+
+/// How the score rings are drawn — Customize → Ring style.
+enum RingStyle { classic, thin, glow }
+
+/// The rest of Customize's look: set by ThemeController before it notifies,
+/// and stamped into the ThemeData (see [LookStamp]) so every reader repaints.
+class Look {
+  static RingStyle ring = RingStyle.glow;
+
+  /// Numbers in Manrope instead of the condensed display face.
+  static bool rounded = false;
+
+  /// Tighter card padding and section gaps.
+  static bool compact = false;
+
+  /// Multiplies the system text size; 0.85–1.3.
+  static double textScale = 1.0;
+
+  /// Bumped on every Customize change (look, skin or accent).
+  static int rev = 0;
+
+  static double ringStroke(double classic) =>
+      ring == RingStyle.thin ? classic * .6 : classic;
+  static bool get glow => ring == RingStyle.glow;
+}
+
+/// A ThemeData extension whose only job is to differ when [Look] changes, so
+/// MaterialApp's theme compares unequal and `P.of`/`F` readers rebuild.
+class LookStamp extends ThemeExtension<LookStamp> {
+  final int rev;
+  const LookStamp(this.rev);
+
+  @override
+  LookStamp copyWith({int? rev}) => LookStamp(rev ?? this.rev);
+
+  @override
+  LookStamp lerp(LookStamp? other, double t) => other ?? this;
+
+  @override
+  bool operator ==(Object other) => other is LookStamp && other.rev == rev;
+
+  @override
+  int get hashCode => rev.hashCode;
+}
+
+/// The accent choices in Customize: the active tab mark, switches and links.
+const kAccents = <(String, Color)>[
+  ('Ice', Color(0xFF4FB3FF)),
+  ('Mint', Color(0xFF34E0A1)),
+  ('Violet', Color(0xFFA48CFF)),
+  ('Amber', Color(0xFFFFB547)),
+];
+
 class P {
   final bool dark;
   const P(this.dark);
 
+  /// The user's picks, set by ThemeController before it notifies. Global like
+  /// `AppColors.active`: MaterialApp rebuilds on the notify and the ThemeData
+  /// carries both (see ThemeController.darkTheme), so every `P.of` dependent
+  /// repaints.
+  static Skin skin = Skin.slate;
+  static Color accentColor = kAccents.first.$2;
+
   static P of(BuildContext c) => P(Theme.of(c).brightness == Brightness.dark);
 
-  // Dark is a cool slate, not black: a soft top-to-bottom fade behind
-  // lighter slate cards, so the cards read as raised without borders.
-  Color get bg => dark ? const Color(0xFF1B2229) : C.n50;
-  Color get card => dark ? const Color(0xFF28313A) : C.white;
-  Color get card2 => dark ? const Color(0xFF303A43) : C.n100;
-  Color get line => dark ? const Color(0xFF38424C) : C.n200;
-  Color get track => dark ? const Color(0xFF3B454F) : C.n200;
+  Color _s(int i) => Color(skin.argb[i]);
+
+  // Dark is a cool slate by default, not black: a soft top-to-bottom fade
+  // behind lighter cards, so the cards read as raised without borders.
+  Color get bg => dark ? _s(0) : C.n50;
+  Color get card => dark ? _s(1) : C.white;
+  Color get card2 => dark ? _s(2) : C.n100;
+  Color get line => dark ? _s(3) : C.n200;
+  Color get track => dark ? _s(4) : C.n200;
 
   /// The page fade's two ends (top, bottom). Only the shell paints it; a
   /// pushed route sits on the flat [bg], which is the fade's midpoint.
-  Color get bgTop => dark ? const Color(0xFF2A343D) : C.n50;
-  Color get bgBottom => dark ? const Color(0xFF12171C) : C.n50;
+  Color get bgTop => dark ? _s(5) : C.n50;
+  Color get bgBottom => dark ? _s(6) : C.n50;
+
+  /// The user's accent. Decoration only — never text on a surface without
+  /// going through [on].
+  Color get accent => accentColor;
 
   Color get ink => dark ? const Color(0xFFF4F6F8) : C.n900;
   Color get ink2 => dark ? const Color(0xFFB9C2CC) : C.n600;
@@ -310,7 +395,7 @@ class F {
   // narrow, so a big number reads at a glance and still fits its card.
   // Tabular, so a live value never jitters its own layout as digits change.
   static const _n = 'Barlow Condensed';
-  static const n48 = TextStyle(
+  static const _c48 = TextStyle(
       fontFamily: _n,
       fontFamilyFallback: _fb,
       fontSize: 48,
@@ -318,7 +403,7 @@ class F {
       fontWeight: FontWeight.w800,
       letterSpacing: -.5,
       fontFeatures: _tab);
-  static const n34 = TextStyle(
+  static const _c34 = TextStyle(
       fontFamily: _n,
       fontFamilyFallback: _fb,
       fontSize: 34,
@@ -326,7 +411,7 @@ class F {
       fontWeight: FontWeight.w800,
       letterSpacing: -.3,
       fontFeatures: _tab);
-  static const n24 = TextStyle(
+  static const _c24 = TextStyle(
       fontFamily: _n,
       fontFamilyFallback: _fb,
       fontSize: 24,
@@ -334,6 +419,17 @@ class F {
       fontWeight: FontWeight.w700,
       letterSpacing: 0,
       fontFeatures: _tab);
+
+  /// Customize → Numbers → Rounded: the same ramp in the text face. Manrope is
+  /// wider, so each step is drawn smaller to keep its old footprint.
+  static TextStyle _r(TextStyle c) => c.copyWith(
+      fontFamily: _f,
+      fontSize: c.fontSize! * .8,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0);
+  static TextStyle get n48 => Look.rounded ? _r(_c48) : _c48;
+  static TextStyle get n34 => Look.rounded ? _r(_c34) : _c34;
+  static TextStyle get n24 => Look.rounded ? _r(_c24) : _c24;
   static const n17 = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
@@ -419,6 +515,10 @@ class Motion {
   /// the screen must not start it at all when [enabled] is false.
   static const breath = Duration(seconds: 5);
 
+  /// A ring sweeping to its value and its number counting up, once, when a
+  /// screen opens. Goes through [motion] like every other animation.
+  static const sweep = Duration(milliseconds: 1100);
+
   /// One pulse of the ECG capture screen's contact rings. Phase is owned by
   /// the screen (like [breath]); nothing runs when [enabled] is false.
   static const ecgPulse = Duration(seconds: 2);
@@ -489,5 +589,8 @@ ThemeData buildTheme(Brightness b) {
       for (final e in const PageTransitionsTheme().builders.entries)
         e.key: _Gated(e.value),
     }),
+    // Differs whenever Customize changes the look, so every theme reader
+    // rebuilds — see [LookStamp].
+    extensions: [LookStamp(Look.rev)],
   );
 }

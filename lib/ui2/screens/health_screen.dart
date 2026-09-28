@@ -8,7 +8,10 @@
 // app that are absolute.
 
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
+
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
 import '../../compute/findings.dart';
 import '../../data/day_label.dart';
@@ -17,7 +20,9 @@ import '../../data/lab_catalogue.dart';
 import '../../data/local_repository.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/metric.dart';
+import '../../state/app_state.dart';
 import '../ui2.dart';
+import 'calm_breathing.dart';
 import 'circadian_detail.dart';
 import 'ecg.dart' show EcgEntryCard, pairedIsMaverickOf;
 import 'findings_log.dart';
@@ -25,6 +30,7 @@ import 'home_screen.dart';
 import 'investigate.dart';
 import 'metric_detail.dart';
 import 'naps.dart';
+import 'wellness_screen.dart' show stressLevelLabel;
 
 /// A read this screen can live without. The wear block and the nap block are
 /// ADDITIONS to the repository interface, so an implementation written before
@@ -470,7 +476,14 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         l?.healthTabTrends ?? 'Trends',
         l?.healthTabVitals ?? 'Vitals',
         l?.healthTabLabs ?? 'Labs',
+        'Live HR',
+        'Stress',
       ];
+
+  /// Display order over the ids above. Ids stay append-only — goldens and
+  /// [HealthScreen.tab] address tabs by id — while the two live-body tabs sit
+  /// right after Overview, where they are found.
+  static const _order = [0, 5, 6, 1, 2, 3, 4];
   late int _tab = widget.tab;
 
   HealthData? _d;
@@ -519,6 +532,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
       _e = null;
       _loadExplore();
     }
+    if (hasRead(#stress)) _loadStress();
   }
 
   Future<void> _load() async {
@@ -607,6 +621,187 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     if (i == 1) _loadExplore();
     if (i == 3) _loadVitals();
     if (i == 4) _loadLabs();
+    if (i == 6) _loadStress();
+  }
+
+  /// Today's stress block (`getDayStress`), or null before the first read.
+  Map<String, dynamic>? _s;
+  bool _sFailed = false;
+
+  Future<void> _loadStress() async {
+    final repo = repoOf(context);
+    if (repo == null) return;
+    final t = beginRead(#stress);
+    try {
+      final s = await _soft(() => repo.getDayStress(todayLabel()));
+      if (stillNewest(#stress, t)) setState(() => (_s = s, _sFailed = false));
+    } catch (_) {
+      if (stillNewest(#stress, t)) setState(() => _sFailed = true);
+    }
+  }
+
+  // ─────────────── STRESS ───────────────
+  //
+  // Daytime stress is the nightly Baevsky SI run per 15 minutes of the day
+  // (`stress_day`, see onehz_pipeline `stressPerWindow`), shown on a 0–3
+  // scale: score / 100 × 3. Only the scale is new here; the number is the
+  // pipeline's. A window with no reading draws nothing and is not counted.
+  Widget _stressTab(BuildContext c) {
+    final p = P.of(c);
+    final l = AppLocalizations.of(c);
+    final s = _s;
+    if (s == null) {
+      if (_sFailed) {
+        return _readFailed('stress', () {
+          setState(() => _sFailed = false);
+          _loadStress();
+        });
+      }
+      if (repoOf(c) == null) {
+        return const StatusCard('No stress reading yet today',
+            'Stress is read from your beat-to-beat data.',
+            icon: LucideIcons.activity);
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
+    final today = todayLabel();
+    final bins = <_StressBin>[
+      for (final e in (s['stress_day'] is List ? s['stress_day'] as List : const []))
+        if (e is Map && e['t'] is num)
+          _StressBin(DateTime.fromMillisecondsSinceEpoch(
+                  (e['t'] as num).toInt() * 1000),
+              (e['score'] as num?)?.toDouble()),
+    ].where((b) => dayLabelOf(b.at) == today).toList();
+    final scored = [for (final b in bins) if (b.score != null) b];
+
+    final nightBlk = s['stress'];
+    final night = nightBlk is Map ? nightBlk['score'] as num? : null;
+    final nightLevel = nightBlk is Map && nightBlk['level'] is String
+        ? stressLevelLabel(l, nightBlk['level'] as String)
+        : null;
+
+    final out = <Widget>[];
+    if (scored.isEmpty) {
+      out.add(StatusCard(
+        'No stress reading yet today',
+        bins.isEmpty
+            ? 'Stress is read from beat-to-beat data, and nothing from today '
+                'has been synced and processed yet.'
+            : 'Today\'s beat data is too thin for a reading so far. Each '
+                '15 minutes needs a few hundred clean beats.',
+        fix: syncOf(c) == null ? '' : 'Sync the band',
+        onFix: syncOf(c),
+        icon: LucideIcons.activity,
+      ));
+    } else {
+      final last = scored.last;
+      final v = last.score! / 100 * 3;
+      final mins = [0, 0, 0];
+      for (final b in scored) {
+        mins[_level(b.score! / 100 * 3)] += 15;
+      }
+      out.addAll([
+        Center(
+          child: SizedBox(
+            width: 250,
+            height: 140,
+            child: CustomPaint(
+              painter: _StressGauge(v / 3, p),
+              child: Align(
+                alignment: const Alignment(0, .85),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(v.toStringAsFixed(1),
+                        style: F.n48.copyWith(color: p.ink)),
+                    Text('of 3', style: F.cap.copyWith(color: p.ink3)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: S.x3),
+        Center(
+          child: Text(
+            '${_levelWord[_level(v)]} stress · as of ${clock(last.at.hour * 60 + last.at.minute)}',
+            textAlign: TextAlign.center,
+            style: F.head.copyWith(color: p.on(_levelColor[_level(v)])),
+          ),
+        ),
+        Section(
+          'Today',
+          Surface(
+            child: Column(children: [
+              SizedBox(
+                height: 80,
+                child: CustomPaint(
+                    painter: _StressBars(bins, p), size: Size.infinite),
+              ),
+              const SizedBox(height: S.x2),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                for (final t in const ['00:00', '12:00', '24:00'])
+                  Text(t, style: F.over.copyWith(color: p.ink3)),
+              ]),
+            ]),
+          ),
+        ),
+        Section(
+          'Time at each level',
+          Surface(
+            child: Column(children: [
+              for (var i = 0; i < 3; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: S.x2),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text(_levelWord[i],
+                          style: F.body.copyWith(color: p.on(_levelColor[i]))),
+                    ),
+                    Text(hm(mins[i].toDouble()),
+                        style: F.body.copyWith(color: p.ink)),
+                  ]),
+                ),
+            ]),
+          ),
+        ),
+      ]);
+    }
+    out.addAll([
+      Section(
+        l?.wellnessStressLastNight ?? 'Stress last night',
+        night == null
+            ? StatusCard(
+                l?.wellnessNoStressTitle ?? 'No stress reading last night',
+                l?.wellnessNoStressBody ??
+                    'Stress is read from beat timing while you were resting '
+                        'overnight, and last night produced no reading.',
+                icon: LucideIcons.activity,
+              )
+            : SignalCard(
+                LucideIcons.activity,
+                C.purple,
+                l?.wellnessAutonomicTension ?? 'Autonomic tension',
+                night.round().toString(),
+                unit: '/100',
+                sub: (nightLevel ?? '').toUpperCase(),
+              ),
+      ),
+      const SizedBox(height: S.x5),
+      ActionCard('Breathe for 2 minutes', 'Slow breathing to settle your system',
+          'Start', LucideIcons.wind, C.blue,
+          onTap: () => go(c, const CalmBreathing())),
+      const SizedBox(height: S.x4),
+      Text(
+        'How it works: the Baevsky stress index on your beat-to-beat data in '
+        '15-minute windows, the same formula as the nightly reading, shown '
+        'from 0 to 3. Under 1 is low, under 2 is medium, 2 and up is high. '
+        'Exercise raises it too. A window without enough clean beats shows '
+        'nothing rather than a guess. Updates after each band sync.',
+        style: F.cap.copyWith(color: p.ink3),
+      ),
+    ]);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
   }
 
   @override
@@ -615,7 +810,9 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     final l = AppLocalizations.of(c);
     return ListView(padding: pad, children: [
       ScreenTitle(l?.healthTitle ?? 'Health'),
-      SubTabs(_tabsOf(l), _tab, _select, color: C.blue),
+      SubTabs([for (final i in _order) _tabsOf(l)[i]], _order.indexOf(_tab),
+          (pos) => _select(_order[pos]),
+          color: C.blue),
       const SizedBox(height: S.x5),
       if (_loading && _d == null)
         const Padding(
@@ -628,6 +825,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
           1 => _explore(c),
           2 => _trends(c, d),
           3 => _vitals(c, d),
+          5 => const _LiveTab(),
+          6 => _stressTab(c),
           _ => _labs(c),
         },
     ]);
@@ -1762,4 +1961,145 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
       takenOn.dispose();
     }
   }
+}
+
+// ─────────────── LIVE HR tab ───────────────
+
+/// Owns the realtime-HR stream only while it is actually ON SCREEN: mounted,
+/// and the shell showing Health. The shell keeps Health alive in an
+/// IndexedStack, so "mounted" alone would hold the band's stream open while
+/// you sat on Home. Same retain/release pair the resting-HR detail uses.
+class _LiveTab extends StatefulWidget {
+  const _LiveTab();
+
+  @override
+  State<_LiveTab> createState() => _LiveTabState();
+}
+
+class _LiveTabState extends State<_LiveTab> {
+  AppState? _owner;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shown = (ShellScope.maybeOf(context)?.current ?? ShellDomain.health) ==
+        ShellDomain.health;
+    if (shown && _owner == null && repoOf(context) != null) {
+      _owner = context.read<AppState>()..retainLiveHrView();
+    } else if (!shown && _owner != null) {
+      _owner!.releaseLiveHrView();
+      _owner = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _owner?.releaseLiveHrView();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // No AppState above us (goldens): the card would reach for one.
+      if (repoOf(c) == null)
+        const StatusCard('No live reading', 'No band is connected.',
+            icon: LucideIcons.heartOff)
+      else
+        const LiveHrCard(),
+      const SizedBox(height: S.x3),
+      Text(
+        'Streams from the band about once a second while this tab is open. '
+        'Nothing here is stored; your history comes from the band sync.',
+        style: F.cap.copyWith(color: p.ink3),
+      ),
+      const SizedBox(height: S.x5),
+      detailLinkRow(c, LucideIcons.heart, 'Resting heart rate',
+          'Your nightly trend', () => go(c, const MetricDetail('resting_hr'))),
+    ]);
+  }
+}
+
+// ─────────────── STRESS drawing ───────────────
+
+class _StressBin {
+  final DateTime at;
+  final double? score; // 0–100, null = window without a reading
+  const _StressBin(this.at, this.score);
+}
+
+const _levelWord = ['Low', 'Medium', 'High'];
+const _levelColor = [C.green, C.yellow, C.red];
+
+/// 0–3 value → level index. The cut points are the display scale's thirds.
+int _level(double v) => v < 1 ? 0 : v < 2 ? 1 : 2;
+
+/// The 0–3 gauge: a half ring shading green → yellow → red, filled to [frac].
+class _StressGauge extends CustomPainter {
+  final double frac;
+  final P p;
+  const _StressGauge(this.frac, this.p);
+
+  @override
+  void paint(Canvas cv, Size s) {
+    const w = 14.0;
+    final r = math.min(s.width / 2, s.height) - w;
+    final center = Offset(s.width / 2, s.height - w / 2);
+    final rect = Rect.fromCircle(center: center, radius: r);
+    final f = frac.clamp(0.0, 1.0);
+    Paint stroke() => Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w
+      ..strokeCap = StrokeCap.round;
+    cv.drawArc(rect, math.pi, math.pi, false, stroke()..color = p.track);
+    cv.drawArc(
+        rect,
+        math.pi,
+        math.pi * f,
+        false,
+        stroke()
+          ..shader = const SweepGradient(
+            startAngle: math.pi,
+            endAngle: 2 * math.pi,
+            colors: [C.green, C.yellow, C.red],
+          ).createShader(rect));
+    final a = math.pi + math.pi * f;
+    final m = center + Offset(math.cos(a) * r, math.sin(a) * r);
+    cv.drawCircle(m, w * .62, Paint()..color = p.ink);
+  }
+
+  @override
+  bool shouldRepaint(_StressGauge old) => old.frac != frac || old.p.dark != p.dark;
+}
+
+/// Today as 96 fifteen-minute slots. A slot with a reading is a bar coloured
+/// by its level; a slot the band covered without a reading is a faint tick; a
+/// slot with no data at all is empty.
+class _StressBars extends CustomPainter {
+  final List<_StressBin> bins;
+  final P p;
+  const _StressBars(this.bins, this.p);
+
+  @override
+  void paint(Canvas cv, Size s) {
+    final slot = s.width / 96;
+    for (final b in bins) {
+      final i = (b.at.hour * 60 + b.at.minute) ~/ 15;
+      final x = i * slot + slot * .15;
+      final score = b.score;
+      final h = score == null ? 3.0 : math.max(3.0, score / 100 * s.height);
+      cv.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(x, s.height - h, slot * .7, h),
+            const Radius.circular(2)),
+        Paint()
+          ..color = score == null
+              ? p.track
+              : _levelColor[_level(score / 100 * 3)],
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StressBars old) => old.bins != bins || old.p.dark != p.dark;
 }
