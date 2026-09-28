@@ -663,9 +663,8 @@ class MoreSettingsView extends StatelessWidget {
                   SetRow(LucideIcons.ruler, C.blue,
                       l?.settingsUnitsRowTitle ?? 'Units',
                       value: units, onTap: onCycleUnits),
-                  SetRow(LucideIcons.sun, C.yellow,
-                      l?.settingsAppearanceRowTitle ?? 'Appearance',
-                      value: appearance, onTap: onCycleAppearance),
+                  // No Appearance row: the app is dark-only (see
+                  // ThemeController.effective), so a picker would do nothing.
                   if (appIcon != null)
                     _IconRow(chosen: appIcon!, onPick: onPickIcon),
                   // Opt-in, and it says what it does rather than what it is

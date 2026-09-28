@@ -129,20 +129,27 @@ class P {
 
   static P of(BuildContext c) => P(Theme.of(c).brightness == Brightness.dark);
 
-  Color get bg => dark ? const Color(0xFF0B1017) : C.n50;
-  Color get card => dark ? const Color(0xFF151C26) : C.white;
-  Color get card2 => dark ? const Color(0xFF1D2632) : C.n100;
-  Color get line => dark ? const Color(0xFF232D3B) : C.n200;
-  Color get track => dark ? const Color(0xFF232D3B) : C.n200;
+  // Dark is a cool slate, not black: a soft top-to-bottom fade behind
+  // lighter slate cards, so the cards read as raised without borders.
+  Color get bg => dark ? const Color(0xFF1B2229) : C.n50;
+  Color get card => dark ? const Color(0xFF28313A) : C.white;
+  Color get card2 => dark ? const Color(0xFF303A43) : C.n100;
+  Color get line => dark ? const Color(0xFF38424C) : C.n200;
+  Color get track => dark ? const Color(0xFF3B454F) : C.n200;
 
-  Color get ink => dark ? const Color(0xFFF1F5F9) : C.n900;
-  Color get ink2 => dark ? const Color(0xFF94A3B8) : C.n600;
+  /// The page fade's two ends (top, bottom). Only the shell paints it; a
+  /// pushed route sits on the flat [bg], which is the fade's midpoint.
+  Color get bgTop => dark ? const Color(0xFF2A343D) : C.n50;
+  Color get bgBottom => dark ? const Color(0xFF12171C) : C.n50;
+
+  Color get ink => dark ? const Color(0xFFF4F6F8) : C.n900;
+  Color get ink2 => dark ? const Color(0xFFB9C2CC) : C.n600;
 
   /// The muted caption ink. Hand-solved to clear 4.5:1 on [card2], the darkest
   /// (light theme) / lightest (dark theme) surface it can sit on — so it is
   /// legible on every surface, not just the one it was eyeballed against.
   /// The values it replaces measured 4.34:1 and 3.21:1 respectively.
-  Color get ink3 => dark ? const Color(0xFF7F8DA0) : const Color(0xFF627188);
+  Color get ink3 => dark ? const Color(0xFF9CA7B3) : const Color(0xFF627188);
 
   /// The ink that goes on top of a [fill]. White by construction — [fill]
   /// darkens the accent until white clears AA on it.
@@ -299,40 +306,52 @@ class F {
       fontWeight: FontWeight.w600,
       letterSpacing: .5);
 
-  // Numerals — a parallel display ramp. Tabular, so a live value never jitters
-  // its own layout as digits change.
+  // Numerals — a parallel display ramp in the condensed face: tall, bold and
+  // narrow, so a big number reads at a glance and still fits its card.
+  // Tabular, so a live value never jitters its own layout as digits change.
+  static const _n = 'Barlow Condensed';
   static const n48 = TextStyle(
-      fontFamily: _f,
+      fontFamily: _n,
       fontFamilyFallback: _fb,
       fontSize: 48,
       height: 1,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -1.8,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -.5,
       fontFeatures: _tab);
   static const n34 = TextStyle(
-      fontFamily: _f,
+      fontFamily: _n,
       fontFamilyFallback: _fb,
       fontSize: 34,
       height: 1,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -1.2,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -.3,
       fontFeatures: _tab);
   static const n24 = TextStyle(
-      fontFamily: _f,
+      fontFamily: _n,
       fontFamilyFallback: _fb,
       fontSize: 24,
       height: 1,
       fontWeight: FontWeight.w700,
-      letterSpacing: -.7,
+      letterSpacing: 0,
       fontFeatures: _tab);
   static const n17 = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
       fontSize: 17,
       height: 1,
-      fontWeight: FontWeight.w600,
-      letterSpacing: -.3,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0,
       fontFeatures: _tab);
+
+  /// The section and metric LABEL: small caps, bold, widely tracked —
+  /// "SLEEP DEBT", "HR ZONES". Pass text already upper-cased.
+  static const label = TextStyle(
+      fontFamily: _f,
+      fontFamilyFallback: _fb,
+      fontSize: 14,
+      height: 18 / 14,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.6);
 }
 
 /// ── SPACING ── 4pt base ───────────────────────────────────────────────────

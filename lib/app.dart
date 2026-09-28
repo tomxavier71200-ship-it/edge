@@ -31,6 +31,7 @@ import 'ui2/screens/what_changed.dart';
 import 'ui2/screens/health_screen.dart';
 import 'ui2/screens/home_screen.dart';
 import 'ui2/screens/journal_compose.dart';
+import 'ui2/screens/more_screen.dart';
 import 'ui2/screens/log_workout.dart';
 import 'ui2/screens/nutrition_screen.dart';
 import 'ui2/screens/wellness_screen.dart';
@@ -548,6 +549,7 @@ class _ShellState extends State<_Shell> {
       key: ValueKey(_rev),
       initial: _domain,
       banner: live ? const _LiveSessionBar() : null,
+      onAction: showActionSheet,
       onSelect: (d) {
         _domain = d;
         Prefs.setInt(Prefs.shellTab, d.index);
@@ -558,6 +560,7 @@ class _ShellState extends State<_Shell> {
         ShellDomain.nutrition => const NutritionScreen(),
         ShellDomain.workout => const WorkoutScreen(),
         ShellDomain.wellness => const WellnessScreen(),
+        ShellDomain.more => const MoreScreen(),
       },
     );
   }

@@ -816,14 +816,19 @@ class LiveHeart extends StatelessWidget {
         spacing: S.x2,
         runSpacing: S.x1,
         children: [
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(LucideIcons.heart, size: 18, color: p.on(C.red)),
-            const SizedBox(width: S.x2),
-            Text('${feed.hr}', style: F.n24.copyWith(color: p.ink)),
-            const SizedBox(width: S.x1),
-            Text(l?.activityLiveBpmUnit ?? 'bpm',
-                style: F.cap.copyWith(color: p.ink3)),
-          ]),
+          // Scales down rather than overflowing: at a 3x text size the beat
+          // and its unit are wider than the card on their own.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(LucideIcons.heart, size: 18, color: p.on(C.red)),
+              const SizedBox(width: S.x2),
+              Text('${feed.hr}', style: F.n24.copyWith(color: p.ink)),
+              const SizedBox(width: S.x1),
+              Text(l?.activityLiveBpmUnit ?? 'bpm',
+                  style: F.cap.copyWith(color: p.ink3)),
+            ]),
+          ),
           if (z != null)
             // The zone's OWN colour, the one the bar underneath paints it in. A
             // fixed green said "zone 5" and "zone 1" in the same breath.

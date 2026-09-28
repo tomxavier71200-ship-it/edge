@@ -195,6 +195,9 @@ void main() {
 const _notComponents = {
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
+  // The shell's More tab: a list of doors that switches tabs through the
+  // ShellScope, so it has no meaning outside a live shell.
+  'MoreScreen',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to

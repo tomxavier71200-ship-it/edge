@@ -135,18 +135,56 @@ void main() {
     }
   }
 
-  testWidgets('the shell has five destinations and cannot grow a sixth',
+  testWidgets('the bar is Home · Health · + · Workout · More, and cannot grow',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
-      theme: buildTheme(Brightness.light),
+      theme: buildTheme(Brightness.dark),
       home: AppShell(
-        builder: (c, d) => Center(child: Text(d.label)),
+        builder: (c, d) => const SizedBox.shrink(),
+        onAction: (_, _) {},
       ),
     ));
-    expect(ShellDomain.values, hasLength(5));
-    for (final d in ShellDomain.values) {
-      expect(find.text(d.label), findsWidgets, reason: '${d.label} tab missing');
+    // Six destinations: four in the bar, two (Nutrition, Wellness) behind
+    // More. A seventh is a change to app_shell.dart, not to a screen.
+    expect(ShellDomain.values, hasLength(6));
+    final bar = [for (final d in ShellDomain.values) if (d.inBar) d];
+    expect(bar, [
+      ShellDomain.home,
+      ShellDomain.health,
+      ShellDomain.workout,
+      ShellDomain.more,
+    ]);
+    for (final d in bar) {
+      expect(find.text(d.label), findsOneWidget, reason: '${d.label} tab missing');
     }
+    for (final d in ShellDomain.values.where((d) => !d.inBar)) {
+      expect(find.text(d.label), findsNothing,
+          reason: '${d.label} lives behind More, not in the bar');
+    }
+    expect(find.bySemanticsLabel('Add'), findsOneWidget,
+        reason: 'the centre action button');
+  });
+
+  testWidgets('an off-bar domain lights More, and the + opens the action',
+      (tester) async {
+    var actions = 0;
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.dark),
+      home: AppShell(
+        initial: ShellDomain.nutrition,
+        builder: (c, d) => Text('body:${d.label}'),
+        onAction: (_, _) => actions++,
+      ),
+    ));
+    expect(find.text('body:Nutrition'), findsOneWidget,
+        reason: 'deep links to an off-bar domain still land on it');
+    final selected = find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.selected == true);
+    expect(find.descendant(of: selected, matching: find.text('More')),
+        findsOneWidget,
+        reason: 'Nutrition is reached through More, so More reads as "here"');
+    await tester.tap(find.bySemanticsLabel('Add'));
+    expect(actions, 1);
   });
 
   testWidgets('every tap target in the shell clears 44 pt', (tester) async {

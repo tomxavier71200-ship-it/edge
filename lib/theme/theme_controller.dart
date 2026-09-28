@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widget/widget_service.dart';
 import 'tokens.dart';
 import 'theme.dart';
+import '../ui2/theme.dart' as ui2 show P;
 
 /// What the user picked. `system` defers to the OS brightness.
 enum AppThemeChoice { system, light, dark }
@@ -62,12 +63,10 @@ class ThemeController extends ChangeNotifier {
 
   AppThemeChoice get choice => _choice;
 
-  /// The brightness actually being rendered.
-  Brightness get effective => switch (_choice) {
-        AppThemeChoice.light => Brightness.light,
-        AppThemeChoice.dark => Brightness.dark,
-        AppThemeChoice.system => _platform,
-      };
+  /// The brightness actually being rendered. ALWAYS DARK: the app is designed
+  /// as a dark-only surface now. The stored choice and the OS brightness are
+  /// still tracked (so this is one line to revert), but neither can switch it.
+  Brightness get effective => Brightness.dark;
 
   bool get isDark => effective == Brightness.dark;
 
@@ -113,7 +112,8 @@ class ThemeController extends ChangeNotifier {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor: AppColors.bg,
+      // The ui2 page colour, so the nav bar blends into the near-black app.
+      systemNavigationBarColor: ui2.P(isDark).bg,
       systemNavigationBarIconBrightness:
           isDark ? Brightness.light : Brightness.dark,
     ));

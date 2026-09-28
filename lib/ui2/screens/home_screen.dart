@@ -796,7 +796,7 @@ class RingTrio extends StatelessWidget {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
-    final rings = [for (final k in HomeRingKind.values) _ringOf(k, d, l)];
+    final rings = [for (final k in _order) _ringOf(k, d, l)];
     final gaps = rings.where((r) => r.why != null).toList();
     // THERE IS NO "THESE TWO ARE FROM SATURDAY" LINE ANY MORE, and there is
     // nothing left for one to explain. Recovery and sleep used to be served
@@ -810,25 +810,20 @@ class RingTrio extends StatelessWidget {
     return Surface(
       elevation: 2,
       child: Column(children: [
-        if (bigText(c))
-          // Past ~1.3× a 100 pt column cannot hold the word "Recovery" on one
-          // line and there is nowhere for it to wrap to. The ring keeps its
-          // size and the type gets the width instead.
-          for (var i = 0; i < rings.length; i++) ...[
-            if (i > 0) const SizedBox(height: S.x2),
-            _RingRow(rings[i], onTap: _open(rings[i].kind)),
-          ]
-        else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < rings.length; i++) ...[
-                if (i > 0) const SizedBox(width: S.x3),
-                Expanded(
-                    child: _RingColumn(rings[i], onTap: _open(rings[i].kind))),
-              ],
+        // ALWAYS three across, whatever the text size: the row of dials is the
+        // shape of this screen. At a large text size the words under each ring
+        // shrink to fit their column (see [_RingText]) instead of the trio
+        // collapsing into a stacked list.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < rings.length; i++) ...[
+              if (i > 0) const SizedBox(width: S.x3),
+              Expanded(
+                  child: _RingColumn(rings[i], onTap: _open(rings[i].kind))),
             ],
-          ),
+          ],
+        ),
         for (final r in gaps) ...[
           const SizedBox(height: S.x2),
           Divider(color: p.line, height: 1),
@@ -866,6 +861,14 @@ class RingTrio extends StatelessWidget {
     final f = onOpen;
     return f == null ? null : () => f(k);
   }
+
+  /// Display order, left to right: the night, what it gave back, what the day
+  /// has cost. Recovery sits in the middle, where the eye lands first.
+  static const _order = [
+    HomeRingKind.sleep,
+    HomeRingKind.recovery,
+    HomeRingKind.strain,
+  ];
 }
 
 /// Which ring. The three the app can stand behind on a home screen: what the
@@ -998,7 +1001,14 @@ class _Dial extends StatelessWidget {
   final _RingState r;
   final double stroke, icon;
 
-  const _Dial(this.r, {required this.stroke, required this.icon});
+  /// Put a MEASURED number inside the ring instead of the icon. Scaled down
+  /// to fit, so a duration like "7h 45m" can never overflow its circle — the
+  /// failure that kept the number outside before. Absent and calibrating
+  /// rings keep the icon: they have no number to show.
+  final bool valueInside;
+
+  const _Dial(this.r,
+      {required this.stroke, required this.icon, this.valueInside = false});
 
   @override
   Widget build(BuildContext c) {
@@ -1017,7 +1027,17 @@ class _Dial extends StatelessWidget {
             : Ring(r.frac ?? 0, r.arc(p), p.track,
                 stroke: stroke, t: animate(c, 1), solid: r.measured),
       ),
-      Icon(r.icon, size: icon, color: r.ink(p)),
+      if (valueInside && r.measured)
+        Padding(
+          padding: EdgeInsets.all(stroke * 2),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(r.value,
+                maxLines: 1, style: F.n34.copyWith(color: p.ink)),
+          ),
+        )
+      else
+        Icon(r.icon, size: icon, color: r.ink(p)),
     ]);
   }
 }
@@ -1037,41 +1057,15 @@ class _RingColumn extends StatelessWidget {
         semanticLabel: r.spoken,
         child: Column(children: [
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 96),
+            constraints: const BoxConstraints(maxWidth: 112),
             child: AspectRatio(
               aspectRatio: 1,
-              child: _Dial(r, stroke: 7, icon: 20),
+              child: _Dial(r, stroke: 9, icon: 22, valueInside: true),
             ),
           ),
           const SizedBox(height: S.x3),
-          _RingText(r, align: TextAlign.center),
+          _RingText(r, align: TextAlign.center, valueInRing: true),
         ]),
-      );
-}
-
-/// The accessibility layout: ring left, type in the width it needs.
-class _RingRow extends StatelessWidget {
-  final _RingState r;
-  final VoidCallback? onTap;
-
-  const _RingRow(this.r, {this.onTap});
-
-  @override
-  Widget build(BuildContext c) => Pressable(
-        onTap: onTap,
-        semanticLabel: r.spoken,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: S.x2),
-          child: Row(children: [
-            SizedBox(
-              width: 56,
-              height: 56,
-              child: _Dial(r, stroke: 5, icon: 15),
-            ),
-            const SizedBox(width: S.x3),
-            Expanded(child: _RingText(r, align: TextAlign.start)),
-          ]),
-        ),
       );
 }
 
@@ -1079,7 +1073,10 @@ class _RingText extends StatelessWidget {
   final _RingState r;
   final TextAlign align;
 
-  const _RingText(this.r, {required this.align});
+  /// The dial above already shows a measured number, so don't repeat it.
+  final bool valueInRing;
+
+  const _RingText(this.r, {required this.align, this.valueInRing = false});
 
   @override
   Widget build(BuildContext c) {
@@ -1087,20 +1084,28 @@ class _RingText extends StatelessWidget {
     final cross = align == TextAlign.center
         ? CrossAxisAlignment.center
         : CrossAxisAlignment.start;
+    // Each line keeps to ONE line and shrinks to its column's width: three
+    // rings across is the layout at every text size, so "RECOVERY" at 2x
+    // scales down rather than wrapping or overflowing.
+    Widget fit(String s, TextStyle st) => FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(s, maxLines: 1, style: st, textAlign: align),
+        );
     return Column(crossAxisAlignment: cross, children: [
-      Text(r.label.toUpperCase(),
-          style: F.over.copyWith(color: p.ink3), textAlign: align),
-      const SizedBox(height: S.x1),
-      // Absent reads as words, never as a dash and never as a zero — so it
-      // takes the sentence weight rather than the numeral one.
-      Text(r.value,
-          style: r.measured
-              ? F.n24.copyWith(color: p.ink)
-              : F.body.copyWith(color: p.ink2),
-          textAlign: align),
+      fit(r.label.toUpperCase(), F.over.copyWith(color: p.ink2)),
+      if (!(valueInRing && r.measured)) ...[
+        const SizedBox(height: S.x1),
+        // Absent reads as words, never as a dash and never as a zero — so it
+        // takes the sentence weight rather than the numeral one.
+        fit(
+            r.value,
+            r.measured
+                ? F.n24.copyWith(color: p.ink)
+                : F.body.copyWith(color: p.ink2)),
+      ],
       if (r.sub.isNotEmpty) ...[
         const SizedBox(height: 2),
-        Text(r.sub, style: F.cap.copyWith(color: p.ink3), textAlign: align),
+        fit(r.sub, F.cap.copyWith(color: p.ink3)),
       ],
     ]);
   }
@@ -1718,9 +1723,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             child: Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
-                  shape: BoxShape.circle, color: p.fill(C.domHome)),
-              child: Icon(LucideIcons.settings, size: 18, color: p.inkOnFill),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: p.card),
+              child: Icon(LucideIcons.user, size: 18, color: p.ink),
             ),
           ),
         ]),

@@ -224,7 +224,7 @@ class Surface extends StatelessWidget {
         padding: pad,
         decoration: BoxDecoration(
           color: color ?? p.card,
-          borderRadius: R.rLg,
+          borderRadius: R.rXl,
           boxShadow: p.el(elevation),
         ),
         child: child,

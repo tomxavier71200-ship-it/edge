@@ -1,30 +1,37 @@
-// The five-tab shell.
+// The app shell.
 //
-// Home · Health · Nutrition · Workout · Wellness. Stable forever: the contents
-// personalise, the mental map does not. Each domain owns an accent, so colour
-// tells you where you are before the label does.
+// The bar is a floating pill — Home · Health · Workout · More — with a "+"
+// disc beside it. The "+" is not a
+// destination: it opens the action sheet the host supplies ([AppShell.onAction])
+// — start a workout, journal, breathe, log food — so the things you DO sit one
+// tap from anywhere, and the tabs stay the places you LOOK.
 //
-// There is no sixth tab, and the type system is what says so — [ShellDomain]
-// is a closed enum and [AppShell] takes a builder keyed by it, so "just add a
-// tab for X" is a change to this file with a reviewer attached, not something
-// a screen can do on its own. Anything that feels like a sixth destination is
-// a `SubTabs` inside the domain that owns it.
+// Nutrition and Wellness are still full domains — deep links and notification
+// routes land on them exactly as before — they are just reached from More
+// rather than from the bar. [ShellDomain.inBar] is the one switch for that.
+//
+// The domain set is still a closed enum and [AppShell] still takes a builder
+// keyed by it, so "just add a tab for X" is a change to this file with a
+// reviewer attached, not something a screen can do on its own.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'grammar.dart';
 import 'theme.dart';
 
-/// The five primary destinations, in bar order.
+/// Every destination. The ORDER is persisted (`Prefs.shellTab` stores the
+/// index), so new values only ever go on the end.
 enum ShellDomain {
   home('Home', LucideIcons.house, C.domHome),
   health('Health', LucideIcons.heartPulse, C.domHealth),
-  nutrition('Nutrition', LucideIcons.utensils, C.domFood),
+  nutrition('Nutrition', LucideIcons.utensils, C.domFood, inBar: false),
   workout('Workout', LucideIcons.dumbbell, C.domMove),
-  wellness('Wellness', LucideIcons.leaf, C.domMind);
+  wellness('Wellness', LucideIcons.leaf, C.domMind, inBar: false),
+  more('More', LucideIcons.ellipsis, C.domHome);
 
-  const ShellDomain(this.label, this.icon, this.accent);
+  const ShellDomain(this.label, this.icon, this.accent, {this.inBar = true});
 
   final String label;
   final IconData icon;
@@ -32,13 +39,25 @@ enum ShellDomain {
   /// The domain's pigment. Use `P.of(context).on(accent)` for text and
   /// `.fill(accent)` for a filled surface — the raw value is not AA-safe.
   final Color accent;
+
+  /// Whether the domain has its own slot in the bar. Off-bar domains are
+  /// reached from More (and by deep link) and light the More slot while open.
+  final bool inBar;
 }
 
-// There is no `Domain` InheritedWidget. There was one, promising that a screen
-// "and anything it pushes" could pick up its accent without threading it — but
-// nothing ever read it, and a pushed route could not have: `MaterialApp.home`
-// is the gate, so `Navigator.of` pushes above the shell entirely. Screens take
-// their accent as a parameter, which is honest about where it comes from.
+/// Lets a screen inside the shell switch tabs — More uses it to open
+/// Nutrition and Wellness, the action sheet to open Workout.
+class ShellScope extends InheritedWidget {
+  final ValueChanged<ShellDomain> select;
+
+  const ShellScope({super.key, required this.select, required super.child});
+
+  static ShellScope? maybeOf(BuildContext c) =>
+      c.dependOnInheritedWidgetOfExactType<ShellScope>();
+
+  @override
+  bool updateShouldNotify(ShellScope old) => false;
+}
 
 class AppShell extends StatefulWidget {
   /// Builds the body of one domain. Called lazily — a tab is not built until
@@ -51,6 +70,10 @@ class AppShell extends StatefulWidget {
   /// (which domains conventionally use to scroll to top).
   final void Function(ShellDomain domain)? onSelect;
 
+  /// The centre "+" button. Null hides it (a gallery, a test).
+  final void Function(BuildContext context, ValueChanged<ShellDomain> select)?
+      onAction;
+
   /// Pinned between the domain and the tab bar, above every tab. This is not
   /// a general slot — it exists for state that is RUNNING and is not on
   /// screen, which today means a minimised workout. A domain's own content
@@ -62,6 +85,7 @@ class AppShell extends StatefulWidget {
     required this.builder,
     this.initial = ShellDomain.home,
     this.onSelect,
+    this.onAction,
     this.banner,
   });
 
@@ -84,17 +108,27 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    return Scaffold(
-      backgroundColor: p.bg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(children: [
-          Expanded(
+    return ShellScope(
+      select: _select,
+      child: Scaffold(
+        backgroundColor: p.bg,
+        // The bar floats: content scrolls on under it, and every tab's list
+        // already ends with enough bottom padding to clear it.
+        extendBody: true,
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [p.bgTop, p.bgBottom],
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
             child: IndexedStack(
               index: _current.index,
               children: [
-                // An unvisited tab is an empty box, not a built screen — the
-                // old shell built all forty screens' worth of state on launch.
+                // An unvisited tab is an empty box, not a built screen.
                 for (final d in ShellDomain.values)
                   if (_built.contains(d))
                     widget.builder(c, d)
@@ -103,45 +137,71 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
           ),
+        ),
+        bottomNavigationBar: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Riding just above the bar, so a floating bar cannot cover it.
           if (widget.banner != null) widget.banner!,
+          _TabBar(
+            current: _current,
+            onTap: _select,
+            onAction: widget.onAction == null
+                ? null
+                : () => widget.onAction!(c, _select),
+          ),
         ]),
       ),
-      bottomNavigationBar: _TabBar(current: _current, onTap: _select),
     );
   }
 }
 
+/// A floating rounded pill of tabs, with the action disc standing beside it.
 class _TabBar extends StatelessWidget {
   final ShellDomain current;
   final ValueChanged<ShellDomain> onTap;
+  final VoidCallback? onAction;
 
-  const _TabBar({required this.current, required this.onTap});
+  const _TabBar({required this.current, required this.onTap, this.onAction});
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    return Container(
-      decoration: BoxDecoration(
-        color: p.card,
-        border: Border(top: BorderSide(color: p.line)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            children: [
-              for (final d in ShellDomain.values)
-                Expanded(
-                  child: _Tab(
-                    domain: d,
-                    on: d == current,
-                    onTap: () => onTap(d),
-                  ),
-                ),
-            ],
+    // An off-bar domain (Nutrition, Wellness) is reached through More, so
+    // More is what reads as "here".
+    final lit = current.inBar ? current : ShellDomain.more;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(S.x4, S.x2, S.x4, S.x3),
+        child: Row(children: [
+          Expanded(
+            child: Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: p.card,
+                borderRadius: R.rXxl,
+                boxShadow: p.el(3),
+              ),
+              child: Row(children: [
+                for (final d in ShellDomain.values)
+                  if (d.inBar)
+                    Expanded(
+                      child: _Tab(
+                        domain: d,
+                        on: d == lit,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          onTap(d);
+                        },
+                      ),
+                    ),
+              ]),
+            ),
           ),
-        ),
+          if (onAction != null) ...[
+            const SizedBox(width: S.x3),
+            _ActionButton(onTap: onAction!),
+          ],
+        ]),
       ),
     );
   }
@@ -157,7 +217,7 @@ class _Tab extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final ink = on ? p.on(domain.accent) : p.ink3;
+    final ink = on ? p.ink : p.ink3;
     return Semantics(
       selected: on,
       child: Pressable(
@@ -166,28 +226,54 @@ class _Tab extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedContainer(
+            AnimatedScale(
+              scale: on ? 1.08 : 1,
               duration: motion(c, Motion.base),
-              padding: EdgeInsets.symmetric(
-                  horizontal: on ? S.x3 : 0, vertical: S.x1),
-              decoration: BoxDecoration(
-                color: on ? p.wash(domain.accent) : const Color(0x00000000),
-                borderRadius: R.rPill,
-              ),
-              child: Icon(domain.icon, size: 20, color: ink),
+              child: Icon(domain.icon, size: 22, color: ink),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 4),
             Text(
               domain.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: F.over.copyWith(
                 color: ink,
+                letterSpacing: 0,
                 fontWeight: on ? FontWeight.w600 : FontWeight.w500,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The "+" beside the bar: a solid disc in the page ink, the same height as
+/// the pill, so it is the brightest thing on the screen without being a colour.
+class _ActionButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ActionButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Pressable(
+      semanticLabel: 'Add',
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        onTap();
+      },
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: p.ink,
+          boxShadow: p.el(3),
+        ),
+        child: Icon(LucideIcons.plus, size: 28, color: p.bg),
       ),
     );
   }
