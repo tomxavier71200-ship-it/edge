@@ -25,6 +25,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support/app_fonts.dart';
 // The cases are the GALLERY's cases. One list, so the pictures in here and
 // the screen a developer opens on a phone cannot describe two different
 // design systems — and so a component added to one is added to both.
@@ -74,6 +75,8 @@ Future<void> _loadType() async {
   // hardware, so on Android and in the test harness the type IS Manrope —
   // registering it under the primary name makes the goldens show what a
   // non-Apple user actually sees, rather than the harness's fallback blocks.
+  // The real faces the tokens name — see support/app_fonts.dart.
+  await loadAppFonts();
   for (final family in const ['Manrope', '.SF Pro Text']) {
     final loader = FontLoader(family);
     for (final f in files) {

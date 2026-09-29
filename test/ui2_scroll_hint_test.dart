@@ -15,6 +15,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support/app_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
@@ -26,6 +27,8 @@ Future<void> _loadType() async {
       .listSync()
       .whereType<File>()
       .where((f) => f.path.endsWith('.ttf'));
+  // The real faces the tokens name — see support/app_fonts.dart.
+  await loadAppFonts();
   for (final family in const ['Manrope', '.SF Pro Text']) {
     final loader = FontLoader(family);
     for (final f in files) {
@@ -62,7 +65,9 @@ double _row(List<String> labels, double scale, {double pad = S.x4}) {
 }
 
 const _wellness = ['Mind', 'Recovery', 'Habits', 'Medication', 'Cycle'];
-const _health = ['Overview', 'Explore', 'Trends', 'Vitals', 'Labs'];
+const _health = [
+  'Overview', 'Live HR', 'Stress', 'Explore', 'Trends', 'Vitals', 'Labs', //
+];
 
 /// Screen width minus the S.x4 gutter each side that every screen holding a
 /// `SubTabs` puts around it.
@@ -96,6 +101,17 @@ void _phone(WidgetTester t, [double width = 390]) {
   t.view.physicalSize = Size(width * 3, 844 * 3);
   t.view.devicePixelRatio = 3;
   addTearDown(t.view.reset);
+}
+
+/// Flings the row until nothing is left after it. One fixed fling stopped
+/// short once the real type made the pills wider than the harness's blocks.
+Future<void> _toEnd(WidgetTester t) async {
+  for (var i = 0; i < 4; i++) {
+    await t.fling(find.byType(ScrollHint), const Offset(-2000, 0), 4000);
+    await t.pumpAndSettle();
+    final at = t.state<ScrollableState>(find.byType(Scrollable)).position;
+    if (at.extentAfter == 0) return;
+  }
 }
 
 void main() {
@@ -148,7 +164,8 @@ void main() {
       for (final labels in const [_wellness, _health]) {
         final shown =
             _chip(labels.last, 1.0, active: false) - (_row(labels, 1.0) - _viewport(390));
-        expect(shown, greaterThan(0));
+        // A sliver or nothing at all: seven Health tabs push the last one
+        // wholly off the edge, which is the same problem, only worse.
         expect(shown, lessThan(S.x5),
             reason: '${labels.last} shows ${shown.toStringAsFixed(1)} pt');
       }
@@ -174,8 +191,7 @@ void main() {
       _phone(t);
       await t.pumpWidget(_harness(_pills(12)));
       await t.pumpAndSettle();
-      await t.fling(find.byType(ScrollHint), const Offset(-2000, 0), 4000);
-      await t.pumpAndSettle();
+      await _toEnd(t);
       expect(find.byIcon(LucideIcons.chevronRight), findsNothing);
     });
 
@@ -190,8 +206,7 @@ void main() {
       _phone(t);
       await t.pumpWidget(_harness(_pills(12)));
       await t.pumpAndSettle();
-      await t.fling(find.byType(ScrollHint), const Offset(-2000, 0), 4000);
-      await t.pumpAndSettle();
+      await _toEnd(t);
       final at = t.state<ScrollableState>(find.byType(Scrollable)).position;
       expect(at.extentAfter, 0, reason: 'the row sprang back to the start');
       expect(find.byIcon(LucideIcons.chevronRight), findsNothing);

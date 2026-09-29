@@ -257,7 +257,7 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
                   values: w.values,
                   labels: w.labels,
                   max: 21,
-                  color: (_) => p.on(C.purple),
+                  color: (_) => p.on(C.strain),
                   fmt: (x) => x.toStringAsFixed(1),
                   title: 'Day strain',
                 );
@@ -275,7 +275,7 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
   Widget _hero(BuildContext c, P p, DayStrainData d) {
     final s = d.strain!;
     final tg = d.target;
-    final col = p.on(C.purple);
+    final col = p.on(C.strain);
     final togo = tg == null ? null : tg.$1 - s;
     return Padding(
       padding: const EdgeInsets.only(top: S.x4, bottom: S.x5),
@@ -386,7 +386,7 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
                     'Built from $drawn recorded waking minutes.',
             child: CustomPaint(
               size: Size.infinite,
-              painter: LineChart(d.curve, p.on(C.purple),
+              painter: LineChart(d.curve, p.on(C.strain),
                   axis: axis, t: animate(context, 1)),
             ),
           ),
@@ -395,7 +395,7 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
             InlineMetrics([
               if (d.strain != null)
                 (l?.dayStrainTitle ?? 'Day strain', d.strain!.toStringAsFixed(1),
-                    C.purple),
+                    C.strain),
               if (d.peakHr != null)
                 (l?.dayStrainPeakHr ?? 'Peak HR', '${d.peakHr} bpm', C.red),
               if (d.wornMin != null)

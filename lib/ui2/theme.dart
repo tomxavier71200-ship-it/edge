@@ -123,12 +123,18 @@ class C {
   static const domMove = purple;
   static const domMind = teal;
 
+  /// The two score hues, WHOOP-style: strain is a vivid blue, sleep a quiet
+  /// steel blue. Named for what they mean so the screens that draw strain or
+  /// sleep agree without each picking a pigment.
+  static const strain = Color(0xFF1E9BFF);
+  static const sleep = Color(0xFF7BA1BB);
+
   /// Every accent the contrast test sweeps. Adding a colour above without
   /// adding it here means it ships unverified.
   static const all = <Color>[
     green, greenD, blue, purple, orange, red, teal, yellow, pink, indigo,
     sky, blueSoft,
-    domHome, domHealth, domFood, domMove, domMind,
+    domHome, domHealth, domFood, domMove, domMind, strain, sleep,
   ];
 }
 
@@ -139,6 +145,9 @@ class C {
 /// inks do not — and every family's [P.card2] is dark enough that [P.ink3]
 /// still clears 4.5:1 on it (slate, the lightest, measures 4.6:1).
 enum Skin {
+  // The default: true black with near-black hairline cards, the WHOOP look.
+  // bgTop carries a faint blue lift so the top of the page is not a void.
+  onyx('Onyx', [0xFF000000, 0xFF0F1113, 0xFF181B1E, 0xFF212529, 0xFF22262A, 0xFF0B1820, 0xFF000000]),
   slate('Slate', [0xFF1B2229, 0xFF28313A, 0xFF303A43, 0xFF38424C, 0xFF3B454F, 0xFF2A343D, 0xFF12171C]),
   midnight('Midnight', [0xFF0E1319, 0xFF19202A, 0xFF212935, 0xFF2A3340, 0xFF2C3542, 0xFF18202A, 0xFF06080B]),
   graphite('Graphite', [0xFF1C1C1F, 0xFF28282C, 0xFF313136, 0xFF3A3A40, 0xFF3C3C42, 0xFF2C2C30, 0xFF111113]),
@@ -215,7 +224,7 @@ class P {
   /// `AppColors.active`: MaterialApp rebuilds on the notify and the ThemeData
   /// carries both (see ThemeController.darkTheme), so every `P.of` dependent
   /// repaints.
-  static Skin skin = Skin.slate;
+  static Skin skin = Skin.onyx;
   static Color accentColor = kAccents.first.$2;
 
   static P of(BuildContext c) => P(Theme.of(c).brightness == Brightness.dark);
@@ -354,7 +363,11 @@ class P {
 /// the golden tests render the same shapes the design was drawn in rather than
 /// silently landing on Roboto.
 class F {
-  static const _f = '.SF Pro Text';
+  // Montserrat: the closest open face to WHOOP's Proxima Nova. It sets about
+  // 12% wider than SF, so each step is drawn one notch smaller to keep the
+  // footprint every row was laid out for, and a little tighter. Line heights
+  // are the SF ramp's, unchanged, so vertical rhythm does not move.
+  static const _f = 'Montserrat';
   static const _fb = ['Manrope'];
   static const _tab = [FontFeature.tabularFigures()];
 
@@ -362,57 +375,63 @@ class F {
   static const display = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 34,
-      height: 40 / 34,
+      fontSize: 30,
+      height: 40 / 30,
       fontWeight: FontWeight.w700,
-      letterSpacing: -.8);
+      letterSpacing: -.6);
   static const t1 = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 28,
-      height: 34 / 28,
+      fontSize: 25,
+      height: 34 / 25,
       fontWeight: FontWeight.w700,
       letterSpacing: -.5);
   static const t2 = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 22,
-      height: 28 / 22,
+      fontSize: 19.5,
+      height: 28 / 19.5,
       fontWeight: FontWeight.w600,
-      letterSpacing: -.4);
+      letterSpacing: -.3);
   static const head = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 17,
-      height: 24 / 17,
+      fontSize: 15,
+      height: 24 / 15,
       fontWeight: FontWeight.w600,
-      letterSpacing: -.2);
+      letterSpacing: -.1);
   static const body = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 15,
-      height: 22 / 15,
+      fontSize: 13.5,
+      height: 22 / 13.5,
       letterSpacing: -.1);
   static const cap = TextStyle(
-      fontFamily: _f, fontFamilyFallback: _fb, fontSize: 13, height: 18 / 13);
+      fontFamily: _f,
+      fontFamilyFallback: _fb,
+      fontSize: 11.5,
+      height: 18 / 11.5,
+      letterSpacing: -.05);
   static const over = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 11,
-      height: 14 / 11,
+      fontSize: 10,
+      height: 14 / 10,
       fontWeight: FontWeight.w600,
-      letterSpacing: .5);
+      letterSpacing: .6);
 
   // Numerals — a parallel display ramp in the condensed face: tall, bold and
   // narrow, so a big number reads at a glance and still fits its card.
   // Tabular, so a live value never jitters its own layout as digits change.
-  static const _n = 'Barlow Condensed';
+  // Barlow Semi Condensed: DIN-style, the sporty stat face WHOOP's numbers
+  // read as, narrow enough that a value still fits the slot it was laid out in.
+  static const _n = 'Barlow Semi Condensed';
   static const _c48 = TextStyle(
       fontFamily: _n,
       fontFamilyFallback: _fb,
       fontSize: 48,
       height: 1,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600,
       letterSpacing: -.5,
       fontFeatures: _tab);
   static const _c34 = TextStyle(
@@ -420,7 +439,7 @@ class F {
       fontFamilyFallback: _fb,
       fontSize: 34,
       height: 1,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600,
       letterSpacing: -.3,
       fontFeatures: _tab);
   static const _c24 = TextStyle(
@@ -428,7 +447,7 @@ class F {
       fontFamilyFallback: _fb,
       fontSize: 24,
       height: 1,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: 0,
       fontFeatures: _tab);
 
@@ -443,7 +462,8 @@ class F {
   /// inside its ring or gauge. One step, not a size per screen.
   static TextStyle get hero =>
       (Look.rounded ? _r(_c48) : _c48).copyWith(
-          fontSize: 64 * (Look.rounded ? .8 : 1));
+          fontSize: 64 * (Look.rounded ? .8 : 1),
+          fontWeight: Look.rounded ? FontWeight.w700 : FontWeight.w500);
   static TextStyle get n48 => Look.rounded ? _r(_c48) : _c48;
   static TextStyle get n34 => Look.rounded ? _r(_c34) : _c34;
   static TextStyle get n24 => Look.rounded ? _r(_c24) : _c24;

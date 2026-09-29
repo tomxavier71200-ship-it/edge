@@ -14,6 +14,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support/app_fonts.dart';
 import 'package:openstrap_edge/data/lab_catalogue.dart';
 import 'package:openstrap_edge/models/metric.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
@@ -770,6 +771,8 @@ Future<void> _loadType() async {
   final files = Directory(
     'assets/fonts/Manrope',
   ).listSync().whereType<File>().where((f) => f.path.endsWith('.ttf'));
+  // The real faces the tokens name — see support/app_fonts.dart.
+  await loadAppFonts();
   for (final family in const ['Manrope', '.SF Pro Text', 'Menlo']) {
     final loader = FontLoader(family);
     for (final f in files) {

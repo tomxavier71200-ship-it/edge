@@ -249,7 +249,7 @@ Widget yourDayCard(BuildContext c, HomeData d) {
     for (final s in (t['sleep'] as List? ?? const [])) {
       if (s is! Map || s['onset_ts'] is! num || s['wake_ts'] is! num) continue;
       final on = (s['onset_ts'] as num).toInt(), off = (s['wake_ts'] as num).toInt();
-      rows.add(_dayRow(c, p, LucideIcons.moon, C.blue, 'Sleep',
+      rows.add(_dayRow(c, p, LucideIcons.moon, C.sleep, 'Sleep',
           '${hhmm(on)} to ${hhmm(off)} · ${hm((off - on) / 60)} in bed', null,
           () => go(c, const SleepDetail())));
     }
@@ -266,7 +266,7 @@ Widget yourDayCard(BuildContext c, HomeData d) {
           c,
           p,
           LucideIcons.activity,
-          C.purple,
+          C.strain,
           name,
           [
             hhmm((w['start_ts'] as num).toInt()),

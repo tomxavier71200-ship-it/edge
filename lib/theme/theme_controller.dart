@@ -54,7 +54,7 @@ class ThemeController extends ChangeNotifier {
     // never paints one frame in the default and then jumps.
     ui2.P.skin = ui2.Skin.values.firstWhere(
         (s) => s.name == prefs.getString(_kSkin),
-        orElse: () => ui2.Skin.slate);
+        orElse: () => ui2.Skin.onyx);
     final accent = prefs.getInt(_kAccent);
     if (accent != null &&
         ui2.kAccents.any((a) => a.$2.toARGB32() == accent)) {
@@ -124,7 +124,7 @@ class ThemeController extends ChangeNotifier {
 
   /// Customize → Reset: every look choice back to the design default.
   Future<void> resetLook() async {
-    ui2.P.skin = ui2.Skin.slate;
+    ui2.P.skin = ui2.Skin.onyx;
     ui2.P.accentColor = ui2.kAccents.first.$2;
     await setLook(
         ring: ui2.RingStyle.glow, rounded: false, compact: false, textScale: 1);

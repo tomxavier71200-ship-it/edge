@@ -839,12 +839,19 @@ class _ActivitySummaryState extends State<ActivitySummary> {
           ]),
         ],
         const SizedBox(height: S.x3),
-        Row(children: [
-          Text(l?.activitySummaryRpeVeryEasy ?? '1 · very easy',
-              style: F.over.copyWith(color: p.ink3)),
-          const Spacer(),
-          Text(l?.activitySummaryRpeMaximal ?? '10 · maximal',
-              style: F.over.copyWith(color: p.ink3)),
+        // Each end gets half the row and wraps inside it at large text,
+        // instead of the pair pushing past the card.
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Text(l?.activitySummaryRpeVeryEasy ?? '1 · very easy',
+                style: F.over.copyWith(color: p.ink3)),
+          ),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Text(l?.activitySummaryRpeMaximal ?? '10 · maximal',
+                textAlign: TextAlign.end,
+                style: F.over.copyWith(color: p.ink3)),
+          ),
         ]),
         const SizedBox(height: S.x2),
         Align(
@@ -1755,10 +1762,17 @@ class _ActivitySummaryState extends State<ActivitySummary> {
                   const SizedBox(width: S.x2),
                   // The row rule: the name gives way, the measurement keeps
                   // its natural width and sits flush at the card edge.
-                  Text('${_kg(top.loadKg!)} × ${top.reps}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: F.n17.copyWith(color: p.ink)),
+                  // At the largest text sizes it scales down rather than
+                  // pushing the row past the card; it is never truncated.
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text('${_kg(top.loadKg!)} × ${top.reps}',
+                          maxLines: 1,
+                          style: F.n17.copyWith(color: p.ink)),
+                    ),
+                  ),
                 ]),
               ),
             ),

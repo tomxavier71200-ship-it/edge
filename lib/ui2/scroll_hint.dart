@@ -66,7 +66,10 @@ class _ScrollHintState extends State<ScrollHint> {
   void _sync(ScrollMetrics m) {
     if (m.axis != Axis.horizontal || !m.hasContentDimensions) return;
     final after = m.extentAfter;
-    if ((after - _after).abs() < 0.5) return;
+    // Sub-pixel moves are skipped, except the one that lands on the end: a
+    // stale 0.3 pt left over from the previous event kept a faint chevron on
+    // a row that had nothing more to show.
+    if ((after - _after).abs() < 0.5 && !(after == 0 && _after != 0)) return;
     setState(() => _after = after);
   }
 

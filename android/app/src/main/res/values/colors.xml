@@ -7,5 +7,5 @@
          dark one; the platform default (?android:colorBackground) was pure
          white and pure black, and pure black against the app's #0B1017 was a
          visible step on every cold start. -->
-    <color name="launch_background">#1B2229</color>
+    <color name="launch_background">#000000</color>
 </resources>

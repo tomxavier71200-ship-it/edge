@@ -534,7 +534,7 @@ class _SleepDetailState extends State<SleepDetail> {
               // The need is the natural ceiling; 10 h when there is none, so a
               // bar never tops out at a scale nobody set.
               max: math.max(d.need.value?.toDouble() ?? 600, 600),
-              color: (_) => p.on(C.blue),
+              color: (_) => p.on(C.sleep),
               fmt: hm,
               title: 'Total sleep',
             );
@@ -588,7 +588,7 @@ class _SleepDetailState extends State<SleepDetail> {
             duration: motion(c, Motion.sweep),
             curve: Curves.easeOutCubic,
             builder: (c, t, _) => Text('${(perf * t).round()}%',
-                style: F.hero.copyWith(color: p.on(C.blue))),
+                style: F.hero.copyWith(color: p.on(C.sleep))),
           ),
           Text('${hm(tst)} asleep of ${hm(need)} needed',
               style: F.body.copyWith(color: p.ink2)),
@@ -598,7 +598,7 @@ class _SleepDetailState extends State<SleepDetail> {
             child: LinearProgressIndicator(
               value: (tst! / need!).clamp(0.0, 1.0).toDouble(),
               minHeight: 8,
-              color: p.on(C.blue),
+              color: p.on(C.sleep),
               backgroundColor: p.track,
             ),
           ),
