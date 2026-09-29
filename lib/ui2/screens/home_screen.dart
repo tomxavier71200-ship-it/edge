@@ -2068,11 +2068,23 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     ];
   }
 
-  /// Pull to reload. The screen also reloads itself on `insightsRevision`, but
-  /// a derive that fails silently, an import, or anything that lands without
-  /// bumping it still leaves the user a way to ask.
-  Widget _refreshable(Widget list) =>
-      RefreshIndicator(onRefresh: _load, child: list);
+  /// Pull to sync: asks the band for what it has (the same path as the sync
+  /// line's tap, so the line under the header shows it running), then
+  /// reloads. The reload also covers what lands without a revision bump — a
+  /// derive that failed silently, an import.
+  Widget _refreshable(Widget list) {
+    final p = P.of(context);
+    return RefreshIndicator(
+      color: p.on(p.accent),
+      backgroundColor: p.card2,
+      onRefresh: () async {
+        final sync = syncOf(context);
+        if (sync != null) _tapSync(sync);
+        await _load();
+      },
+      child: list,
+    );
+  }
 
   Widget _glance(BuildContext c, HomeData d) {
     final l = AppLocalizations.of(c);
