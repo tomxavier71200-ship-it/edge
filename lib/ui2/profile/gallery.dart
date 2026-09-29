@@ -51,6 +51,7 @@ import '../activity/poster.dart'
 import '../activity/setup.dart' show ActivitySetup;
 import '../activity/tiles.dart';
 import '../activity/share.dart' show ShareSheet, shareOrigin;
+import '../activity/strain_coach.dart';
 import '../activity/summary.dart';
 import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
@@ -895,6 +896,12 @@ Map<String, Widget> extraCases() => {
         ),
       ),
       'koop_mark': const Surface(child: Center(child: KoopMark(size: 96))),
+      // No app above the gallery, so it draws the gauge alone.
+      'strain_coach': const StrainCoach(11.4),
+      'info_button': const Row(children: [
+        Expanded(child: ScreenTitle('Recovery', info: kInfoRecovery)),
+        InfoButton('Strain', kInfoStrain),
+      ]),
       // One inside its usual range, one above it.
       'range_rows': Column(children: [
         const RangeBanner(inside: 1, total: 2, when: 'Last night'),

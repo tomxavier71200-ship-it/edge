@@ -440,7 +440,7 @@ class _SleepDetailState extends State<SleepDetail> {
       final rejectedDay = d.day;
       final rejected =
           (d.night['sleep_source'] as String?) == 'rejected' && rejectedDay != null;
-      return detailScaffold(c, title, [
+      return detailScaffold(c, title, info: kInfoSleep, [
         ...dayNavRow(_day ?? d.day, d.days, _goDay),
         const SizedBox(height: S.x2),
         // A day CAN be in `availableDays` and still hold no night — the band
@@ -483,7 +483,7 @@ class _SleepDetailState extends State<SleepDetail> {
     // The stepper names the night, so the nav bar does not say it twice. With
     // one night on disk there is no stepper, and then the subtitle is the only
     // thing that dates the screen.
-    return detailScaffold(c, title,
+    return detailScaffold(c, title, info: kInfoSleep,
         sub: d.days.length < 2 ? (d.day ?? '').toUpperCase() : '', [
       ...dayNavRow(_day ?? d.day, d.days, _goDay),
 

@@ -1853,7 +1853,7 @@ class _StepGoalGaugeState extends State<_StepGoalGauge> {
 /// in one function is the reason the back affordance is in the same place on
 /// all of them.
 Widget detailScaffold(BuildContext c, String title, List<Widget> body,
-    {String sub = '', Widget? trailing}) {
+    {String sub = '', Widget? trailing, String? info}) {
   final p = P.of(c);
   return Scaffold(
     backgroundColor: p.bg,
@@ -1863,7 +1863,13 @@ Widget detailScaffold(BuildContext c, String title, List<Widget> body,
           padding: const EdgeInsets.symmetric(horizontal: S.x4),
           child: NavBar(title,
               sub: sub,
-              trailing: trailing,
+              trailing: info == null
+                  ? trailing
+                  : Row(mainAxisSize: MainAxisSize.min, children: [
+                      ?trailing,
+                      if (trailing != null) const SizedBox(width: S.x2),
+                      InfoButton(title, info),
+                    ]),
               onBack: () => Navigator.of(c).maybePop()),
         ),
         Expanded(

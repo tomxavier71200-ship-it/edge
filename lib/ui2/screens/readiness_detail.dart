@@ -163,7 +163,8 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
     // No date in the nav bar. It named the held-over night, and the headline
     // can no longer BE that night — a date up here now would be labelling
     // today's number with somebody else's day.
-    return detailScaffold(c, l?.readinessDetailTitle ?? 'Readiness', [
+    return detailScaffold(c, l?.readinessDetailTitle ?? 'Readiness',
+        info: kInfoRecovery, [
       if (_loading && _d == null) ...[
         const SizedBox(height: S.x8),
         const Center(child: CircularProgressIndicator()),

@@ -39,6 +39,7 @@ import '../grammar.dart';
 import '../paint_activity.dart';
 import '../theme.dart';
 import 'catalogue.dart';
+import 'strain_coach.dart';
 import 'summary.dart';
 
 /// What the band and the phone know right now. Read once per tick.
@@ -806,6 +807,12 @@ class LiveHeart extends StatelessWidget {
     }
     final z = feed.zone;
     return Column(children: [
+      // The strain coach leads, WHOOP-style: the workout's load against
+      // today's target, then the heart rate under it.
+      if (feed.strain != null) ...[
+        StrainCoach(feed.strain!),
+        const SizedBox(height: S.x4),
+      ],
       // A Wrap, not a Row: the beat, its unit and the zone pill fit one line
       // at a normal text size and overflowed the live screen by 64 px at an
       // accessibility one. Two lines is the honest answer; a clipped heart
@@ -996,8 +1003,9 @@ List<(String, String)> _commonStats(
   final kcal = _kcal(a, feed, weightKg, elapsed);
   return [
     if (kcal != null) ('$kcal', l?.activityLiveKcalEstUnit ?? 'kcal · est'),
-    if (feed.strain != null)
-      (feed.strain!.toStringAsFixed(1), l?.activityLiveStrainUnit ?? 'strain'),
+    // No strain here: [StrainCoach] leads every screen that draws this row,
+    // and the same figure twice on one screen is the duplication the app
+    // keeps having to undo.
     if (feed.steps != null) ('${feed.steps}', l?.activityLiveStepsUnit ?? 'steps'),
   ];
 }

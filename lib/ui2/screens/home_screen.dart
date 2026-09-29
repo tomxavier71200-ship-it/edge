@@ -1892,6 +1892,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
               ]),
             ),
           ),
+          const SizedBox(width: S.x2),
+          const InfoButton('Home', kInfoHome),
         ]),
       ),
 
@@ -1910,6 +1912,10 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             d.series.values.any((s) => s.isNotEmpty))
           Section('Dashboard', dashboardCard(c, d, _openCustomize),
               action: 'Edit', onAction: _openCustomize),
+        // Today's timeline is there before today's data is: it says what
+        // will fill it, rather than the section vanishing until a sync.
+        if (isToday && homeSections().any((s) => s.id == 'day' && s.on))
+          Section('Your day', yourDayCard(c, d)),
       ] else ...[
         // ── the three rings ──
         //

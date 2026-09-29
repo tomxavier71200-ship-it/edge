@@ -809,7 +809,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     final d = _d ?? const HealthData();
     final l = AppLocalizations.of(c);
     return ListView(padding: pad, children: [
-      ScreenTitle(l?.healthTitle ?? 'Health'),
+      ScreenTitle(l?.healthTitle ?? 'Health', info: kInfoHealth),
       SubTabs([for (final i in _order) _tabsOf(l)[i]], _order.indexOf(_tab),
           (pos) => _select(_order[pos]),
           color: C.blue),

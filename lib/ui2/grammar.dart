@@ -1792,7 +1792,11 @@ class SubTabs extends StatelessWidget {
 class ScreenTitle extends StatelessWidget {
   final String title;
   final Widget? trailing;
-  const ScreenTitle(this.title, {super.key, this.trailing});
+
+  /// What this screen shows and how it is worked out, in two or three plain
+  /// sentences. When set, an [InfoButton] sits at the end of the title.
+  final String? info;
+  const ScreenTitle(this.title, {super.key, this.trailing, this.info});
 
   @override
   Widget build(BuildContext c) {
@@ -1810,7 +1814,57 @@ class ScreenTitle extends StatelessWidget {
             ),
           ),
           ?trailing,
+          if (info != null) ...[
+            const SizedBox(width: S.x2),
+            InfoButton(title, info!),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// The ⓘ on a screen's title: a quiet outlined circle that opens a sheet
+/// saying what the screen shows and how it is worked out. The words are the
+/// screen's own (see screen_info.dart), never a generic "learn more".
+class InfoButton extends StatelessWidget {
+  final String title;
+  final String body;
+  const InfoButton(this.title, this.body, {super.key});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Pressable(
+      semanticLabel: 'About $title',
+      onTap: () => showModalBottomSheet<void>(
+        context: c,
+        backgroundColor: p.card,
+        showDragHandle: true,
+        builder: (s) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(S.x5, 0, S.x5, S.x6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('ABOUT ${title.toUpperCase()}',
+                    style: F.over.copyWith(color: p.ink3)),
+                const SizedBox(height: S.x3),
+                Text(body, style: F.body.copyWith(color: p.ink2)),
+              ],
+            ),
+          ),
+        ),
+      ),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: p.line),
+        ),
+        child: Icon(LucideIcons.info, size: 16, color: p.ink2),
       ),
     );
   }

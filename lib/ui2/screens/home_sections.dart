@@ -282,10 +282,22 @@ Widget yourDayCard(BuildContext c, HomeData d) {
     child: rows.isEmpty
         ? Padding(
             padding: const EdgeInsets.symmetric(vertical: S.x3),
-            child: Text(
-                'Nothing recorded for today yet. Sleep and workouts show up here '
-                'after the band syncs.',
-                style: F.body.copyWith(color: p.ink3)),
+            child: Row(children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                    border: Border.all(color: p.line), borderRadius: R.rMd),
+                child: Icon(LucideIcons.clock, size: 18, color: p.ink3),
+              ),
+              const SizedBox(width: S.x3),
+              Expanded(
+                child: Text(
+                    'Nothing synced for today yet. Your sleep and workouts '
+                    'show up here after the band syncs.',
+                    style: F.body.copyWith(color: p.ink3)),
+              ),
+            ]),
           )
         : Column(children: [
             for (var i = 0; i < rows.length; i++) ...[

@@ -39,6 +39,7 @@ import '../charts.dart';
 import '../profile/profile.dart' show openProfile;
 import '../grammar.dart';
 import '../revision.dart';
+import '../screen_info.dart';
 import '../theme.dart';
 import '../../data/day_label.dart' show calendarDaysBetween;
 import 'log_workout.dart';
@@ -94,7 +95,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           padding: const EdgeInsets.fromLTRB(0, S.x2, 0, S.x16),
           children: [
             for (final w in <Widget>[
-              ScreenTitle(loc?.workoutScreenTitle ?? 'Workout'),
+              ScreenTitle(loc?.workoutScreenTitle ?? 'Workout',
+                  info: kInfoWorkout),
               SubTabs(_tabs(loc), tab, (i) => setState(() => tab = i),
                   color: C.domMove),
               const SizedBox(height: S.x5),

@@ -240,6 +240,7 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
     return detailScaffold(
       c,
       l?.dayStrainTitle ?? 'Day strain',
+      info: kInfoStrain,
       [
         if (_loading && _d == null) ...[
           const SizedBox(height: S.x8),
