@@ -1959,6 +1959,10 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             );
           }),
 
+        // The morning read: what the rings mean together, in one sentence.
+        if (isToday && (widget.hour ?? DateTime.now().hour) < 12)
+          ?morningCard(c, d),
+
         // Right under the rings, above everything else — the one spot on
         // this screen nobody scrolls past without seeing.
         const CommunityNudge(),
@@ -2323,25 +2327,42 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   Widget _tonight(BuildContext c, P p, HomeData d) {
     final need = d.sleepNeedMin.value;
     final coachBed = d.bedtime.value;
-    // Peak is the coach's own bedtime for the full need. Perform and Get by
-    // are the same bedtime moved later by 15% and 30% of that need — plain
-    // arithmetic on the coach's figures, so they exist only when both do.
-    final plans = coachBed == null || need == null
+    // THE BAND ALARM, when one is set, is the wake time the plan works back
+    // from — the planner and the alarm are one decision. No AppState in a
+    // golden, so no alarm there.
+    final epoch = repoOf(c) == null
+        ? null
+        : c.select<AppState, int?>((a) => a.alarmEpoch);
+    final wakeAt =
+        epoch == null ? null : DateTime.fromMillisecondsSinceEpoch(epoch * 1000);
+    final wake = wakeAt == null ? null : wakeAt.hour * 60 + wakeAt.minute;
+    // With a wake time: asleep by wake − (need × share). Without one: Peak is
+    // the coach's own bedtime for the full need, and Perform and Get by move
+    // it later by 15% and 30% of that need. Plain arithmetic on figures that
+    // exist, so the plans exist only when those do.
+    const shares = [('Peak', 1.0), ('Perform', .85), ('Get by', .7)];
+    final plans = need == null
         ? const <(String, double, num)>[]
-        : [
-            for (final (name, frac) in const [
-              ('Peak', 1.0),
-              ('Perform', .85),
-              ('Get by', .7)
-            ])
-              (name, frac, (coachBed + need * (1 - frac)) % 1440),
-          ];
+        : wake != null
+            ? [
+                for (final (name, frac) in shares)
+                  (name, frac, (wake - need * frac) % 1440),
+              ]
+            : coachBed == null
+                ? const <(String, double, num)>[]
+                : [
+                    for (final (name, frac) in shares)
+                      (name, frac, (coachBed + need * (1 - frac)) % 1440),
+                  ];
     final sel = plans.isEmpty ? null : plans[_planSel.clamp(0, 2)];
     final bed = sel?.$3 ?? coachBed;
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (bed != null) ...[
-          Text('BED BY', style: F.over.copyWith(color: p.ink3)),
+          // "Asleep by" from a wake time: the arithmetic is sleep, and how
+          // long you take to drop off is not something this can know.
+          Text(wake != null && sel != null ? 'ASLEEP BY' : 'BED BY',
+              style: F.over.copyWith(color: p.ink3)),
           Text(clock(bed), style: F.n48.copyWith(color: p.ink)),
         ],
         Text(
@@ -2352,8 +2373,12 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   ? 'You need ${hm(need)} of sleep tonight.'
                   : sel == null
                       ? 'For the ${hm(need)} of sleep you need tonight.'
-                      : 'For ${(sel.$2 * 100).round()}% of the ${hm(need)} '
-                          'you need tonight.',
+                      : wake != null
+                          ? 'To wake at ${clock(wake)} with '
+                              '${(sel.$2 * 100).round()}% of the ${hm(need)} '
+                              'you need.'
+                          : 'For ${(sel.$2 * 100).round()}% of the ${hm(need)} '
+                              'you need tonight.',
           style: F.body.copyWith(color: p.ink2),
         ),
         if (plans.isNotEmpty) ...[

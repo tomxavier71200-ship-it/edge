@@ -308,6 +308,51 @@ Widget yourDayCard(BuildContext c, HomeData d) {
   );
 }
 
+/// The morning read under the rings: one sentence on what recovery and last
+/// night's sleep mean together. It repeats none of the rings' numbers — they
+/// are right above it — only says what they add up to.
+///
+/// Null unless today's own recovery is in: a held-over night is not this
+/// morning's, and a sentence about it would be.
+Widget? morningCard(BuildContext c, HomeData d) {
+  final v = d.readiness.value;
+  if (v == null || d.heldOverNight != null) return null;
+  final p = P.of(c);
+  final tier = readinessBand(v).tier;
+  final recovery = switch (tier) {
+    3 => 'You are well recovered',
+    2 => 'Your recovery is steady',
+    1 => 'Your recovery is lower than usual',
+    _ => 'Your body is asking for rest',
+  };
+  final slept = d.sleepMin.value, need = d.sleepNeedMin.value;
+  final perf = (slept == null || need == null || need <= 0) ? null : slept / need;
+  final sleep = perf == null
+      ? '.'
+      : perf >= .95
+          ? ' and you slept close to what you needed.'
+          : perf >= .8
+              ? ', on a little less sleep than you needed.'
+              : ', on a lot less sleep than you needed.';
+  final advice = switch (tier) {
+    3 => 'A harder day is fine.',
+    2 => 'A normal day suits you.',
+    1 => 'Keep today on the lighter side.',
+    _ => 'Keep today easy and get to bed early.',
+  };
+  return Padding(
+    padding: const EdgeInsets.only(top: S.x3),
+    child: Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('THIS MORNING', style: F.over.copyWith(color: p.ink3)),
+        const SizedBox(height: S.x2),
+        Text('$recovery$sleep $advice',
+            style: F.head.copyWith(color: p.ink)),
+      ]),
+    ),
+  );
+}
+
 Widget _dayRow(BuildContext c, P p, IconData icon, Color col, String name,
         String sub, String? value, VoidCallback onTap) =>
     Pressable(
