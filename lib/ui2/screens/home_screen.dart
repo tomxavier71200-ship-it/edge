@@ -719,14 +719,17 @@ String prettyDay(String? dayId, [AppLocalizations? l]) {
   if (v == null) {
     return (label: l?.homeReadinessNotScored ?? 'Not scored', color: C.n400, tier: -1);
   }
+  // WHOOP's three recovery colours: green, yellow, red. The cut-offs are this
+  // app's own (above); only the paint is WHOOP's convention, so the dial says
+  // good, middling or low before the number is read.
   if (v >= 61) {
     return (label: l?.homeReadinessGoodToGo ?? 'Good to go', color: C.green, tier: 3);
   }
   if (v >= 37) {
-    return (label: l?.homeReadinessSteady ?? 'Steady', color: C.green, tier: 2);
+    return (label: l?.homeReadinessSteady ?? 'Steady', color: C.yellow, tier: 2);
   }
   if (v >= 26) {
-    return (label: l?.homeReadinessTakeItEasy ?? 'Take it easy', color: C.orange, tier: 1);
+    return (label: l?.homeReadinessTakeItEasy ?? 'Take it easy', color: C.red, tier: 1);
   }
   return (label: l?.homeReadinessRestToday ?? 'Rest today', color: C.red, tier: 0);
 }
@@ -811,15 +814,10 @@ class RingTrio extends StatelessWidget {
     // ([overnightMetric]), so a ring with no night behind it is a gap row with
     // the reason in it — same place every other absence on this screen goes.
 
-    // No card: the rings sit on the page with a soft light behind them, so
-    // they read as the screen's headline rather than as one card of many.
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          radius: .9,
-          colors: [p.ink.withValues(alpha: .07), p.ink.withValues(alpha: 0)],
-        ),
-      ),
+    // No card and no light behind them: three thin dials straight on the
+    // black page, WHOOP-style. They are the headline by being alone.
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x2),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: S.x4),
         child: Column(children: [
@@ -1048,14 +1046,20 @@ class _Dial extends StatelessWidget {
   const _Dial(this.r,
       {required this.stroke, required this.icon, this.valueInside = false});
 
+  /// Scores this run of the app has already swept in. A dial fills once per
+  /// new score — coming back to Home, or the screen rebuilding, draws it
+  /// already full instead of replaying the sweep every time.
+  static final _swept = <String>{};
+
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     final w = Look.ringStroke(stroke);
-    // Sweeps in and counts up once, when the ring first appears. `motion`
-    // makes this instant under reduced motion.
+    final fresh = _swept.add('${r.kind.name}:${r.value}');
+    // Sweeps in and counts up once per new score. `motion` makes it instant
+    // under reduced motion.
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
+      tween: Tween(begin: fresh ? 0 : 1, end: 1),
       duration: motion(c, Motion.sweep),
       curve: Curves.easeOutCubic,
       builder: (c, t, _) => Stack(alignment: Alignment.center, children: [
@@ -1432,9 +1436,12 @@ const kHomeSections = {
   'breakdown': 'Breakdown of your day',
 };
 
-/// Off until turned on: At a glance repeats the dashboard's numbers, and the
-/// journal check-in is an invitation, not a reading.
-const _homeSectionsOff = {'glance', 'journal'};
+/// Off until turned on. Home defaults to the dials plus Your day, Tonight and
+/// the Dashboard: the WHOOP shape, one thing to look at. At a glance repeats
+/// the dashboard's numbers, the journal check-in is an invitation rather than
+/// a reading, and the weekly insight, the plan and the breakdown all have
+/// fuller homes a tap away. Customize turns any of them back on.
+const _homeSectionsOff = {'glance', 'journal', 'insight', 'plan', 'breakdown'};
 
 /// Bumped by Customize so a Home kept alive under it re-reads the layout.
 final homeLayoutRev = ValueNotifier<int>(0);
@@ -1874,25 +1881,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 tint: kCoachAccent),
             const SizedBox(width: S.x2),
           ],
-          Pressable(
-            semanticLabel: 'Customize Home',
-            onTap: () => go(c, const CustomizeScreen()),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x2),
-              decoration: BoxDecoration(
-                  color: p.wash(p.accent), borderRadius: R.rPill),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(LucideIcons.slidersHorizontal,
-                    size: 14, color: p.on(p.accent)),
-                const SizedBox(width: S.x1),
-                Text('Edit',
-                    style: F.cap.copyWith(
-                        color: p.on(p.accent), fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ),
-          const SizedBox(width: S.x2),
+          // No Edit pill here: a coloured button before any data was one
+          // control too many. Customize lives in More, and the Dashboard
+          // section carries its own Edit.
           const InfoButton('Home', kInfoHome),
         ]),
       ),

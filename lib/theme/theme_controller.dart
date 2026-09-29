@@ -62,7 +62,7 @@ class ThemeController extends ChangeNotifier {
     }
     ui2.Look.ring = ui2.RingStyle.values.firstWhere(
         (r) => r.name == prefs.getString(_kRing),
-        orElse: () => ui2.RingStyle.glow);
+        orElse: () => ui2.RingStyle.thin);
     ui2.Look.rounded = prefs.getBool(_kRounded) ?? false;
     ui2.Look.compact = prefs.getBool(_kCompact) ?? false;
     ui2.Look.textScale = (prefs.getDouble(_kText) ?? 1.0).clamp(.85, 1.3);
@@ -127,7 +127,7 @@ class ThemeController extends ChangeNotifier {
     ui2.P.skin = ui2.Skin.onyx;
     ui2.P.accentColor = ui2.kAccents.first.$2;
     await setLook(
-        ring: ui2.RingStyle.glow, rounded: false, compact: false, textScale: 1);
+        ring: ui2.RingStyle.thin, rounded: false, compact: false, textScale: 1);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kSkin);
     await prefs.remove(_kAccent);

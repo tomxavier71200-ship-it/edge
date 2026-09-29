@@ -194,7 +194,9 @@ class Scrubber extends StatelessWidget {
   }
 }
 
-/// The base card surface. Elevation, not outline.
+/// The base card surface: near-black, a hairline edge, 12 pt corners. On a
+/// true-black page a shadow does not show, so the hairline is what separates
+/// a card from the page — the one card style the whole app uses.
 class Surface extends StatelessWidget {
   final Widget child;
   final EdgeInsets? pad;
@@ -225,7 +227,8 @@ class Surface extends StatelessWidget {
         padding: pad ?? EdgeInsets.all(Look.compact ? S.x3 : S.x4),
         decoration: BoxDecoration(
           color: color ?? p.card,
-          borderRadius: R.rXl,
+          borderRadius: R.rMd,
+          border: p.dark ? Border.all(color: p.line) : null,
           boxShadow: p.el(elevation),
         ),
         child: child,

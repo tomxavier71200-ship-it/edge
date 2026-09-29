@@ -170,7 +170,7 @@ enum RingStyle { classic, thin, glow }
 /// The rest of Customize's look: set by ThemeController before it notifies,
 /// and stamped into the ThemeData (see [LookStamp]) so every reader repaints.
 class Look {
-  static RingStyle ring = RingStyle.glow;
+  static RingStyle ring = RingStyle.thin;
 
   /// Numbers in Manrope instead of the condensed display face.
   static bool rounded = false;
