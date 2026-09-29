@@ -35,7 +35,7 @@ void main() {
     await _pump(
       tester,
       const ImportOutcome(
-          source: 'OpenStrap backup', days: 10, workouts: 3, journalRows: 1, labRows: 1),
+          source: 'Koop backup', days: 10, workouts: 3, journalRows: 1, labRows: 1),
     );
     expect(find.textContaining('10 days imported'), findsOneWidget);
     // The others still show, just not as the headline — journal gets its own

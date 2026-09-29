@@ -829,7 +829,8 @@ void main() {
       // stored 10.8.
       await show(const DayStrainData(strain: 10.8, wornMin: 1274));
       expect(find.textContaining('produced no strain'), findsNothing);
-      expect(find.textContaining('10.8'), findsOneWidget);
+      // In the gauge and in the sentence under it: shown, never replaced.
+      expect(find.textContaining('10.8'), findsWidgets);
     });
 
     // The Zones screen offered "Add your age in Profile" on all three real

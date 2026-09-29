@@ -618,7 +618,7 @@ Future<void> checkSyncStaleness({bool allowPermissionPrompt = false}) async {
         // event was actually presented.
         priority: NotifPriority.normal,
         title: "Your band hasn't synced in a while",
-        body: 'No new data for about $hoursStale hours. Open OpenStrap to '
+        body: 'No new data for about $hoursStale hours. Open Koop to '
             'reconnect — background sync may have stalled.',
         date: now.toIso8601String().substring(0, 10),
         route: '/today',

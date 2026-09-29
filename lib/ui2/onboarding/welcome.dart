@@ -366,7 +366,7 @@ Future<ImportOutcome> runImport(
   }
 
   if (decrypted.isNotEmpty) sources.add('Encrypted backup');
-  if (plain.any(_isDbBackup)) sources.add('OpenStrap backup');
+  if (plain.any(_isDbBackup)) sources.add('Koop backup');
   try {
     for (final p in db) {
       days += await app.importEdgeBackup(p);
@@ -596,7 +596,7 @@ class WelcomeView extends StatelessWidget {
               // the same rolling baselines. What IS true is the half that
               // protects data: no import overwrites a day this band measured.
               l?.welcomeImportFooterNote ??
-                  'Raw sensor exports, an OpenStrap backup (encrypted or not), '
+                  'Raw sensor exports, a Koop backup (encrypted or not), '
                       'or a vendor CSV. '
                       'Imported days sit alongside days this app measured and feed '
                       'the same baselines — but a day the band already measured is '

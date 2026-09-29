@@ -9,6 +9,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'grammar.dart';
 import 'theme.dart';
 
 class DayBars extends StatefulWidget {
@@ -42,11 +43,21 @@ class DayBars extends StatefulWidget {
 class _DayBarsState extends State<DayBars> {
   late int _sel = widget.values.length - 1;
 
-  void _pick(Offset local, double width) {
+  /// Slot index for a 0…1 position along the strip.
+  int _slot(double f) {
     final n = widget.values.length;
-    if (n == 0 || width <= 0) return;
-    final i = (local.dx / width * n).floor().clamp(0, n - 1);
-    if (i != _sel) setState(() => _sel = i);
+    return (f * n).floor().clamp(0, math.max(0, n - 1)).toInt();
+  }
+
+  /// The centre of slot [i], so a screen reader's step lands on a day.
+  double _at(int i) {
+    final n = widget.values.length;
+    return n == 0 ? 0 : (i + .5) / n;
+  }
+
+  String _say(int i) {
+    final v = widget.values[i];
+    return '${widget.labels[i]}, ${v == null ? 'no data' : widget.fmt(v)}';
   }
 
   @override
@@ -71,30 +82,28 @@ class _DayBarsState extends State<DayBars> {
         ],
       ]),
       const SizedBox(height: S.x3),
-      Semantics(
-        label: '${widget.title}: ${[
-          for (var i = 0; i < n; i++)
-            '${widget.labels[i]} ${widget.values[i] == null ? 'no data' : widget.fmt(widget.values[i]!)}'
-        ].join(', ')}',
-        child: LayoutBuilder(builder: (c, box) {
-          return Listener(
-            onPointerDown: (e) => _pick(e.localPosition, box.maxWidth),
-            onPointerMove: (e) => _pick(e.localPosition, box.maxWidth),
-            child: SizedBox(
-              height: 110,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: 1),
-                duration: motion(c, Motion.sweep),
-                curve: Curves.easeOutCubic,
-                builder: (c, t, _) => CustomPaint(
-                  size: Size.infinite,
-                  painter: _Bars(widget.values, widget.max, widget.color, sel,
-                      p.track, t),
-                ),
-              ),
+      Scrubber(
+        value: n == 0 ? null : _at(sel),
+        label: widget.title,
+        step: n == 0 ? 1 : 1 / n,
+        describe: (f) => n == 0 ? 'No data' : _say(_slot(f)),
+        onChanged: (f) {
+          final i = _slot(f);
+          if (i != _sel) setState(() => _sel = i);
+        },
+        child: SizedBox(
+          height: 110,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: motion(c, Motion.sweep),
+            curve: Curves.easeOutCubic,
+            builder: (c, t, _) => CustomPaint(
+              size: Size.infinite,
+              painter: _Bars(
+                  widget.values, widget.max, widget.color, sel, p.track, t),
             ),
-          );
-        }),
+          ),
+        ),
       ),
       const SizedBox(height: S.x2),
       Row(children: [

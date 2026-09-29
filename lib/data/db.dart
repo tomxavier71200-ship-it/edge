@@ -8558,7 +8558,7 @@ class LocalDb {
       if (inflated == null ||
           await sniffFile(inflated) != ImportContainer.sqlite) {
         throw const ImportFormatException(
-          'That file unpacked to something that is not an OpenStrap database.',
+          'That file unpacked to something that is not a Koop database.',
         );
       }
       return await _mergeFromDbFile(inflated);

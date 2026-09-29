@@ -127,11 +127,11 @@ class BackupHeader {
 
   static BackupHeader parse(Uint8List bytes) {
     if (bytes.length < byteLength) {
-      throw const BackupFormatException('not an OpenStrap backup');
+      throw const BackupFormatException('not a Koop backup');
     }
     for (var i = 0; i < 4; i++) {
       if (bytes[i] != kBackupMagic[i]) {
-        throw const BackupFormatException('not an OpenStrap backup');
+        throw const BackupFormatException('not a Koop backup');
       }
     }
     final version = bytes[4];

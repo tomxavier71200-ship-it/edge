@@ -883,6 +883,18 @@ Map<String, Widget> extraCases() => {
           ),
         );
       }),
+      // A week with one unworn day: the gap has to read as a gap.
+      'day_bars': Surface(
+        child: DayBars(
+          values: const [62, 71, null, 55, 80, 67, 74],
+          labels: const ['Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Today'],
+          max: 100,
+          color: (v) => v >= 67 ? C.green : (v >= 34 ? C.yellow : C.red),
+          fmt: (v) => '${v.round()}%',
+          title: 'This week',
+        ),
+      ),
+      'koop_mark': const Surface(child: Center(child: KoopMark(size: 96))),
       'chart_macro_ring': Builder(builder: (c) {
         final p = P.of(c);
         return Surface(

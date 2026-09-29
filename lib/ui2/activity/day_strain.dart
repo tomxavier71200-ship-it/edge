@@ -295,11 +295,15 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
                   band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21)),
               child: Align(
                 alignment: Alignment.bottomCenter,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text((s * t).toStringAsFixed(1),
-                      style: F.n48.copyWith(color: p.ink, fontSize: 60)),
-                  Text('OF 21', style: F.over.copyWith(color: p.ink3)),
-                ]),
+                // Scaled down, never clipped, at large text sizes.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text((s * t).toStringAsFixed(1),
+                        style: F.hero.copyWith(color: p.ink)),
+                    Text('OF 21', style: F.over.copyWith(color: p.ink3)),
+                  ]),
+                ),
               ),
             ),
           ),

@@ -61,7 +61,9 @@ class _Repo extends LocalRepository {
       {'has_sleep': true, 'duration_min': 250};
 }
 
-Future<void> _settle(WidgetTester t, {int n = 40}) async {
+// 80 × 20 ms outlasts Motion.sweep (1100 ms): the rings count up to their
+// value, so an earlier frame shows a number on its way there.
+Future<void> _settle(WidgetTester t, {int n = 80}) async {
   for (var i = 0; i < n; i++) {
     await t.pump(const Duration(milliseconds: 20));
   }

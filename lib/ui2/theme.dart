@@ -70,6 +70,18 @@ class C {
   static const routeHard = Color(0xFFFF8A30);
   static const routeSlow = Color(0xFFFF4D4D);
 
+  /// The Koop mark's pigments (see koop_mark.dart), and nothing else's. Like
+  /// the route ramp they are not in [all]: a logo is a picture, not ink or a
+  /// fill the contrast sweep should judge. Each ring runs light to deep along
+  /// its diagonal; the tile runs top to bottom.
+  static const brandBlue0 = Color(0xFF7CC4FF);
+  static const brandBlue1 = Color(0xFF3B6BFF);
+  static const brandGreen0 = Color(0xFF5CF0A0);
+  static const brandGreen1 = Color(0xFF14B8A6);
+  static const brandTile0 = Color(0xFF232C35);
+  static const brandTile1 = Color(0xFF0B0F13);
+  static const brandMono = Color(0xFFFFFFFF);
+
   /// The basemap's two ends, which is the whole of the map's styling: every
   /// tile pixel is mapped onto the line between them by `_themeFilter`.
   ///
@@ -427,6 +439,11 @@ class F {
       fontSize: c.fontSize! * .8,
       fontWeight: FontWeight.w800,
       letterSpacing: 0);
+  /// The hero numeral: the one headline number a detail screen opens on,
+  /// inside its ring or gauge. One step, not a size per screen.
+  static TextStyle get hero =>
+      (Look.rounded ? _r(_c48) : _c48).copyWith(
+          fontSize: 64 * (Look.rounded ? .8 : 1));
   static TextStyle get n48 => Look.rounded ? _r(_c48) : _c48;
   static TextStyle get n34 => Look.rounded ? _r(_c34) : _c34;
   static TextStyle get n24 => Look.rounded ? _r(_c24) : _c24;

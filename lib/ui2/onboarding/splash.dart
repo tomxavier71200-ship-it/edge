@@ -12,7 +12,6 @@
 // moment the app is already slowest.
 
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../ui2.dart';
 
@@ -82,9 +81,13 @@ class _Cover extends StatelessWidget {
       color: p.bg,
       child: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(LucideIcons.activity, size: 44, color: p.on(C.green)),
-          const SizedBox(height: S.x4),
-          Text('OpenStrap', style: F.t2.copyWith(color: p.ink)),
+          // The mark draws itself in while init runs; the wordmark is set
+          // wide and light so it reads as a logotype, not a heading.
+          const KoopMark(size: 96, animate: true),
+          const SizedBox(height: S.x5),
+          Text('KOOP',
+              style: F.t2.copyWith(
+                  color: p.ink, letterSpacing: 6, fontWeight: FontWeight.w600)),
         ]),
       ),
     );

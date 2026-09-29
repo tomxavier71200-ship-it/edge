@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Koop tile: C.brandTile0 at the top to C.brandTile1 at the bottom. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:startColor="#232C35"
+        android:endColor="#0B0F13" />
+</shape>

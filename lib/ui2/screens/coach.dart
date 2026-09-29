@@ -485,7 +485,7 @@ class _CoachScreenState extends State<CoachScreen> {
             l?.coachNotSetUpBody ??
                 'It runs on a model you choose — one on your own machine, or any '
                     'OpenAI-compatible provider with your own key. Nothing goes '
-                    'through OpenStrap either way.',
+                    'through Koop either way.',
             fix: l?.coachChooseModelFix ?? 'Choose a model',
             icon: LucideIcons.sparkles,
             onFix: () => go(c, const CoachSetup()),

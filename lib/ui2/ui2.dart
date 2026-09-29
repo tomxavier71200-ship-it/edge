@@ -9,6 +9,7 @@ export 'app_shell.dart';
 export 'charts.dart';
 export 'community_links.dart';
 export 'day_bars.dart';
+export 'koop_mark.dart';
 export 'grammar.dart';
 export 'live_hr.dart';
 export 'ecg_widgets.dart';

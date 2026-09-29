@@ -588,7 +588,7 @@ class _SleepDetailState extends State<SleepDetail> {
             duration: motion(c, Motion.sweep),
             curve: Curves.easeOutCubic,
             builder: (c, t, _) => Text('${(perf * t).round()}%',
-                style: F.n48.copyWith(color: p.on(C.blue), fontSize: 64)),
+                style: F.hero.copyWith(color: p.on(C.blue))),
           ),
           Text('${hm(tst)} asleep of ${hm(need)} needed',
               style: F.body.copyWith(color: p.ink2)),

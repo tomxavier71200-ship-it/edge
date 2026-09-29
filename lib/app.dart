@@ -124,7 +124,7 @@ class _OpenStrapAppState extends State<OpenStrapApp> with WidgetsBindingObserver
     final theme = context.watch<ThemeController>();
     final locale = context.watch<LocaleController>();
     return MaterialApp(
-      title: 'OpenStrap',
+      title: 'Koop',
       debugShowCheckedModeBanner: false,
       // The palette is the design system's, the CHOICE is still the user's.
       theme: buildTheme(Brightness.light),
@@ -293,7 +293,7 @@ class _InitFailed extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('OpenStrap could not start',
+                Text('Koop could not start',
                     style: F.t2.copyWith(color: p.ink)),
                 const SizedBox(height: 8),
                 Text(

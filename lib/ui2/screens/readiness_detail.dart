@@ -213,11 +213,20 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
                           solid: true,
                           glow: Look.glow),
                     ),
-                    Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text('${(v * t).round()}',
-                          style: F.n48.copyWith(color: p.ink, fontSize: 64)),
-                      Text('RECOVERY', style: F.over.copyWith(color: p.ink3)),
-                    ]),
+                    // Scaled down, never clipped, when the reader's text size
+                    // would push the numeral past the ring.
+                    Padding(
+                      padding: const EdgeInsets.all(S.x6),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text('${(v * t).round()}',
+                              style: F.hero.copyWith(color: p.ink)),
+                          Text('RECOVERY',
+                              style: F.over.copyWith(color: p.ink3)),
+                        ]),
+                      ),
+                    ),
                   ]),
                 ),
               ),

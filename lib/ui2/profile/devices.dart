@@ -1435,7 +1435,7 @@ Future<void> showRestartRequiredSheet(BuildContext c) async {
         padding: const EdgeInsets.fromLTRB(S.x4, S.x2, S.x4, S.x4),
         child: Text(
           'iOS can only show the system pairing sheet before the app has used '
-          'Bluetooth. Close OpenStrap completely, then reopen it — the sheet '
+          'Bluetooth. Close Koop completely, then reopen it — the sheet '
           'appears on its own.',
           style: F.body.copyWith(color: p.ink),
         ),
