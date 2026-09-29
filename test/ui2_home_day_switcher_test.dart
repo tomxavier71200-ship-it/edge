@@ -126,7 +126,7 @@ void main() {
     await _settle(t);
 
     expect(find.text('No data for this day'), findsOneWidget);
-    expect(find.text('Sync the band'), findsNothing);
+    expect(find.text('Sync now'), findsNothing);
   });
 }
 

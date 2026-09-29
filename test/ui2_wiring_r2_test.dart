@@ -375,7 +375,7 @@ void main() {
         (t) async {
       await t.pumpWidget(frame(
           const HomeData(dayId: '2026-05-20', heldOverNight: '2026-05-16')));
-      expect(find.text('Nothing recorded for today'), findsOneWidget);
+      expect(find.text('No score yet today'), findsOneWidget);
       expect(find.textContaining('16 May'), findsOneWidget);
     });
 
@@ -401,8 +401,8 @@ void main() {
                   hour: 20,
                   workoutLive: true))));
       expect(find.text('A workout is still running'), findsOneWidget);
-      expect(find.text('Nothing recorded for today'), findsNothing);
-      expect(find.text('Sync the band'), findsNothing);
+      expect(find.text('No score yet today'), findsNothing);
+      expect(find.text('Sync now'), findsNothing);
     });
   });
 

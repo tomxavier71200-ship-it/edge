@@ -161,19 +161,23 @@ Widget _dashRow(
   final s = _summary(pts);
   final today = viewing;
 
-  String sub;
+  // `sub` is what the row shows, kept to one short line; `said` is the same
+  // fact in full words for a screen reader.
+  String sub, said;
   IconData? arrow;
   Color arrowColor = p.ink3;
   if (s == null) {
-    sub = 'No data yet';
+    sub = said = 'No data yet';
   } else {
     final day = dayLabelOf(DateTime.fromMillisecondsSinceEpoch(s.last.t * 1000));
     final dated = day == today ? '' : ' · ${_short(day)}';
     final avg = s.avg;
     if (avg == null) {
-      sub = 'Baseline ${s.n} of $kBaselineMin days$dated';
+      sub = 'Baseline ${s.n}/$kBaselineMin$dated';
+      said = 'Baseline ${s.n} of $kBaselineMin days$dated';
     } else {
-      sub = 'Avg ${_fmt(k, avg)} · ${s.n} days$dated';
+      sub = 'Avg ${_fmt(k, avg)} · ${s.n}d$dated';
+      said = 'Average ${_fmt(k, avg)} over ${s.n} days$dated';
       final rel = avg == 0 ? 0.0 : (s.last.v - avg) / avg.abs();
       if (rel.abs() < .02) {
         arrow = LucideIcons.arrowRight;
@@ -189,15 +193,22 @@ Widget _dashRow(
   }
 
   return Pressable(
-    semanticLabel: '${spec.title}. ${s == null ? 'No data' : _fmt(k, s.last.v)}. $sub',
+    semanticLabel: '${spec.title}. ${s == null ? 'No data' : _fmt(k, s.last.v)}. $said',
     onTap: () => go(c, MetricDetail(k)),
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: S.x3),
       child: Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(spec.title, style: F.body.copyWith(color: p.ink)),
-            Text(sub, style: F.over.copyWith(color: p.ink3)),
+            Text(spec.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: F.body.copyWith(color: p.ink)),
+            Text(sub,
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+                softWrap: false,
+                style: F.cap.copyWith(color: p.ink3)),
           ]),
         ),
         if (s != null && s.week.length > 2) ...[

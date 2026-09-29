@@ -535,7 +535,7 @@ StatusCard? staleInsightsCard(
               'The last rollup was built on ${prettyDay(built, l)}, which is too old to stand behind.'),
       _ => l?.homeInsightsNoVersionStamp ?? 'The stored rollup carries no version stamp.',
     },
-    fix: onSync == null ? '' : (l?.homeSyncBand ?? 'Sync the band'),
+    fix: onSync == null ? '' : (l?.homeSyncBand ?? 'Sync now'),
     icon: LucideIcons.refreshCw,
     onFix: onSync,
   );
@@ -1684,13 +1684,14 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     return StatusCard(
       d.heldOverNight == null
           ? (l?.homeNothingDerivedTitle ?? 'Nothing derived yet')
-          : (l?.homeNothingTodayTitle ?? 'Nothing recorded for today'),
+          : (l?.homeNothingTodayTitle ?? 'No score yet today'),
       d.heldOverNight == null
           ? (l?.homeNothingDerivedBody ?? 'No band recordings processed yet.')
+          // Short, WHOOP-style: the day of the last score and one action. The
+          // fuller "why" is the Home ⓘ.
           : (l?.homeNothingTodayBody(prettyDay(d.heldOverNight, l)) ??
-              'The last night this app scored was '
-                  '${prettyDay(d.heldOverNight, l)}. Nothing has reached it since.'),
-      fix: sync == null ? '' : (l?.homeSyncBand ?? 'Sync the band'),
+              'Last score: ${prettyDay(d.heldOverNight, l)}.'),
+      fix: sync == null ? '' : (l?.homeSyncBand ?? 'Sync now'),
       icon: LucideIcons.watch,
       onFix: sync == null ? null : () => _tapSync(sync),
     );
@@ -1786,7 +1787,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             return StatusCard(
               l?.homeNothingDerivedTitle ?? 'Nothing derived yet',
               l?.homeNothingDerivedBody ?? 'No band recordings processed yet.',
-              fix: sync == null ? '' : (l?.homeSyncBand ?? 'Sync the band'),
+              fix: sync == null ? '' : (l?.homeSyncBand ?? 'Sync now'),
               icon: LucideIcons.watch,
               onFix: sync == null ? null : () => _tapSync(sync),
             );
@@ -1859,7 +1860,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         child: Row(children: [
           Expanded(
             child: Pressable(
-              semanticLabel: l?.homeSyncBand ?? 'Sync the band',
+              semanticLabel: l?.homeSyncBand ?? 'Sync now',
               onTap: switch (syncOf(c)) {
                 final s? => () => _tapSync(s),
                 null => null,

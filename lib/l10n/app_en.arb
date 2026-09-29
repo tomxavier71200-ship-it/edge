@@ -7245,7 +7245,7 @@
   "@homeInsightsNoVersionStamp": {
     "description": "Reason the cross-day rollup is being rebuilt: the stored rollup has no version stamp."
   },
-  "homeSyncBand": "Sync the band",
+  "homeSyncBand": "Sync now",
   "@homeSyncBand": {
     "description": "Call-to-action button label: sync the band."
   },
@@ -7393,11 +7393,11 @@
   "@homeProfileSettings": {
     "description": "Semantic label for the avatar button that opens Profile and settings."
   },
-  "homeNothingTodayTitle": "Nothing recorded for today",
+  "homeNothingTodayTitle": "No score yet today",
   "@homeNothingTodayTitle": {
     "description": "Title shown when there is history but nothing recorded for today."
   },
-  "homeNothingTodayBody": "The last night this app scored was {day}. Nothing has reached it since.",
+  "homeNothingTodayBody": "Last score: {day}.",
   "@homeNothingTodayBody": {
     "description": "Body shown when there is history but nothing recorded for today, naming the last scored night.",
     "placeholders": {
