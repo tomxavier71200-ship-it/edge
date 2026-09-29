@@ -896,6 +896,15 @@ Map<String, Widget> extraCases() => {
         ),
       ),
       'koop_mark': const Surface(child: Center(child: KoopMark(size: 96))),
+      'hero_dial': Center(
+        child: HeroDial(
+          value: 10.8 / 21,
+          color: C.strain,
+          number: (t) => (10.8 * t).toStringAsFixed(1),
+          label: 'Strain of 21',
+          band: (12 / 21, 14 / 21),
+        ),
+      ),
       // No app above the gallery, so it draws the gauge alone.
       'strain_coach': const StrainCoach(11.4),
       'info_button': const Row(children: [

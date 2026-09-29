@@ -582,25 +582,20 @@ class _SleepDetailState extends State<SleepDetail> {
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (perf != null) ...[
-          Text('SLEEP PERFORMANCE', style: F.over.copyWith(color: p.ink3)),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: motion(c, Motion.sweep),
-            curve: Curves.easeOutCubic,
-            builder: (c, t, _) => Text('${(perf * t).round()}%',
-                style: F.hero.copyWith(color: p.on(C.sleep))),
-          ),
-          Text('${hm(tst)} asleep of ${hm(need)} needed',
-              style: F.body.copyWith(color: p.ink2)),
-          const SizedBox(height: S.x3),
-          ClipRRect(
-            borderRadius: R.rPill,
-            child: LinearProgressIndicator(
-              value: (tst! / need!).clamp(0.0, 1.0).toDouble(),
-              minHeight: 8,
-              color: p.on(C.sleep),
-              backgroundColor: p.track,
+          // One dial: how much of the night's need was slept.
+          Center(
+            child: HeroDial(
+              value: perf / 100,
+              color: C.sleep,
+              number: (t) => '${(perf * t).round()}%',
+              label: 'Sleep performance',
             ),
+          ),
+          const SizedBox(height: S.x3),
+          Center(
+            child: Text('${hm(tst)} asleep of ${hm(need)} needed',
+                textAlign: TextAlign.center,
+                style: F.body.copyWith(color: p.ink2)),
           ),
         ] else ...[
           Text(hm(tst), style: F.n48.copyWith(color: p.ink)),

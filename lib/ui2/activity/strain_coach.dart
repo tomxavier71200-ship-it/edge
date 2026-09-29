@@ -13,7 +13,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/day_label.dart';
 import '../../state/app_state.dart';
-import '../charts.dart';
+import '../hero_dial.dart';
 import '../grammar.dart';
 import '../theme.dart';
 
@@ -74,30 +74,18 @@ class _StrainCoachState extends State<StrainCoach> {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final s = widget.strain;
-    final col = p.on(C.strain);
     final tg = _target;
     return Surface(
       child: Column(children: [
-        SizedBox(
-          width: 240,
-          height: 132,
-          child: CustomPaint(
-            painter: HalfGauge(s / 21, col, p.track, p.ink,
-                stroke: Look.ringStroke(14),
-                glow: Look.glow,
-                band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21)),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(s.toStringAsFixed(1),
-                      style: F.n48.copyWith(color: p.ink)),
-                  Text('THIS WORKOUT', style: F.over.copyWith(color: p.ink3)),
-                ]),
-              ),
-            ),
-          ),
+        // The same dial as Day strain, live: never re-swept per reading.
+        HeroDial(
+          value: s / 21,
+          color: C.strain,
+          number: (_) => s.toStringAsFixed(1),
+          label: 'This workout',
+          band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21),
+          size: 190,
+          animate: false,
         ),
         if (tg != null || _dayBefore != null) ...[
           const SizedBox(height: S.x3),

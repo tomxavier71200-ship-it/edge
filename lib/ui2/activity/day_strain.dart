@@ -276,38 +276,18 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
   Widget _hero(BuildContext c, P p, DayStrainData d) {
     final s = d.strain!;
     final tg = d.target;
-    final col = p.on(C.strain);
     final togo = tg == null ? null : tg.$1 - s;
     return Padding(
       padding: const EdgeInsets.only(top: S.x4, bottom: S.x5),
       child: Column(children: [
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: motion(c, Motion.sweep),
-          curve: Curves.easeOutCubic,
-          builder: (c, t, _) => SizedBox(
-            width: 260,
-            height: 150,
-            child: CustomPaint(
-              painter: HalfGauge(s / 21, col, p.track, p.ink,
-                  t: t,
-                  stroke: Look.ringStroke(16),
-                  glow: Look.glow,
-                  band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21)),
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                // Scaled down, never clipped, at large text sizes.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text((s * t).toStringAsFixed(1),
-                        style: F.hero.copyWith(color: p.ink)),
-                    Text('OF 21', style: F.over.copyWith(color: p.ink3)),
-                  ]),
-                ),
-              ),
-            ),
-          ),
+        // One dial, 0 to 21 round the circle, today's target as the faint
+        // band on the track.
+        HeroDial(
+          value: s / 21,
+          color: C.strain,
+          number: (t) => (s * t).toStringAsFixed(1),
+          label: 'Strain of 21',
+          band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21),
         ),
         const SizedBox(height: S.x3),
         Text(

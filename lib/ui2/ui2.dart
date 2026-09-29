@@ -10,6 +10,7 @@ export 'charts.dart';
 export 'community_links.dart';
 export 'day_bars.dart';
 export 'koop_mark.dart';
+export 'hero_dial.dart';
 export 'range_row.dart';
 export 'screen_info.dart';
 export 'grammar.dart';

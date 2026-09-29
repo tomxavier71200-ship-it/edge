@@ -192,44 +192,15 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             Section(l?.readinessDetailWhatWasMissing ?? 'What was missing',
                 _absence(c, p, d.absentDiag!)),
         ] else
-          // The hero: no card, the ring on the page with light behind it,
-          // sweeping in and counting up once.
+          // The hero: one dial in its band colour, straight on the page.
           Padding(
             padding: const EdgeInsets.symmetric(vertical: S.x5),
             child: Column(children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: 1),
-                duration: motion(c, Motion.sweep),
-                curve: Curves.easeOutCubic,
-                builder: (c, t, _) => SizedBox(
-                  width: 210,
-                  height: 210,
-                  child: Stack(alignment: Alignment.center, children: [
-                    CustomPaint(
-                      size: const Size(210, 210),
-                      painter: Ring(d.readiness.normalized(100),
-                          p.on(band.color), p.track,
-                          stroke: Look.ringStroke(16),
-                          t: t,
-                          solid: true,
-                          glow: Look.glow),
-                    ),
-                    // Scaled down, never clipped, when the reader's text size
-                    // would push the numeral past the ring.
-                    Padding(
-                      padding: const EdgeInsets.all(S.x6),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text('${(v * t).round()}',
-                              style: F.hero.copyWith(color: p.ink)),
-                          Text('RECOVERY',
-                              style: F.over.copyWith(color: p.ink3)),
-                        ]),
-                      ),
-                    ),
-                  ]),
-                ),
+              HeroDial(
+                value: d.readiness.normalized(100),
+                color: band.color,
+                number: (t) => '${(v * t).round()}%',
+                label: 'Recovery',
               ),
               const SizedBox(height: S.x4),
               Text(band.label,
