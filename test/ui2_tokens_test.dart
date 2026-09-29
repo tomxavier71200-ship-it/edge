@@ -199,6 +199,7 @@ const _notComponents = {
   // ShellScope, so it has no meaning outside a live shell.
   'MoreScreen',
   'CustomizeScreen',
+  'MonthlyReport',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to

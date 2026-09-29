@@ -1186,6 +1186,11 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   }
 
   // ─────────────── TRENDS ───────────────
+  /// Days drawn, and the switch's label. Six months is 182 days, not 180,
+  /// so its left edge is the same weekday as today.
+  static const _trendRanges = [(7, '7D'), (30, '30D'), (182, '6M')];
+  int _trendRange = 1;
+
   Widget _trends(BuildContext c, HealthData d) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
@@ -1233,7 +1238,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
           : (l?.healthVsDayAverage(prior.length) ??
               'vs your ${prior.length}-day average');
       final delta = base == null ? 0.0 : s.last - base;
-      final win = denseDays(pts, 30);
+      final win = denseDays(pts, _trendRanges[_trendRange].$1);
       final metricKey = key == 'sleep' ? 'sleep' : key;
       // The hero number is the newest STORED point, which after a sync gap is
       // not today's. Say when it is from rather than let the card imply now.
@@ -1260,6 +1265,13 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // How far back the lines reach. Only the drawn window changes: the
+      // comparison under each number stays against its stated average, so
+      // switching range never changes what a card claims.
+      SubTabs([for (final r in _trendRanges) r.$2], _trendRange,
+          (i) => setState(() => _trendRange = i),
+          color: C.domHealth),
+      const SizedBox(height: S.x3),
       trend('resting_hr', l?.healthRowRestingHr ?? 'Resting heart rate', 'bpm',
           C.red, higherBetter: false),
       const SizedBox(height: S.x3),

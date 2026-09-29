@@ -22,6 +22,8 @@ import 'coach.dart';
 import 'home_screen.dart' show go, pad;
 import 'journal_compose.dart';
 import 'log_food.dart';
+import 'monthly_report.dart';
+import 'wellness_screen.dart' show JournalFindings;
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -43,6 +45,16 @@ class MoreScreen extends StatelessWidget {
         SetRow(LucideIcons.leaf, C.domMind, 'Wellness',
             sub: 'Mind, habits, medication and cycle',
             onTap: () => open(ShellDomain.wellness)),
+      ]),
+      settingsGroup(c, 'Insights', [
+        SetRow(LucideIcons.calendarRange, C.strain, 'Monthly report',
+            sub: 'Last month against the one before',
+            onTap: () => go(c, const MonthlyReport())),
+        // The journal analysis already exists; it was three taps deep in
+        // Wellness → Habits. This is a second door to the same screen.
+        SetRow(LucideIcons.scatterChart, C.domMind, 'Journal insights',
+            sub: 'What you log, against your recovery',
+            onTap: () => go(c, const JournalFindings())),
       ]),
       settingsGroup(c, 'Tools', [
         SetRow(LucideIcons.sparkles, kCoachAccent, 'Coach',
