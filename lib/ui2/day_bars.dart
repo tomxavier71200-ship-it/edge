@@ -72,14 +72,26 @@ class _DayBarsState extends State<DayBars> {
           child: Text(widget.title.toUpperCase(),
               style: F.over.copyWith(color: p.ink3)),
         ),
-        if (n > 0) ...[
-          Text(widget.labels[sel], style: F.cap.copyWith(color: p.ink3)),
-          const SizedBox(width: S.x2),
-          Text(v == null ? 'No data' : widget.fmt(v),
-              style: v == null
-                  ? F.cap.copyWith(color: p.ink3)
-                  : F.n24.copyWith(color: p.ink)),
-        ],
+        // The readout gives way to large text by scaling, never by pushing
+        // the row past the card.
+        if (n > 0)
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(widget.labels[sel],
+                        style: F.cap.copyWith(color: p.ink3)),
+                    const SizedBox(width: S.x2),
+                    Text(v == null ? 'No data' : widget.fmt(v),
+                        style: v == null
+                            ? F.cap.copyWith(color: p.ink3)
+                            : F.n24.copyWith(color: p.ink)),
+                  ]),
+            ),
+          ),
       ]),
       const SizedBox(height: S.x3),
       Scrubber(

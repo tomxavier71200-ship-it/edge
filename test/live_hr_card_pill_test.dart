@@ -10,7 +10,7 @@ import 'package:openstrap_edge/ui2/ui2.dart';
 
 void main() {
   testWidgets(
-      'a single streaming device renders the bare Pill, no Pressable above it',
+      'a single streaming device shows no device switcher',
       (t) async {
     final app = AppState.forTesting();
     addTearDown(app.dispose);
@@ -34,13 +34,10 @@ void main() {
     await t.pumpAndSettle();
 
     expect(find.text('61'), findsOneWidget);
-    expect(find.byType(Pill), findsOneWidget);
-    // Below the multi-device gate the label is the const 'LIVE' Pill and
-    // nothing wraps it with the device-switch semantics — the card's own
-    // Surface has its own, unrelated Pressable elsewhere in the tree, so a
-    // bare `findsNothing` on Pressable would be too broad; the switch
-    // affordance's own semantic label is the specific, addressable marker.
-    expect(find.text('LIVE'), findsOneWidget);
+    // The minimal card names no device when only one is streaming: the
+    // label row says what the number is, and there is nothing to switch.
+    expect(find.byType(Pill), findsNothing);
+    expect(find.text('LIVE HEART RATE'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Tap to switch device')), findsNothing);
   });
 }

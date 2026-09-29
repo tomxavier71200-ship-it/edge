@@ -895,6 +895,33 @@ Map<String, Widget> extraCases() => {
         ),
       ),
       'koop_mark': const Surface(child: Center(child: KoopMark(size: 96))),
+      // One inside its usual range, one above it.
+      'range_rows': Column(children: [
+        const RangeBanner(inside: 1, total: 2, when: 'Last night'),
+        const SizedBox(height: S.x3),
+        Surface(
+          child: Column(children: [
+            RangeRow(
+              icon: LucideIcons.activity,
+              color: C.green,
+              name: 'HRV',
+              value: 64,
+              unit: 'ms',
+              range: const NormalRange(52, 66, 21),
+              fmt: (x) => x.round().toString(),
+            ),
+            RangeRow(
+              icon: LucideIcons.heart,
+              color: C.red,
+              name: 'Resting heart rate',
+              value: 61,
+              unit: 'bpm',
+              range: const NormalRange(51, 57, 21),
+              fmt: (x) => x.round().toString(),
+            ),
+          ]),
+        ),
+      ]),
       'chart_macro_ring': Builder(builder: (c) {
         final p = P.of(c);
         return Surface(

@@ -61,19 +61,32 @@ class LiveHrCard extends StatelessWidget {
   const LiveHrCard({super.key})
       : _hr = null,
         _trace = null,
+        _zone = null,
         _preview = false;
 
   /// A fixed reading, for the gallery. The gallery has no band, no stream and
   /// no Provider above it, and a card that reached for one would either throw
   /// there or force every caller to thread state through. This is the same
   /// widget with its inputs handed to it.
-  const LiveHrCard.preview({super.key, required int hr, required List<int> trace})
+  const LiveHrCard.preview(
+      {super.key, required int hr, required List<int> trace, int? zone})
       : _hr = hr,
         _trace = trace,
+        _zone = zone,
         _preview = true;
 
   final int? _hr;
   final List<int>? _trace;
+  final int? _zone;
+
+  /// The zone names the Zones screen falls back to, so the two read alike.
+  static const _zoneNames = [
+    'Warm-up',
+    'Easy',
+    'Aerobic',
+    'Threshold',
+    'Max effort'
+  ];
   final bool _preview;
 
   @override
@@ -102,34 +115,35 @@ class LiveHrCard extends StatelessWidget {
       trace = c.read<AppState>().liveHrTrace();
     }
 
+    // WHOOP-quiet: a label, one big number, the zone. No heart glyph — the
+    // only motion is a small dot that blinks once per reading as it lands,
+    // so it pulses at the rate beats actually arrive and owns no timer.
+    final rev = _preview ? 0 : c.select<AppState, int>((a) => a.liveHrTraceRev);
+    final zone = _preview ? _zone : c.read<AppState>().zoneOfLiveHr(hr);
+    final zc = zone == null ? p.ink3 : ZoneBar.cols(p)[zone - 1];
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // At 3.1x text an n48 number plus a pill does not fit a phone width, so
-        // the number is allowed to scale down inside the space that is left
-        // rather than the row overflowing. The pill keeps its size: it is two
-        // short words and shrinking it is how a label becomes unreadable.
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Icon(LucideIcons.heart, size: 26, color: p.on(C.red)),
-          const SizedBox(width: S.x3),
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text('$hr', style: F.n48.copyWith(color: p.ink)),
-                  const SizedBox(width: S.x2),
-                  Text('bpm', style: F.body.copyWith(color: p.ink3)),
-                ],
+          TweenAnimationBuilder<double>(
+            key: ValueKey(rev),
+            tween: Tween(begin: 1, end: 0),
+            duration: motion(c, Motion.slow),
+            curve: Curves.easeOut,
+            builder: (c, t, _) => Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: p.on(C.red).withValues(alpha: .45 + .55 * t),
               ),
             ),
           ),
           const SizedBox(width: S.x2),
-          // WHOSE PULSE THIS IS, only when two devices are streaming. Below
-          // that the row is byte-identical to today's: same Pill, same
-          // position, no Pressable in the tree at all.
+          Expanded(
+            child: Text('LIVE HEART RATE',
+                style: F.over.copyWith(color: p.ink3)),
+          ),
+          // WHOSE PULSE THIS IS, only when two devices are streaming.
           if (!_preview && c.select<AppState, bool>((a) => a.liveHrMultiDevice))
             Builder(builder: (c) {
               final app = c.read<AppState>();
@@ -144,10 +158,53 @@ class LiveHrCard extends StatelessWidget {
                 semanticLabel: 'Showing $label. Tap to switch device.',
                 child: Pill(label, C.red, icon: LucideIcons.radio),
               );
-            })
-          else
-            const Pill('LIVE', C.red, icon: LucideIcons.radio),
+            }),
         ]),
+        const SizedBox(height: S.x3),
+        // At 3.1x text the numeral scales down inside the width rather than
+        // overflowing it.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('$hr', style: F.hero.copyWith(color: p.ink)),
+              const SizedBox(width: S.x2),
+              Text('BPM', style: F.over.copyWith(color: p.ink3)),
+            ],
+          ),
+        ),
+        const SizedBox(height: S.x3),
+        // The zone, on the same table a workout started now would use. With
+        // no table (no age, unstamped band) the bar stays grey and says so
+        // rather than banding against a stranger's maximum.
+        Row(children: [
+          for (var i = 0; i < 5; i++) ...[
+            if (i > 0) const SizedBox(width: 3),
+            Expanded(
+              child: AnimatedContainer(
+                duration: motion(c, Motion.base),
+                height: 4,
+                decoration: BoxDecoration(
+                  color: zone == i + 1 ? zc : p.track,
+                  borderRadius: R.rPill,
+                ),
+              ),
+            ),
+          ],
+        ]),
+        const SizedBox(height: S.x2),
+        Text(
+          zone == null
+              ? (_preview || c.read<AppState>().hasLiveZones
+                  ? 'Below zone 1'
+                  : 'Zones need your age in Profile')
+              : 'ZONE $zone · ${_zoneNames[zone - 1]}',
+          style: F.cap.copyWith(
+              color: zone == null ? p.ink3 : zc, fontWeight: FontWeight.w600),
+        ),
         if (trace.length > 2) ...[
           const SizedBox(height: S.x3),
           SizedBox(

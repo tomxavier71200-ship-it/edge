@@ -6034,6 +6034,33 @@ class AppState extends ChangeNotifier {
     return set.zoneNumber(hr.toDouble());
   }
 
+  /// The zone [hr] falls in, 1..5, for the Live HR tab — which has no session
+  /// to borrow a table from. The active workout's set when there is one,
+  /// otherwise the set a workout started now would get: the same inputs as
+  /// [startWorkout] passes, so the tab and a workout can never disagree about
+  /// one heartbeat. Null below zone 1 or with no set (no age, unstamped band).
+  /// Whether the Live HR tab has a zone table at all — "below zone 1" and
+  /// "no zones without your age" are different sentences.
+  bool get hasLiveZones => _liveZoneSet() != null;
+
+  ana.HeartRateZoneSet? _liveZoneSet() =>
+      activeWorkout?.zoneSet ??
+      trainingZones(
+        age: (user?['age'] as num?),
+        deviceFamily: engine.linkDeviceFamily,
+        observedCeilingBpm: _observedCeilingBpm,
+        restingHrHistory: _rhr28,
+        manualZoneLowerBpm: manualZoneBoundsFromProfile(user),
+      );
+
+  int? zoneOfLiveHr(int hr) {
+    if (hr <= 0) return null;
+    final set = _liveZoneSet();
+    if (set == null) return null;
+    final z = set.zoneNumber(hr.toDouble());
+    return z == 0 ? null : z;
+  }
+
   /// The zone the live session is in right now, 1..5, or null at rest / with
   /// no session. Exposed so the live screens read the ONE zone table instead
   /// of keeping a second copy of the thresholds — which is how two screens

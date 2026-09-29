@@ -838,6 +838,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     final l = AppLocalizations.of(c);
     final rows = <Widget>[];
     final gaps = <Widget>[];
+    var ranged = 0, inRange = 0;
 
     // ALL FIVE ROWS ARE READ FROM THE NIGHT, so all five take the same
     // measured gap. `overnight: false` is for a row that is not — a hole at
@@ -852,7 +853,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         String value, String unit, List<double?> series, String metricKey,
         {String? whyAbsent,
         bool overnight = true,
-        Rising rising = Rising.neither}) {
+        Rising rising = Rising.neither,
+        String Function(double)? fmt}) {
       if (m.isEmpty) {
         final s = StatusCard.forMetric(
             l?.healthNoMetric(name.toLowerCase()) ??
@@ -862,8 +864,31 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         if (s != null) gaps.add(s);
         return;
       }
+      // Against the reader's own usual range once there is one; until then
+      // the plain row, saying how many more nights the range needs.
+      final nr = normalRangeOf(d.points(metricKey));
+      final v = m.value;
+      if (nr.range != null && v != null) {
+        ranged++;
+        if (nr.range!.contains(v.toDouble())) inRange++;
+        rows.add(RangeRow(
+            icon: icon,
+            color: col,
+            name: name,
+            sub: sub,
+            value: v.toDouble(),
+            unit: unit,
+            range: nr.range!,
+            fmt: fmt ?? (x) => x.round().toString(),
+            onTap: () => go(c, MetricDetail(metricKey))));
+        return;
+      }
+      final left = kRangeMinNights - nr.nights;
       rows.add(MetricRow(icon, col, name, value,
-          sub: sub,
+          sub: left > 0 && nr.nights > 0
+              ? '$sub · usual range in $left more '
+                  'night${left == 1 ? '' : 's'}'
+              : sub,
           unit: unit,
           series: series,
           rising: rising,
@@ -914,6 +939,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     row(sleepMin, LucideIcons.moon, C.blue, l?.healthRowSleep ?? 'Sleep',
         night == null ? (l?.healthSubLastNight ?? 'Last night') : prettyDay(night),
         hm(sleepMin.value), '', d.spark('sleep', 24), 'sleep',
+        fmt: (x) => hm(x),
         // More sleep is the direction this app coaches towards — `sleepNeed`
         // exists to say you are short of it, never over it.
         rising: Rising.good,
@@ -950,6 +976,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         respMetric.value == null ? '' : respMetric.value!.toStringAsFixed(1),
         'br/min',
         d.spark('resp_rate', 24), 'resp_rate',
+        fmt: (x) => x.toStringAsFixed(1),
         // DELIBERATELY UNJUDGED. Readiness scores a rise as a cost, but that
         // is a deviation from your own baseline, not a claim that breathing
         // slower is better health — nobody here would tell you a falling
@@ -1023,6 +1050,17 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
       // positively identified itself as an MG, and stays while it is away.
       if (pairedIsMaverickOf(c)) ...[
         const EcgEntryCard(),
+        const SizedBox(height: S.x3),
+      ],
+      // The one-line answer first: is last night normal for me? Only rows
+      // that have a usual range count, so a new user sees no verdict at all.
+      if (ranged > 0) ...[
+        RangeBanner(
+            inside: inRange,
+            total: ranged,
+            when: night == null
+                ? (l?.healthSubLastNight ?? 'Last night')
+                : prettyDay(night)),
         const SizedBox(height: S.x3),
       ],
       if (rows.isNotEmpty)
