@@ -451,19 +451,21 @@ class F {
       letterSpacing: 0,
       fontFeatures: _tab);
 
-  /// Customize → Numbers → Rounded: the same ramp in the text face. Manrope is
-  /// wider, so each step is drawn smaller to keep its old footprint.
+  /// Customize → Numbers → Rounded: the same ramp in the text face. Montserrat
+  /// is wider, so each step is drawn smaller to keep its old footprint, and
+  /// semibold rather than extra-bold: heavy numerals read as a toy.
   static TextStyle _r(TextStyle c) => c.copyWith(
       fontFamily: _f,
       fontSize: c.fontSize! * .8,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 0);
+      fontWeight: FontWeight.w600,
+      letterSpacing: -.3);
+
   /// The hero numeral: the one headline number a detail screen opens on,
   /// inside its ring or gauge. One step, not a size per screen.
   static TextStyle get hero =>
       (Look.rounded ? _r(_c48) : _c48).copyWith(
           fontSize: 64 * (Look.rounded ? .8 : 1),
-          fontWeight: Look.rounded ? FontWeight.w700 : FontWeight.w500);
+          fontWeight: Look.rounded ? FontWeight.w600 : FontWeight.w500);
   static TextStyle get n48 => Look.rounded ? _r(_c48) : _c48;
   static TextStyle get n34 => Look.rounded ? _r(_c34) : _c34;
   static TextStyle get n24 => Look.rounded ? _r(_c24) : _c24;
