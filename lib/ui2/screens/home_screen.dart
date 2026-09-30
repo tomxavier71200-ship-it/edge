@@ -48,6 +48,7 @@ import '../../theme/theme_switcher.dart' show themedRoute;
 import '../activity/day_strain.dart' show DayStrainDetail;
 import '../profile/alarm.dart' show AlarmScreen;
 import '../profile/customize.dart' show CustomizeScreen;
+import 'calm_breathing.dart';
 import 'home_sections.dart';
 import '../profile/devices.dart' show formatDayTime;
 import '../profile/profile.dart';
@@ -1955,6 +1956,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         // The morning read: what the rings mean together, in one sentence.
         if (isToday && (widget.hour ?? DateTime.now().hour) < 12)
           ?morningCard(c, d),
+        if (isToday)
+          ?recoveryTip(c, d, () => go(c, const CalmBreathing())),
         // Monday and the first days of a month: a door into the report.
         if (isToday && repoOf(c) != null) ?reportCard(c, DateTime.now()),
 

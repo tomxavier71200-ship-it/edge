@@ -386,6 +386,56 @@ class _WindDownToggleState extends State<WindDownToggle> {
   }
 }
 
+/// After a low recovery, one line: the input that pulled it down most, and a
+/// door to something the app already has — a few minutes of paced breathing.
+///
+/// The driver is the glass box's own: named only when it landed outside the
+/// reader's usual spread, and pulling DOWN (negative contribution). No
+/// named driver, no reason given — the line then just offers the session.
+/// It makes no claim about what breathing will do to tomorrow's score.
+Widget? recoveryTip(BuildContext c, HomeData d, VoidCallback openBreathing) {
+  final v = d.readiness.value;
+  if (v == null || d.heldOverNight != null || readinessBand(v).tier > 1) {
+    return null;
+  }
+  final p = P.of(c);
+  Map<String, dynamic>? worst;
+  for (final e in d.drivers) {
+    final w = e['contribution'];
+    if (w is num && w < 0 &&
+        (worst == null || w < (worst['contribution'] as num))) {
+      worst = e;
+    }
+  }
+  final why = switch (worst?['label']?.toString()) {
+    null => 'Recovery is low today',
+    'hrv' => 'HRV is below your usual',
+    'rhr' => 'Resting heart rate is above your usual',
+    'resp' => 'Breathing rate is off your usual',
+    'temp' => 'Skin temperature is off your usual',
+    final k => '${driverLabel(k)} pulled recovery down',
+  };
+  return Padding(
+    padding: const EdgeInsets.only(top: S.x3),
+    child: Surface(
+      onTap: openBreathing,
+      semanticLabel: '$why. Try a five-minute breathing session.',
+      child: Row(children: [
+        Icon(LucideIcons.wind, size: 18, color: p.ink3),
+        const SizedBox(width: S.x3),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(why, style: F.body.copyWith(color: p.ink)),
+            Text('Try a 5-minute breathing session',
+                style: F.cap.copyWith(color: p.ink3)),
+          ]),
+        ),
+        Icon(LucideIcons.chevronRight, size: 16, color: p.ink3),
+      ]),
+    ),
+  );
+}
+
 /// The morning read under the rings: one sentence on what recovery and last
 /// night's sleep mean together. It repeats none of the rings' numbers — they
 /// are right above it — only says what they add up to.

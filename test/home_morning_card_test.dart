@@ -47,6 +47,50 @@ void main() {
     expect(find.textContaining('lower than usual'), findsOneWidget);
   });
 
+  Future<Widget?> tip(WidgetTester t, HomeData d) async {
+    Widget? out;
+    await t.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.dark),
+      home: Scaffold(body: Builder(builder: (c) {
+        out = recoveryTip(c, d, () {});
+        return out ?? const SizedBox();
+      })),
+    ));
+    return out;
+  }
+
+  testWidgets('low recovery names the input that pulled it down most',
+      (t) async {
+    await tip(
+        t,
+        const HomeData(
+          readiness: Metric(value: 30, confidence: .8),
+          drivers: [
+            {'label': 'rhr', 'contribution': -0.4},
+            {'label': 'hrv', 'contribution': -1.2},
+            {'label': 'resp', 'contribution': 0.6},
+          ],
+        ));
+    expect(find.text('HRV is below your usual'), findsOneWidget);
+    expect(find.textContaining('breathing session'), findsOneWidget);
+  });
+
+  testWidgets('no tip on a good day, and no invented reason', (t) async {
+    expect(
+        await tip(t,
+            const HomeData(readiness: Metric(value: 70, confidence: .8))),
+        isNull);
+    await tip(
+        t,
+        const HomeData(
+          readiness: Metric(value: 20, confidence: .8),
+          drivers: [
+            {'label': 'hrv', 'contribution': 0.5},
+          ],
+        ));
+    expect(find.text('Recovery is low today'), findsOneWidget);
+  });
+
   testWidgets('no recovery, or a held-over night: no card at all', (t) async {
     expect(await _card(t, const HomeData()), isNull);
     expect(
