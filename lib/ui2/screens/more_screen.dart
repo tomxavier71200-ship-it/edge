@@ -22,6 +22,7 @@ import 'coach.dart';
 import 'home_screen.dart' show go, pad;
 import 'journal_compose.dart';
 import 'log_food.dart';
+import 'healthspan_screen.dart';
 import 'monthly_report.dart';
 import 'strength_screen.dart';
 import 'vo2max_screen.dart';
@@ -49,6 +50,9 @@ class MoreScreen extends StatelessWidget {
             onTap: () => open(ShellDomain.wellness)),
       ]),
       settingsGroup(c, 'Insights', [
+        SetRow(LucideIcons.heartHandshake, C.green, 'Healthspan',
+            sub: 'Long-term habits against published targets',
+            onTap: () => go(c, const HealthspanScreen())),
         SetRow(LucideIcons.dumbbell, C.strain, 'Strength',
             sub: 'Sets per muscle group this week',
             onTap: () => go(c, const StrengthScreen())),

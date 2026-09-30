@@ -202,6 +202,7 @@ const _notComponents = {
   'PeriodReport',
   'Vo2maxScreen',
   'StrengthScreen',
+  'HealthspanScreen',
   // Reads and writes the notification prefs and re-arms reminders through
   // AppState: a live control, with no app above the gallery to drive it.
   'WindDownToggle',
