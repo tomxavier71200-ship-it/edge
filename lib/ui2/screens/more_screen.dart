@@ -23,6 +23,7 @@ import 'home_screen.dart' show go, pad;
 import 'journal_compose.dart';
 import 'log_food.dart';
 import 'monthly_report.dart';
+import 'vo2max_screen.dart';
 import 'wellness_screen.dart' show JournalFindings;
 
 class MoreScreen extends StatelessWidget {
@@ -47,6 +48,9 @@ class MoreScreen extends StatelessWidget {
             onTap: () => open(ShellDomain.wellness)),
       ]),
       settingsGroup(c, 'Insights', [
+        SetRow(LucideIcons.gauge, C.green, 'VO2 max',
+            sub: 'Estimated from your GPS runs',
+            onTap: () => go(c, const Vo2maxScreen())),
         SetRow(LucideIcons.calendarDays, C.strain, 'Weekly report',
             sub: 'Last week against the one before',
             onTap: () => go(c, const PeriodReport(ReportPeriod.week))),
