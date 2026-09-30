@@ -205,6 +205,8 @@ const _notComponents = {
   // Reads and writes the notification prefs and re-arms reminders through
   // AppState: a live control, with no app above the gallery to drive it.
   'WindDownToggle',
+  // Reads the detector's table; a live door, not a component.
+  'DetectedWorkoutCard',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to

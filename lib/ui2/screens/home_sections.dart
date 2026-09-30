@@ -26,6 +26,7 @@ import '../activity/day_strain.dart' show DayStrainDetail;
 import '../ui2.dart';
 import 'home_screen.dart';
 import 'journal_compose.dart';
+import 'log_workout.dart' show Suggestion, WorkoutSuggestionScreen, activeSuggestions;
 import 'metric_detail.dart' show MetricDetail, specOf;
 import 'sleep_detail.dart';
 
@@ -321,6 +322,71 @@ Widget yourDayCard(BuildContext c, HomeData d) {
             ],
           ]),
   );
+}
+
+/// "Did you work out?" on Home: the detector's newest unreviewed bout, one
+/// tap from the existing review screen where it is logged or dismissed.
+/// Nothing is logged from here. Absent when there is nothing waiting or
+/// auto-detection is off (see [activeSuggestions]).
+class DetectedWorkoutCard extends StatefulWidget {
+  const DetectedWorkoutCard({super.key});
+
+  @override
+  State<DetectedWorkoutCard> createState() => _DetectedWorkoutCardState();
+}
+
+class _DetectedWorkoutCardState extends State<DetectedWorkoutCard> {
+  List<Suggestion> _all = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final s = await activeSuggestions();
+    if (mounted) setState(() => _all = s);
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    if (_all.isEmpty) return const SizedBox.shrink();
+    final p = P.of(c);
+    final s = _all.reduce((a, b) => b.startTs > a.startTs ? b : a);
+    final at = DateTime.fromMillisecondsSinceEpoch(s.startTs * 1000);
+    final what = s.activity?.name.toLowerCase() ?? 'workout';
+    final more = _all.length - 1;
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x3),
+      child: Surface(
+        onTap: () async {
+          await Navigator.of(c).push(MaterialPageRoute<void>(
+              builder: (_) => WorkoutSuggestionScreen(preloaded: _all)));
+          if (mounted) _load();
+        },
+        semanticLabel: 'Review a detected workout',
+        child: Row(children: [
+          Icon(LucideIcons.radar, size: 18, color: p.ink3),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                  'Did you do a ${s.durationMin}-minute $what at '
+                  '${clock(at.hour * 60 + at.minute)}?',
+                  style: F.body.copyWith(color: p.ink)),
+              Text(
+                  more > 0
+                      ? 'Review · $more more waiting'
+                      : 'Review to log it or dismiss it',
+                  style: F.cap.copyWith(color: p.ink3)),
+            ]),
+          ),
+          Icon(LucideIcons.chevronRight, size: 16, color: p.ink3),
+        ]),
+      ),
+    );
+  }
 }
 
 /// Tonight's wind-down reminder, switched from where the bedtime is shown.

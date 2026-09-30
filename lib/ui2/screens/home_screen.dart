@@ -1960,6 +1960,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           ?recoveryTip(c, d, () => go(c, const CalmBreathing())),
         // Monday and the first days of a month: a door into the report.
         if (isToday && repoOf(c) != null) ?reportCard(c, DateTime.now()),
+        // A detected bout waiting for a yes or no. Draws nothing when none is.
+        if (isToday && repoOf(c) != null) const DetectedWorkoutCard(),
 
         // Right under the rings, above everything else — the one spot on
         // this screen nobody scrolls past without seeing.
