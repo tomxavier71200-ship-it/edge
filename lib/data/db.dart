@@ -4138,6 +4138,21 @@ class LocalDb {
     );
   }
 
+  /// Every set logged in [fromSec, toSec) (epoch seconds), oldest first — the
+  /// Strength screen's week. Read-only.
+  static Future<List<Map<String, Object?>>> strengthSetsBetween(
+    int fromSec,
+    int toSec,
+  ) async {
+    final db = await instance;
+    return db.query(
+      'strength_set',
+      where: 'at_ts >= ? AND at_ts < ?',
+      whereArgs: [fromSec, toSec],
+      orderBy: 'at_ts ASC',
+    );
+  }
+
   /// The most recent sets logged for one exercise, newest first — the
   /// substrate for "previous" and "best" on the live screen.
   static Future<List<Map<String, Object?>>> recentSetsFor(

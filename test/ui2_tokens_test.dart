@@ -201,6 +201,7 @@ const _notComponents = {
   'CustomizeScreen',
   'PeriodReport',
   'Vo2maxScreen',
+  'StrengthScreen',
   // Reads and writes the notification prefs and re-arms reminders through
   // AppState: a live control, with no app above the gallery to drive it.
   'WindDownToggle',
