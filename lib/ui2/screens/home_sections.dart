@@ -15,8 +15,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
 import '../../data/day_label.dart';
+import '../../notify/notification_center.dart';
+import '../../notify/notification_prefs.dart';
+import '../../state/app_state.dart';
 import '../../state/prefs.dart';
 import '../activity/day_strain.dart' show DayStrainDetail;
 import '../ui2.dart';
@@ -317,6 +321,69 @@ Widget yourDayCard(BuildContext c, HomeData d) {
             ],
           ]),
   );
+}
+
+/// Tonight's wind-down reminder, switched from where the bedtime is shown.
+/// The same preference as Notifications → Wind-down; flipping it re-arms the
+/// OS reminders through AppState, which works the time back from tonight's
+/// band alarm when one is armed.
+class WindDownToggle extends StatefulWidget {
+  const WindDownToggle({super.key});
+
+  @override
+  State<WindDownToggle> createState() => _WindDownToggleState();
+}
+
+class _WindDownToggleState extends State<WindDownToggle> {
+  NotificationPrefs? _prefs;
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationPrefs.load().then((p) {
+      if (mounted) setState(() => _prefs = p);
+    });
+  }
+
+  Future<void> _flip() async {
+    final p = _prefs;
+    if (p == null) return;
+    final next = p.copyWith(windDownEnabled: !p.windDownEnabled);
+    setState(() => _prefs = next);
+    await next.save();
+    if (!mounted) return;
+    await context.read<AppState>().refreshAiReminders();
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final on = _prefs?.windDownEnabled ?? false;
+    return Pressable(
+      semanticLabel: 'Wind-down reminder, ${on ? 'on' : 'off'}',
+      onTap: _prefs == null ? null : _flip,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: S.x3),
+        child: Row(children: [
+          Icon(LucideIcons.moonStar, size: 18, color: p.ink3),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Wind-down reminder', style: F.body.copyWith(color: p.ink)),
+              Text(
+                  '${NotificationCenter.windDownBeforeBedMin} minutes before '
+                  'bedtime',
+                  style: F.cap.copyWith(color: p.ink3)),
+            ]),
+          ),
+          Text(on ? 'On' : 'Off',
+              style: F.cap.copyWith(
+                  color: on ? p.on(C.green) : p.ink3,
+                  fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
 }
 
 /// The morning read under the rings: one sentence on what recovery and last

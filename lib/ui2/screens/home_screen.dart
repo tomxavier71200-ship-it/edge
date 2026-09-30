@@ -2425,7 +2425,10 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         ],
         const SizedBox(height: S.x4),
         // No AppState in a golden: the alarm row would reach for one.
-        if (repoOf(c) != null) _alarmRow(c, p),
+        if (repoOf(c) != null) ...[
+          _alarmRow(c, p),
+          const WindDownToggle(),
+        ],
       ]),
     );
   }

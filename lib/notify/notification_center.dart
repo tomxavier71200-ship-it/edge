@@ -531,6 +531,20 @@ class NotificationCenter {
     return t;
   }
 
+  /// Tonight's bedtime for the wind-down nudge: worked back from a wake time
+  /// (the armed band alarm) when there is one and a sleep need to subtract,
+  /// else the coach's learned bedtime, else null — no nudge. Pure.
+  static double? bedtimeFor({
+    int? wakeMinOfDay,
+    double? needMin,
+    double? learnedBedtimeMin,
+  }) {
+    if (wakeMinOfDay != null && needMin != null && needMin > 0) {
+      return ((wakeMinOfDay - needMin) % 1440 + 1440) % 1440;
+    }
+    return learnedBedtimeMin;
+  }
+
   /// Two-digit HH:MM from minutes-past-midnight (notification bodies).
   static String _hhmm(int minuteOfDay) {
     final m = minuteOfDay % 1440;

@@ -2639,9 +2639,19 @@ class AppState extends ChangeNotifier {
       // silently never got computed at all.
       final cd = await _readCrossdaySummary();
       final meds = await _medScheduleToday(prefs);
+      // With tonight's band alarm armed, bedtime is worked back from it — the
+      // same "asleep by" the Tonight card shows — so the wind-down nudge and
+      // the planner agree. Otherwise the coach's learned bedtime.
+      final wake = _alarmArmedTonight && alarmEpoch != null
+          ? DateTime.fromMillisecondsSinceEpoch(alarmEpoch! * 1000)
+          : null;
+      final bedtime = NotificationCenter.bedtimeFor(
+          wakeMinOfDay: wake == null ? null : wake.hour * 60 + wake.minute,
+          needMin: cd.needMin,
+          learnedBedtimeMin: cd.bedtimeMin);
       await NotificationCenter.instance.scheduleStandingReminders(
         prefs,
-        bedtimeMinOfDay: cd.bedtimeMin,
+        bedtimeMinOfDay: bedtime,
         weeklyFinding: prefs.remindersEnabled
             ? NotificationCenter.weeklyLookbackFinding(cd.recent)
             : null,
@@ -2692,22 +2702,33 @@ class AppState extends ChangeNotifier {
   /// lookback's finding summarizes. Read in one place because three schedules
   /// hang off it — check-in, wind-down, nightly sweep, weekly lookback — and
   /// a second copy of this parse is a second thing to get wrong.
-  Future<({double? bedtimeMin, List<Map<String, dynamic>> recent})>
+  Future<
+          ({
+            double? bedtimeMin,
+            double? needMin,
+            List<Map<String, dynamic>> recent
+          })>
       _readCrossdaySummary() async {
+    const none = (
+      bedtimeMin: null,
+      needMin: null,
+      recent: <Map<String, dynamic>>[],
+    );
     try {
       final cd = await LocalDb.baseline('crossday');
       final m = cd?['payload_json'];
-      if (m is! String) {
-        return (bedtimeMin: null, recent: const <Map<String, dynamic>>[]);
-      }
+      if (m is! String) return none;
       final j = jsonDecode(m);
-      if (j is! Map) {
-        return (bedtimeMin: null, recent: const <Map<String, dynamic>>[]);
-      }
-      final bt = (j['sleep_coach'] as Map?)?['bedtime'];
+      if (j is! Map) return none;
+      final coach = j['sleep_coach'] as Map?;
+      final bt = coach?['bedtime'];
       final v = bt is Map ? bt['value'] : null;
       final bedtime =
           (v is Map ? (v['bedtime_min_of_day'] as num?) : null)?.toDouble();
+      // The coach's computed need — the same envelope Health and Home read.
+      final nd = coach?['need'];
+      final nv = nd is Map ? nd['value'] : null;
+      final needSec = nv is Map ? nv['need_sec'] as num? : null;
       // Same rows `DerivationEngine._runNotifications` consumes for the daily
       // exception — {date, rhr, unsettled, illness, anomaly, temp}.
       final rawRecent = j['recent'];
@@ -2716,11 +2737,15 @@ class AppState extends ChangeNotifier {
           for (final r in rawRecent)
             if (r is Map) r.cast<String, dynamic>(),
       ];
-      return (bedtimeMin: bedtime, recent: recent);
+      return (
+        bedtimeMin: bedtime,
+        needMin: needSec == null ? null : needSec / 60,
+        recent: recent,
+      );
     } catch (_) {
       // No rollup → no learned bedtime and an empty week: every consumer has
       // its own honest silence for that.
-      return (bedtimeMin: null, recent: const <Map<String, dynamic>>[]);
+      return none;
     }
   }
 
