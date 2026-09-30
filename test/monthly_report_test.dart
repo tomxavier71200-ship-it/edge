@@ -34,4 +34,27 @@ void main() {
     expect(dayLabelOfSec(m.t), '2026-08-20');
     expect(monthMax(aug, 2026, 10), isNull);
   });
+
+  test('weeks start on Monday, local', () {
+    // 30 Sep 2026 is a Wednesday.
+    expect(weekStart(DateTime(2026, 9, 30)), DateTime(2026, 9, 28));
+    expect(weekStart(DateTime(2026, 9, 28)), DateTime(2026, 9, 28));
+    expect(weekStart(DateTime(2026, 10, 4)), DateTime(2026, 9, 28));
+  });
+
+  test('a week needs four recorded days, and averages only those', () {
+    final wk = [
+      (t: _at(2026, 9, 21), v: 50.0),
+      (t: _at(2026, 9, 23), v: 60.0),
+      (t: _at(2026, 9, 25), v: 70.0),
+    ];
+    final from = DateTime(2026, 9, 21), to = DateTime(2026, 9, 28);
+    expect(rangeStat(wk, from, to, kWeekMinDays), isNull);
+    final four = [...wk, (t: _at(2026, 9, 27), v: 80.0)];
+    final s = rangeStat(four, from, to, kWeekMinDays)!;
+    expect(s.days, 4);
+    expect(s.mean, 65);
+    // The next Monday belongs to the next week.
+    expect(inRange([(t: _at(2026, 9, 28), v: 1.0)], from, to), isEmpty);
+  });
 }

@@ -47,9 +47,12 @@ class MoreScreen extends StatelessWidget {
             onTap: () => open(ShellDomain.wellness)),
       ]),
       settingsGroup(c, 'Insights', [
+        SetRow(LucideIcons.calendarDays, C.strain, 'Weekly report',
+            sub: 'Last week against the one before',
+            onTap: () => go(c, const PeriodReport(ReportPeriod.week))),
         SetRow(LucideIcons.calendarRange, C.strain, 'Monthly report',
             sub: 'Last month against the one before',
-            onTap: () => go(c, const MonthlyReport())),
+            onTap: () => go(c, const PeriodReport(ReportPeriod.month))),
         // The journal analysis already exists; it was three taps deep in
         // Wellness → Habits. This is a second door to the same screen.
         SetRow(LucideIcons.scatterChart, C.domMind, 'Journal insights',

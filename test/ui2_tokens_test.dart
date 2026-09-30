@@ -199,7 +199,7 @@ const _notComponents = {
   // ShellScope, so it has no meaning outside a live shell.
   'MoreScreen',
   'CustomizeScreen',
-  'MonthlyReport',
+  'PeriodReport',
   // Reads and writes the notification prefs and re-arms reminders through
   // AppState: a live control, with no app above the gallery to drive it.
   'WindDownToggle',

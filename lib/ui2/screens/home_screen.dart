@@ -56,6 +56,7 @@ import 'ai_briefing.dart' show AiBriefingScreen;
 import 'coach.dart';
 import 'day_timeline.dart' show DayTimelineScreen;
 import 'metric_detail.dart';
+import 'monthly_report.dart' show reportCard;
 import 'readiness_detail.dart';
 import 'sleep_detail.dart';
 
@@ -1954,6 +1955,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         // The morning read: what the rings mean together, in one sentence.
         if (isToday && (widget.hour ?? DateTime.now().hour) < 12)
           ?morningCard(c, d),
+        // Monday and the first days of a month: a door into the report.
+        if (isToday && repoOf(c) != null) ?reportCard(c, DateTime.now()),
 
         // Right under the rings, above everything else — the one spot on
         // this screen nobody scrolls past without seeing.

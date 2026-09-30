@@ -1,14 +1,15 @@
-// The monthly report: a calendar month's averages against the month before,
-// plus its best night and its hardest day.
+// The weekly and monthly reports: a period's averages against the period
+// before, plus its longest night and its hardest day.
 //
 // Arithmetic on stored day values only — `metric_series`, one point per
 // derived day — so nothing here is a new metric. The rules that keep it
 // honest:
 //
-//   · A month needs [kMonthMinDays] recorded days before it gets averages at
-//     all. Fewer, and the screen says how many it has instead.
-//   · A change against the month before is shown only when BOTH months clear
-//     that floor. Otherwise the average stands alone.
+//   · A period needs a floor of recorded days before it gets averages at all
+//     ([kWeekMinDays] a week, [kMonthMinDays] a month). Fewer, and the screen
+//     says how many it has instead.
+//   · A change against the period before is shown only when BOTH periods
+//     clear that floor. Otherwise the average stands alone.
 //   · Each average is over the days that exist, and says how many.
 
 import 'package:flutter/material.dart';
@@ -25,41 +26,61 @@ import 'metric_detail.dart' show detailScaffold;
 /// Recorded days a month needs before it is summarised.
 const kMonthMinDays = 14;
 
-/// One metric over one calendar month (local days).
+/// Recorded days a week needs — the same floor as a dashboard average.
+const kWeekMinDays = 4;
+
+typedef _Pts = List<({int t, double v})>;
+
+/// One metric over one period (local days).
 class MonthStat {
   final double mean;
   final int days;
   const MonthStat(this.mean, this.days);
 }
 
-/// The points of [pts] that fall in [year]/[month] (local), by the point's own
-/// day. Pure, so the report's arithmetic is testable without a store.
-List<({int t, double v})> inMonth(
-    List<({int t, double v})> pts, int year, int month) => [
-      for (final p in pts)
-        if (_ym(p.t) == (year, month) && p.v.isFinite) p,
-    ];
+/// Local day label for an epoch-seconds point, through the one day-label
+/// helper.
+String dayLabelOfSec(int t) =>
+    dayLabelOf(DateTime.fromMillisecondsSinceEpoch(t * 1000));
 
-(int, int) _ym(int epochSec) {
-  final d = DateTime.fromMillisecondsSinceEpoch(epochSec * 1000);
-  return (d.year, d.month);
+/// The points of [pts] whose own local day is in [from, to). Day labels are
+/// ISO dates, so they compare as strings. Pure.
+_Pts inRange(_Pts pts, DateTime from, DateTime to) {
+  final a = dayLabelOf(from), b = dayLabelOf(to);
+  return [
+    for (final p in pts)
+      if (p.v.isFinite &&
+          dayLabelOfSec(p.t).compareTo(a) >= 0 &&
+          dayLabelOfSec(p.t).compareTo(b) < 0)
+        p,
+  ];
 }
 
-/// The month's mean over its recorded days, or null under [kMonthMinDays].
-MonthStat? monthStat(List<({int t, double v})> pts, int year, int month) {
-  final m = inMonth(pts, year, month);
-  if (m.length < kMonthMinDays) return null;
-  return MonthStat(m.map((p) => p.v).reduce((a, b) => a + b) / m.length,
-      m.length);
+/// The mean over [from, to)'s recorded days, or null under [minDays].
+MonthStat? rangeStat(_Pts pts, DateTime from, DateTime to, int minDays) {
+  final m = inRange(pts, from, to);
+  if (m.length < minDays) return null;
+  return MonthStat(
+      m.map((p) => p.v).reduce((a, b) => a + b) / m.length, m.length);
 }
 
-/// The point with the highest value in the month, or null when it has none.
-({int t, double v})? monthMax(
-    List<({int t, double v})> pts, int year, int month) {
-  final m = inMonth(pts, year, month);
+/// The highest point in [from, to), or null when it has none.
+({int t, double v})? rangeMax(_Pts pts, DateTime from, DateTime to) {
+  final m = inRange(pts, from, to);
   if (m.isEmpty) return null;
   return m.reduce((a, b) => b.v > a.v ? b : a);
 }
+
+// The calendar-month shorthands the monthly test and callers use.
+_Pts inMonth(_Pts pts, int y, int m) =>
+    inRange(pts, DateTime(y, m), DateTime(y, m + 1));
+MonthStat? monthStat(_Pts pts, int y, int m) =>
+    rangeStat(pts, DateTime(y, m), DateTime(y, m + 1), kMonthMinDays);
+({int t, double v})? monthMax(_Pts pts, int y, int m) =>
+    rangeMax(pts, DateTime(y, m), DateTime(y, m + 1));
+
+/// Monday of [d]'s week, local.
+DateTime weekStart(DateTime d) => DateTime(d.year, d.month, d.day - (d.weekday - 1));
 
 const _months = [
   'January', 'February', 'March', 'April', 'May', 'June', 'July', //
@@ -76,22 +97,34 @@ final _rows = <(String, String, String Function(double), bool?)>[
   ('resting_hr', 'Resting heart rate', (v) => '${v.round()} bpm', false),
 ];
 
-class MonthlyReport extends StatefulWidget {
-  const MonthlyReport({super.key});
+enum ReportPeriod { week, month }
+
+class PeriodReport extends StatefulWidget {
+  final ReportPeriod period;
+  const PeriodReport(this.period, {super.key});
 
   @override
-  State<MonthlyReport> createState() => _MonthlyReportState();
+  State<PeriodReport> createState() => _PeriodReportState();
 }
 
-class _MonthlyReportState extends State<MonthlyReport> {
-  Map<String, List<({int t, double v})>>? _series;
+class _PeriodReportState extends State<PeriodReport> {
+  Map<String, _Pts>? _series;
 
-  /// The month shown: last calendar month by default, because the current
+  bool get _week => widget.period == ReportPeriod.week;
+  int get _min => _week ? kWeekMinDays : kMonthMinDays;
+
+  /// The period shown: the last COMPLETE one by default, since the current
   /// one is not over.
-  late DateTime _month = () {
+  late DateTime _start = () {
     final n = DateTime.now();
-    return DateTime(n.year, n.month - 1);
+    return _week
+        ? weekStart(DateTime(n.year, n.month, n.day - 7))
+        : DateTime(n.year, n.month - 1);
   }();
+
+  DateTime _shift(DateTime d, int by) => _week
+      ? DateTime(d.year, d.month, d.day + 7 * by)
+      : DateTime(d.year, d.month + by);
 
   @override
   void initState() {
@@ -101,7 +134,7 @@ class _MonthlyReportState extends State<MonthlyReport> {
 
   Future<void> _load() async {
     final repo = context.read<AppState>().repo;
-    final out = <String, List<({int t, double v})>>{};
+    final out = <String, _Pts>{};
     if (repo != null) {
       for (final r in _rows) {
         try {
@@ -114,38 +147,47 @@ class _MonthlyReportState extends State<MonthlyReport> {
     if (mounted) setState(() => _series = out);
   }
 
-  void _step(int by) =>
-      setState(() => _month = DateTime(_month.year, _month.month + by));
+  String _name(DateTime start) {
+    if (!_week) return '${_months[start.month - 1]} ${start.year}';
+    final end = DateTime(start.year, start.month, start.day + 6);
+    final m0 = _months[start.month - 1].substring(0, 3);
+    final m1 = _months[end.month - 1].substring(0, 3);
+    return start.month == end.month
+        ? '${start.day}–${end.day} $m1'
+        : '${start.day} $m0 – ${end.day} $m1';
+  }
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     final s = _series;
-    final y = _month.year, m = _month.month;
-    final prev = DateTime(y, m - 1);
-    final now = DateTime.now();
-    final canNext = DateTime(y, m + 1).isBefore(DateTime(now.year, now.month));
-    final title = '${_months[m - 1]} $y';
-    return detailScaffold(c, 'Monthly report', [
+    final end = _shift(_start, 1);
+    final canNext = !end.isAfter(_week
+        ? weekStart(DateTime.now())
+        : DateTime(DateTime.now().year, DateTime.now().month));
+    final unit = _week ? 'week' : 'month';
+    return detailScaffold(c, _week ? 'Weekly report' : 'Monthly report', [
       Row(children: [
         Pressable(
-          semanticLabel: 'Previous month',
-          onTap: () => _step(-1),
+          semanticLabel: 'Previous $unit',
+          onTap: () => setState(() => _start = _shift(_start, -1)),
           child: Padding(
             padding: const EdgeInsets.all(S.x3),
             child: Icon(LucideIcons.chevronLeft, color: p.ink2),
           ),
         ),
         Expanded(
-          child: Text(title,
+          child: Text(_name(_start),
               textAlign: TextAlign.center,
               style: F.t2.copyWith(color: p.ink)),
         ),
         Opacity(
           opacity: canNext ? 1 : .3,
           child: Pressable(
-            semanticLabel: 'Next month',
-            onTap: canNext ? () => _step(1) : null,
+            semanticLabel: 'Next $unit',
+            onTap: canNext
+                ? () => setState(() => _start = _shift(_start, 1))
+                : null,
             child: Padding(
               padding: const EdgeInsets.all(S.x3),
               child: Icon(LucideIcons.chevronRight, color: p.ink2),
@@ -157,23 +199,23 @@ class _MonthlyReportState extends State<MonthlyReport> {
       if (s == null)
         const Center(child: CircularProgressIndicator())
       else
-        ..._body(c, p, s, y, m, prev),
+        ..._body(p, s, _start, end),
     ]);
   }
 
-  List<Widget> _body(BuildContext c, P p, Map<String, List<({int t, double v})>> s,
-      int y, int m, DateTime prev) {
+  List<Widget> _body(P p, Map<String, _Pts> s, DateTime from, DateTime to) {
+    final prevFrom = _shift(from, -1);
     final days = {
       for (final pts in s.values)
-        for (final pt in inMonth(pts, y, m)) dayLabelOfSec(pt.t),
+        for (final pt in inRange(pts, from, to)) dayLabelOfSec(pt.t),
     }.length;
-    if (days < kMonthMinDays) {
+    final unit = _week ? 'week' : 'month';
+    if (days < _min) {
       return [
         StatusCard(
           'Not enough days for a report',
-          '${_months[m - 1]} has $days recorded '
-              '${days == 1 ? 'day' : 'days'}. A report needs at least '
-              '$kMonthMinDays, so the averages mean something.',
+          'This $unit has $days recorded ${days == 1 ? 'day' : 'days'}. A '
+              'report needs at least $_min, so the averages mean something.',
           icon: LucideIcons.calendarDays,
         ),
       ];
@@ -181,9 +223,9 @@ class _MonthlyReportState extends State<MonthlyReport> {
     final rows = <Widget>[];
     for (final r in _rows) {
       final pts = s[r.$1] ?? const [];
-      final now = monthStat(pts, y, m);
+      final now = rangeStat(pts, from, to, _min);
       if (now == null) continue;
-      final before = monthStat(pts, prev.year, prev.month);
+      final before = rangeStat(pts, prevFrom, from, _min);
       final d = before == null ? null : now.mean - before.mean;
       final col = d == null || r.$4 == null || d.abs() < 1e-9
           ? p.ink3
@@ -194,8 +236,7 @@ class _MonthlyReportState extends State<MonthlyReport> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(r.$2, style: F.body.copyWith(color: p.ink)),
-              Text('${now.days} days',
-                  style: F.over.copyWith(color: p.ink3)),
+              Text('${now.days} days', style: F.cap.copyWith(color: p.ink3)),
             ]),
           ),
           Text(r.$3(now.mean), style: F.n24.copyWith(color: p.ink)),
@@ -213,8 +254,8 @@ class _MonthlyReportState extends State<MonthlyReport> {
         ]),
       ));
     }
-    final best = monthMax(s['sleep'] ?? const [], y, m);
-    final hardest = monthMax(s['strain'] ?? const [], y, m);
+    final best = rangeMax(s['sleep'] ?? const [], from, to);
+    final hardest = rangeMax(s['strain'] ?? const [], from, to);
     return [
       Section(
         'Averages',
@@ -230,8 +271,8 @@ class _MonthlyReportState extends State<MonthlyReport> {
       Padding(
         padding: const EdgeInsets.only(top: S.x2),
         child: Text(
-            'Arrows compare with ${_months[prev.month - 1]}, and only when '
-            'it also has $kMonthMinDays recorded days.',
+            'Arrows compare with the $unit before, and only when it also has '
+            '$_min recorded days.',
             style: F.cap.copyWith(color: p.ink3)),
       ),
       if (best != null || hardest != null)
@@ -244,8 +285,7 @@ class _MonthlyReportState extends State<MonthlyReport> {
                 Text('${prettyDay(dayLabelOfSec(best.t))} · ${hm(best.v)} asleep',
                     style: F.body.copyWith(color: p.ink)),
               ],
-              if (best != null && hardest != null)
-                const SizedBox(height: S.x3),
+              if (best != null && hardest != null) const SizedBox(height: S.x3),
               if (hardest != null) ...[
                 Text('HARDEST DAY', style: F.over.copyWith(color: p.ink3)),
                 Text(
@@ -260,7 +300,32 @@ class _MonthlyReportState extends State<MonthlyReport> {
   }
 }
 
-/// Local day label for an epoch-seconds point, through the one day-label
-/// helper.
-String dayLabelOfSec(int t) =>
-    dayLabelOf(DateTime.fromMillisecondsSinceEpoch(t * 1000));
+/// The Home card on report days: Monday for last week, the 1st to the 3rd
+/// for last month. One tap into the report; it states no numbers of its own.
+Widget? reportCard(BuildContext c, DateTime now) {
+  final month = now.day <= 3;
+  final week = now.weekday == DateTime.monday;
+  if (!month && !week) return null;
+  final p = P.of(c);
+  final period = month ? ReportPeriod.month : ReportPeriod.week;
+  final last = month
+      ? _months[DateTime(now.year, now.month - 1).month - 1]
+      : 'last week';
+  return Padding(
+    padding: const EdgeInsets.only(top: S.x3),
+    child: Surface(
+      onTap: () => go(c, PeriodReport(period)),
+      semanticLabel: 'Open your report for $last',
+      child: Row(children: [
+        Icon(LucideIcons.calendarRange, size: 18, color: p.ink3),
+        const SizedBox(width: S.x3),
+        Expanded(
+          child: Text(
+              month ? 'Your $last report is ready' : 'Your week in review',
+              style: F.body.copyWith(color: p.ink)),
+        ),
+        Icon(LucideIcons.chevronRight, size: 16, color: p.ink3),
+      ]),
+    ),
+  );
+}
