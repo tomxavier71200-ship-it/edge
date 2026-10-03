@@ -3,9 +3,10 @@ name: ios-test-build
 # An unsigned iPhone build of a work-in-progress branch, for sideloading onto
 # a test device (Sideloadly / AltStore) from a machine that is not a Mac.
 #
-# Deliberately NOT the release pipeline (build.yml): no version guards, no
-# GitHub Release, no AltStore source — the .ipa is only attached to the run as
-# a downloadable artifact. Needs no secrets: with no GoogleService-Info.plist
+# Deliberately NOT the release pipeline (build.yml): no version guards and no
+# tagged release. The .ipa is attached to the run as an artifact AND published
+# to one rolling `koop-ios` pre-release with a SideStore source, so a test
+# phone subscribed to it gets one-tap updates. Needs no secrets: with no GoogleService-Info.plist
 # the Xcode build phase writes an inert placeholder, and .env is left blank.
 
 on:
@@ -14,7 +15,9 @@ on:
     branches: ['whoop-ui']
 
 permissions:
-  contents: read
+  # write: the job publishes the .ipa and the SideStore source to the
+  # rolling `koop-ios` release so SideStore can offer one-tap updates.
+  contents: write
 
 jobs:
   ios:
@@ -41,7 +44,12 @@ jobs:
       - run: flutter pub get
 
       - name: Build unsigned iOS app
-        run: flutter build ios --release --no-codesign --dart-define-from-file=.env
+        # A version that rises on every run (0.10.<run>), so SideStore sees each
+        # push as an update; the pubspec version stays the release line.
+        run: >
+          flutter build ios --release --no-codesign --dart-define-from-file=.env
+          --build-name=0.10.${{ github.run_number }}
+          --build-number=${{ github.run_number }}
 
       # Same reason as build.yml: a Watch companion cannot survive a per-user
       # free-account resign, so the .ipa would not install with it inside.
@@ -66,3 +74,28 @@ jobs:
           name: openstrap-edge-test-ipa
           path: openstrap-edge-test-unsigned.ipa
           retention-days: 14
+
+      # One-tap updates: the rolling `koop-ios` release always holds the newest
+      # koop.ipa and the SideStore source pointing at it. Subscribe once to
+      #   https://github.com/<owner>/<repo>/releases/download/koop-ios/apps.json
+      # and SideStore shows "Update" whenever this job runs.
+      - name: Generate SideStore source
+        run: |
+          cp openstrap-edge-test-unsigned.ipa koop.ipa
+          python3 .github/scripts/gen_koop_source.py \
+            koop.ipa apps.json "${{ github.repository }}" koop-ios
+
+      - name: Publish to the koop-ios release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: koop-ios
+          name: Koop for iPhone (rolling)
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          body: |
+            Rolling iPhone build of the whoop-ui branch.
+            Add this source in SideStore: https://github.com/${{ github.repository }}/releases/download/koop-ios/apps.json
+          files: |
+            koop.ipa
+            apps.json
