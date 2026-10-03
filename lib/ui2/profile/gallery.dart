@@ -57,6 +57,7 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/home_sections.dart' show MonitorTiles;
+import '../screens/more_screen.dart' show DoorRow, DoorTile, FeatureCard;
 import '../screens/sleep_whoop.dart';
 import '../screens/stress_detail.dart';
 import '../screens/screens.dart';
@@ -334,6 +335,18 @@ Map<String, Widget> goldenCases() => {
       // The newest day: forward is dead, and the label reads Today rather than
       // a date. Both halves of that are the honesty — there is no day after
       // this one, and saying so beats a live arrow that does nothing.
+      // More's doors: a tile, a wide row, the featured card.
+      'door_tile': DoorTile(LucideIcons.gauge, C.green, 'VO2 max',
+          'From your GPS runs', onTap: () {}),
+      'door_row': DoorRow(LucideIcons.user, C.blue, 'Profile and settings',
+          'Devices, data, notifications and privacy', onTap: () {}),
+      'feature_card': FeatureCard(
+          icon: LucideIcons.sparkles,
+          color: C.purple,
+          title: 'Coach',
+          sub: 'Ask anything about your sleep, recovery and training.',
+          cta: 'Ask the coach',
+          onTap: () {}),
       // WHOOP's sleep cards, with full inputs.
       'overnight_hr': OvernightHrCard(
         onset: DateTime(2026, 10, 3, 6, 44).millisecondsSinceEpoch ~/ 1000,
