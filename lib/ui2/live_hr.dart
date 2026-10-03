@@ -160,75 +160,122 @@ class LiveHrCard extends StatelessWidget {
               );
             }),
         ]),
-        const SizedBox(height: S.x3),
-        // At 3.1x text the numeral scales down inside the width rather than
-        // overflowing it.
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text('$hr', style: F.hero.copyWith(color: p.ink)),
-              const SizedBox(width: S.x2),
-              Text('BPM', style: F.over.copyWith(color: p.ink3)),
-            ],
+        const SizedBox(height: S.x4),
+        // The number and the zone it sits in, on one line — the way a watch
+        // face reads: big figure left, the zone as a coloured chip right.
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(
+            // At 3.1x text the numeral scales down inside the width rather
+            // than overflowing it.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text('$hr', style: F.hero.copyWith(color: p.ink)),
+                  const SizedBox(width: S.x2),
+                  Text('BPM', style: F.over.copyWith(color: p.ink3)),
+                ],
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: S.x3),
-        // The zone, on the same table a workout started now would use. With
-        // no table (no age, unstamped band) the bar stays grey and says so
-        // rather than banding against a stranger's maximum.
+          const SizedBox(width: S.x2),
+          Flexible(
+            child: Container(
+              alignment: Alignment.bottomRight,
+              padding: const EdgeInsets.only(bottom: S.x2),
+              child: zone == null
+                  ? Text(
+                      _preview || c.read<AppState>().hasLiveZones
+                          ? 'Below zone 1'
+                          : 'Zones need your age in Profile',
+                      textAlign: TextAlign.right,
+                      style: F.cap.copyWith(color: p.ink3))
+                  : Pill('ZONE $zone · ${_zoneNames[zone - 1]}',
+                      ZoneBar.pigment[zone - 1]),
+            ),
+          ),
+        ]),
+        const SizedBox(height: S.x4),
+        // The zone scale, Z1…Z5, the current one lit. With no table (no age,
+        // unstamped band) it stays grey rather than banding against a
+        // stranger's maximum.
         Row(children: [
           for (var i = 0; i < 5; i++) ...[
             if (i > 0) const SizedBox(width: 3),
             Expanded(
-              child: AnimatedContainer(
-                duration: motion(c, Motion.base),
-                height: 4,
-                decoration: BoxDecoration(
-                  color: zone == i + 1 ? zc : p.track,
-                  borderRadius: R.rPill,
+              child: Column(children: [
+                AnimatedContainer(
+                  duration: motion(c, Motion.base),
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: zone == i + 1
+                        ? zc
+                        : (zone != null && i + 1 < zone
+                            ? zc.withValues(alpha: .25)
+                            : p.track),
+                    borderRadius: R.rPill,
+                  ),
                 ),
-              ),
+                const SizedBox(height: S.x1),
+                Text('Z${i + 1}',
+                    style: F.over.copyWith(
+                        color: zone == i + 1 ? zc : p.ink3)),
+              ]),
             ),
           ],
         ]),
-        const SizedBox(height: S.x2),
-        Text(
-          zone == null
-              ? (_preview || c.read<AppState>().hasLiveZones
-                  ? 'Below zone 1'
-                  : 'Zones need your age in Profile')
-              : 'ZONE $zone · ${_zoneNames[zone - 1]}',
-          style: F.cap.copyWith(
-              color: zone == null ? p.ink3 : zc, fontWeight: FontWeight.w600),
-        ),
         if (trace.length > 2) ...[
-          const SizedBox(height: S.x3),
-          SizedBox(
-            height: 56,
+          const SizedBox(height: S.x5),
+          // A real scale, not a free-floating squiggle: the frame labels the
+          // bpm gridlines the line is drawn against.
+          ChartFrame(
+            title: 'Last ${trace.length} readings',
+            unit: 'bpm',
+            height: 110,
+            yAxis: _axisOf(trace),
+            series: [for (final v in trace) v.toDouble()],
+            xLabels: const ['Earlier', 'Now'],
             child: CustomPaint(
               painter: LineChart(
                 [for (final v in trace) v.toDouble()],
-                C.red,
-                fill: false,
+                zone == null ? p.on(C.red) : zc,
+                axis: _axisOf(trace),
+                dots: true,
+                dotInk: p.card,
               ),
               size: Size.infinite,
             ),
           ),
-          const SizedBox(height: S.x2),
-          Text(
-            'The last ${trace.length} readings — ${trace.reduce(math.min)}'
-            '–${trace.reduce(math.max)} bpm. Not stored; this is '
-            'the live stream, not a record of your day.',
-            style: F.over.copyWith(color: p.ink3),
-          ),
+          const SizedBox(height: S.x4),
+          // Min · average · max of exactly the readings drawn above.
+          Row(children: [
+            _stat(p, 'MIN', '${trace.reduce(math.min)}'),
+            _stat(p, 'AVG',
+                '${(trace.reduce((a, b) => a + b) / trace.length).round()}'),
+            _stat(p, 'MAX', '${trace.reduce(math.max)}'),
+          ]),
+          const SizedBox(height: S.x3),
+          Text('Live from the band. Not stored.',
+              style: F.cap.copyWith(color: p.ink3)),
         ],
       ]),
     );
   }
+
+  static AxisSpec? _axisOf(List<int> t) =>
+      AxisSpec.of([for (final v in t) v.toDouble()], ticks: 3);
+
+  Widget _stat(P p, String label, String v) => Expanded(
+        child: Column(children: [
+          Text(label,
+              style: F.over.copyWith(color: p.ink3, letterSpacing: 1.4)),
+          const SizedBox(height: S.x1),
+          Text(v, style: F.n24.copyWith(color: p.ink)),
+        ]),
+      );
 
   /// No live reading. Three different facts, and only the one the app can
   /// actually see is stated.

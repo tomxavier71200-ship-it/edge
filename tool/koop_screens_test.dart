@@ -5,6 +5,7 @@
 //
 // Output: build/koop_screens/<name>.png at 390 × 844 pt, 2x.
 
+import 'dart:math' as math;
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -179,10 +180,17 @@ void main() {
       ]),
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
-    'live_hr': Padding(
+    'live_hr': ListView(
       padding: const EdgeInsets.all(16),
-      child: LiveHrCard.preview(
-          hr: 81, trace: [for (var i = 0; i < 60; i++) 76 + (i * 7 % 9)], zone: 2),
+      children: [
+        LiveHrCard.preview(
+            hr: 112,
+            trace: [
+              for (var i = 0; i < 60; i++)
+                (88 + i * .45 + 4 * math.sin(i / 4)).round()
+            ],
+            zone: 2),
+      ],
     ),
   };
 
