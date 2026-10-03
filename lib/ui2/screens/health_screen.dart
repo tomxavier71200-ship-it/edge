@@ -698,7 +698,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
       final v = last.score! / 100 * 3;
       final mins = [0, 0, 0];
       for (final b in scored) {
-        mins[_level(b.score! / 100 * 3)] += 15;
+        mins[stressLevelOf(b.score! / 100 * 3)] += 15;
       }
       out.addAll([
         Center(
@@ -724,9 +724,9 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         const SizedBox(height: S.x3),
         Center(
           child: Text(
-            '${_levelWord[_level(v)]} stress · as of ${clock(last.at.hour * 60 + last.at.minute)}',
+            '${kStressLevelWords[stressLevelOf(v)]} stress · as of ${clock(last.at.hour * 60 + last.at.minute)}',
             textAlign: TextAlign.center,
-            style: F.head.copyWith(color: p.on(_levelColor[_level(v)])),
+            style: F.head.copyWith(color: p.on(kStressLevelColors[stressLevelOf(v)])),
           ),
         ),
         Section(
@@ -755,8 +755,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
                   padding: const EdgeInsets.symmetric(vertical: S.x2),
                   child: Row(children: [
                     Expanded(
-                      child: Text(_levelWord[i],
-                          style: F.body.copyWith(color: p.on(_levelColor[i]))),
+                      child: Text(kStressLevelWords[i],
+                          style: F.body.copyWith(color: p.on(kStressLevelColors[i]))),
                     ),
                     Text(hm(mins[i].toDouble()),
                         style: F.body.copyWith(color: p.ink)),
@@ -2079,11 +2079,11 @@ class _StressBin {
   const _StressBin(this.at, this.score);
 }
 
-const _levelWord = ['Low', 'Medium', 'High'];
-const _levelColor = [C.green, C.yellow, C.red];
+const kStressLevelWords = ['Low', 'Medium', 'High'];
+const kStressLevelColors = [C.green, C.yellow, C.red];
 
 /// 0–3 value → level index. The cut points are the display scale's thirds.
-int _level(double v) => v < 1 ? 0 : v < 2 ? 1 : 2;
+int stressLevelOf(double v) => v < 1 ? 0 : v < 2 ? 1 : 2;
 
 /// The 0–3 gauge: a half ring shading green → yellow → red, filled to [frac].
 class _StressGauge extends CustomPainter {
@@ -2145,7 +2145,7 @@ class _StressBars extends CustomPainter {
         Paint()
           ..color = score == null
               ? p.track
-              : _levelColor[_level(score / 100 * 3)],
+              : kStressLevelColors[stressLevelOf(score / 100 * 3)],
       );
     }
   }

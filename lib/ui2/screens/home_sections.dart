@@ -25,8 +25,10 @@ import '../../state/prefs.dart';
 import '../activity/day_strain.dart' show DayStrainDetail;
 import '../ui2.dart';
 import 'home_screen.dart';
+import 'health_screen.dart' show kStressLevelColors, kStressLevelWords, stressLevelOf;
 import 'journal_compose.dart';
-import 'log_workout.dart' show Suggestion, WorkoutSuggestionScreen, activeSuggestions;
+import 'log_workout.dart'
+    show LogWorkout, Suggestion, WorkoutSuggestionScreen, activeSuggestions;
 import 'metric_detail.dart' show MetricDetail, specOf;
 import 'sleep_detail.dart';
 
@@ -265,9 +267,12 @@ Widget yourDayCard(BuildContext c, HomeData d) {
     for (final s in (t['sleep'] as List? ?? const [])) {
       if (s is! Map || s['onset_ts'] is! num || s['wake_ts'] is! num) continue;
       final on = (s['onset_ts'] as num).toInt(), off = (s['wake_ts'] as num).toInt();
+      // The pill holds the time in bed as h:mm, the way WHOOP's sleep pill
+      // reads; the label under it on the Sleep screen says what it measures.
+      final mins = ((off - on) / 60).round();
       rows.add(_dayRow(c, p, LucideIcons.moon, C.sleep, 'Sleep',
-          '${hhmm(on)} to ${hhmm(off)} · ${hm((off - on) / 60)} in bed', null,
-          () => go(c, const SleepDetail())));
+          '${mins ~/ 60}:${(mins % 60).toString().padLeft(2, '0')}',
+          hhmm(on), hhmm(off), () => go(c, const SleepDetail())));
     }
     for (final w in (t['sessions'] as List? ?? const [])) {
       if (w is! Map || w['start_ts'] is! num) continue;
@@ -275,53 +280,214 @@ Widget yourDayCard(BuildContext c, HomeData d) {
       final name = type.isEmpty
           ? 'Activity'
           : '${type[0].toUpperCase()}${type.substring(1).replaceAll('_', ' ')}';
-      final mins = (w['duration_min'] as num?)?.toInt();
-      final avg = (w['avg_hr'] as num?)?.toInt();
       final strain = (w['strain'] as num?)?.toDouble();
+      final start = (w['start_ts'] as num).toInt();
+      final end = (w['end_ts'] as num?)?.toInt();
       rows.add(_dayRow(
           c,
           p,
           LucideIcons.activity,
           C.strain,
           name,
-          [
-            hhmm((w['start_ts'] as num).toInt()),
-            if (mins != null) '$mins min',
-            if (avg != null) '$avg avg bpm',
-          ].join(' · '),
-          strain?.toStringAsFixed(1),
+          // No strain scored, no number in the pill — a dash, never a zero.
+          strain?.toStringAsFixed(1) ?? '—',
+          hhmm(start),
+          end == null ? '' : hhmm(end),
           () => go(c, const DayStrainDetail())));
     }
   }
-  return Surface(
-    pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),
-    child: rows.isEmpty
-        ? Padding(
+  Widget action(IconData icon, String label, VoidCallback onTap) => Expanded(
+        child: Pressable(
+          onTap: onTap,
+          semanticLabel: label,
+          child: Container(
             padding: const EdgeInsets.symmetric(vertical: S.x3),
-            child: Row(children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                    border: Border.all(color: p.line), borderRadius: R.rMd),
-                child: Icon(LucideIcons.clock, size: 18, color: p.ink3),
-              ),
-              const SizedBox(width: S.x3),
-              Expanded(
-                child: Text(
-                    'Nothing synced for today yet. Your sleep and workouts '
-                    'show up here after the band syncs.',
-                    style: F.body.copyWith(color: p.ink3)),
+            decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, size: 16, color: p.ink),
+              const SizedBox(width: S.x2),
+              Flexible(
+                child: Text(label.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                    style: F.over.copyWith(
+                        color: p.ink, letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700)),
               ),
             ]),
-          )
-        : Column(children: [
-            for (var i = 0; i < rows.length; i++) ...[
-              if (i > 0) Divider(color: p.line, height: 1),
-              rows[i],
-            ],
-          ]),
+          ),
+        ),
+      );
+  return Surface(
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('ACTIVITIES', style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+      const SizedBox(height: S.x3),
+      if (rows.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: S.x3),
+          child: Text(
+              'Nothing synced for today yet. Your sleep and workouts show up '
+              'here after the band syncs.',
+              style: F.body.copyWith(color: p.ink3)),
+        )
+      else
+        for (final r in rows) ...[r, const SizedBox(height: S.x2)],
+      const SizedBox(height: S.x1),
+      Row(children: [
+        action(LucideIcons.plus, 'Add activity',
+            () => go(c, const LogWorkout())),
+        const SizedBox(width: S.x2),
+        action(LucideIcons.timer, 'Start activity',
+            () => ShellScope.maybeOf(c)?.select(ShellDomain.workout)),
+      ]),
+    ]),
   );
+}
+
+/// The two tiles under the dials, WHOOP-style: Health Monitor (how many of
+/// the overnight vitals sit in the reader's own usual range) and Stress
+/// Monitor (the latest daytime reading, 0–3). Each opens its Health tab.
+class MonitorTiles extends StatefulWidget {
+  final HomeData d;
+  final VoidCallback onHealth, onStress;
+  const MonitorTiles(
+      {super.key,
+      required this.d,
+      required this.onHealth,
+      required this.onStress});
+
+  @override
+  State<MonitorTiles> createState() => _MonitorTilesState();
+}
+
+class _MonitorTilesState extends State<MonitorTiles> {
+  /// Latest scored 15-minute window today, 0–100, and when; null for none.
+  ({double score, DateTime at})? _stress;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStress();
+  }
+
+  Future<void> _loadStress() async {
+    final repo = repoOf(context);
+    if (repo == null) return;
+    try {
+      final today = todayLabel();
+      final s = await repo.getDayStress(today);
+      ({double score, DateTime at})? last;
+      for (final e in (s['stress_day'] is List ? s['stress_day'] as List : const [])) {
+        if (e is! Map || e['t'] is! num || e['score'] is! num) continue;
+        final at =
+            DateTime.fromMillisecondsSinceEpoch((e['t'] as num).toInt() * 1000);
+        if (dayLabelOf(at) != today) continue;
+        last = (score: (e['score'] as num).toDouble(), at: at);
+      }
+      if (mounted) setState(() => _stress = last);
+    } catch (_) {}
+  }
+
+  /// The overnight vitals the Health overview judges, counted the same way
+  /// (normalRangeOf: newest point against the earlier nights). Only those with
+  /// a range count; none with a range → null, and the tile says so.
+  (int, int)? _inRange() {
+    var inside = 0, total = 0;
+    for (final k in const ['hrv', 'resting_hr', 'resp_rate']) {
+      final pts = widget.d.series[k] ?? const [];
+      final r = normalRangeOf(pts).range;
+      if (r == null || pts.isEmpty) continue;
+      total++;
+      final newest = pts.reduce((a, b) => b.t > a.t ? b : a);
+      if (r.contains(newest.v)) inside++;
+    }
+    return total == 0 ? null : (inside, total);
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final hr = _inRange();
+    final s = _stress;
+    final v = s == null ? null : s.score / 100 * 3;
+    final lvl = v == null ? null : stressLevelOf(v);
+    Widget tile(String title, VoidCallback onTap, Widget badge, String word,
+            Color wordCol, String sub) =>
+        Expanded(
+          child: Surface(
+            onTap: onTap,
+            semanticLabel: '$title. $word. $sub',
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Text(title.toUpperCase(),
+                      style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+                ),
+                Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+              ]),
+              const SizedBox(height: S.x4),
+              Row(children: [
+                badge,
+                const SizedBox(width: S.x3),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(word.toUpperCase(),
+                        maxLines: 2,
+                        style: F.over.copyWith(
+                            color: wordCol, letterSpacing: 1.4,
+                            fontWeight: FontWeight.w700)),
+                    Text(sub, style: F.cap.copyWith(color: p.ink2)),
+                  ]),
+                ),
+              ]),
+            ]),
+          ),
+        );
+    Widget box(Widget child, Color col) => Container(
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: const EdgeInsets.symmetric(horizontal: S.x1),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: p.wash(col), borderRadius: R.rSm),
+          child: child,
+        );
+    final all = hr != null && hr.$1 == hr.$2;
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x4),
+      child: IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          tile(
+            'Health Monitor',
+            widget.onHealth,
+            box(
+                Icon(hr == null ? LucideIcons.minus
+                        : all ? LucideIcons.check : LucideIcons.triangleAlert,
+                    size: 18,
+                    color: hr == null ? p.ink3 : p.on(all ? C.green : C.orange)),
+                hr == null ? p.ink3 : (all ? C.green : C.orange)),
+            hr == null ? 'Building range' : all ? 'Within range' : 'Outside range',
+            hr == null ? p.ink3 : p.on(all ? C.green : C.orange),
+            hr == null ? 'Needs 7 nights' : '${hr.$1}/${hr.$2} metrics',
+          ),
+          const SizedBox(width: S.x3),
+          tile(
+            'Stress Monitor',
+            widget.onStress,
+            box(
+                Text(v == null ? '—' : v.toStringAsFixed(1),
+                    style: F.n24.copyWith(
+                        color: lvl == null ? p.ink3 : p.on(kStressLevelColors[lvl]))),
+                lvl == null ? p.ink3 : kStressLevelColors[lvl]),
+            lvl == null ? 'No reading' : kStressLevelWords[lvl],
+            lvl == null ? p.ink3 : p.on(kStressLevelColors[lvl]),
+            s == null
+                ? 'Not yet today'
+                : clock(s.at.hour * 60 + s.at.minute),
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
 /// "Did you work out?" on Home: the detector's newest unreviewed bout, one
@@ -547,33 +713,53 @@ Widget? morningCard(BuildContext c, HomeData d) {
   );
 }
 
+/// One activity, WHOOP-style: a filled pill with the icon and the score,
+/// the name in spaced capitals, start over end at the right with a bar in
+/// the activity's colour.
 Widget _dayRow(BuildContext c, P p, IconData icon, Color col, String name,
-        String sub, String? value, VoidCallback onTap) =>
+        String value, String start, String end, VoidCallback onTap) =>
     Pressable(
-      semanticLabel: '$name. $sub',
+      semanticLabel: '$name, $value, $start to $end',
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: S.x3),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(S.x2, S.x2, S.x3, S.x2),
+        decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
         child: Row(children: [
           Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(color: p.wash(col), borderRadius: R.rMd),
-            child: Icon(icon, size: 18, color: p.on(col)),
+            width: 104,
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: S.x3),
+            decoration: BoxDecoration(color: p.on(col), borderRadius: R.rSm),
+            child: Row(children: [
+              Icon(icon, size: 20, color: p.bg),
+              const SizedBox(width: S.x2),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, style: F.n24.copyWith(color: p.bg)),
+                ),
+              ),
+            ]),
           ),
           const SizedBox(width: S.x3),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, style: F.body.copyWith(color: p.ink)),
-              Text(sub, style: F.over.copyWith(color: p.ink3)),
-            ]),
+            child: Text(name.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: F.over.copyWith(
+                    color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
           ),
-          if (value != null) ...[
-            const SizedBox(width: S.x2),
-            Text(value, style: F.n24.copyWith(color: p.on(col))),
-          ],
-          const SizedBox(width: S.x1),
-          Icon(LucideIcons.chevronRight, size: 16, color: p.ink3),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(start, style: F.cap.copyWith(color: p.ink2)),
+            if (end.isNotEmpty) Text(end, style: F.cap.copyWith(color: p.ink2)),
+          ]),
+          const SizedBox(width: S.x2),
+          Container(
+            width: 2,
+            height: 30,
+            decoration: BoxDecoration(color: p.on(col), borderRadius: R.rPill),
+          ),
         ]),
       ),
     );

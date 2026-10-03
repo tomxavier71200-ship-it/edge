@@ -56,6 +56,7 @@ import '../activity/summary.dart';
 import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
+import '../screens/home_sections.dart' show MonitorTiles;
 import '../screens/screens.dart';
 import '../ui2.dart';
 import 'devices.dart';
@@ -896,6 +897,14 @@ Map<String, Widget> extraCases() => {
         ),
       ),
       'koop_mark': const Surface(child: Center(child: KoopMark(size: 96))),
+      // No repository above the gallery: no stress reading, no ranges — the
+      // tiles' honest empty states.
+      'mini_dials': const MiniDials(
+          d: HomeData(
+              readiness: Metric(value: 44, confidence: .8),
+              strain: Metric(value: 14, confidence: .6))),
+      'monitor_tiles': MonitorTiles(
+          d: const HomeData(), onHealth: () {}, onStress: () {}),
       'hero_dial': Center(
         child: HeroDial(
           value: 10.8 / 21,
