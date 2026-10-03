@@ -102,7 +102,9 @@ class CloudSync extends ChangeNotifier {
     return e.isEmpty ? null : e;
   }
 
-  bool get wifiOnly => Prefs.getBool(kCloudWifiOnlyKey, true);
+  /// Off by default: uploads go over mobile data too. The person asked for
+  /// that; the row on the Data screen says each upload is a full copy.
+  bool get wifiOnly => Prefs.getBool(kCloudWifiOnlyKey, false);
   DateTime? get lastUp => _at(kCloudLastUpKey);
   DateTime? get lastCheck => _at(kCloudLastCheckKey);
   DateTime? get remoteSeen {
