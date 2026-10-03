@@ -1,26 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 120 120">
   <title>Koop logo (app icon)</title>
-  <!-- Same geometry and colours as lib/ui2/koop_mark.dart. Rings: r 19, stroke 8, centres (47,60) and (73,60). -->
+  <!-- Same geometry and colours as lib/ui2/koop_mark.dart. Rings: r 18, stroke 8, centres (47.75,60) and (72.25,60). -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#232C35"/><stop offset="1" stop-color="#0B0F13"/></linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#000305"/></linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="0" y2=".5"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".09"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-    <linearGradient id="blue" gradientUnits="userSpaceOnUse" x1="28" y1="41" x2="66" y2="79"><stop offset="0" stop-color="#7CC4FF"/><stop offset="1" stop-color="#3B6BFF"/></linearGradient>
-    <linearGradient id="green" gradientUnits="userSpaceOnUse" x1="54" y1="41" x2="92" y2="79"><stop offset="0" stop-color="#5CF0A0"/><stop offset="1" stop-color="#14B8A6"/></linearGradient>
+    <linearGradient id="blue" gradientUnits="userSpaceOnUse" x1="29.75" y1="42" x2="65.75" y2="78"><stop offset="0" stop-color="#F00000"/><stop offset="1" stop-color="#280101"/></linearGradient>
+    <linearGradient id="green" gradientUnits="userSpaceOnUse" x1="54.25" y1="42" x2="90.25" y2="78"><stop offset="0" stop-color="#3F3C2C"/><stop offset="1" stop-color="#FBFF00"/></linearGradient>
     <!-- The over-pass: a channel cut where blue crosses back over green at the top. -->
     <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="120" height="120">
       <rect width="120" height="120" fill="#fff"/>
-      <path d="M53.498 42.146 A19 19 0 0 1 64.357 52.272" fill="none" stroke="#000" stroke-width="12.4"/>
+      <path d="M53.497 42.940 A18 18 0 0 1 64.343 53.024" fill="none" stroke="#000" stroke-width="12.4"/>
     </mask>
   </defs>
   <g id="tile-background">
-    <rect width="120" height="120" rx="27" fill="url(#tile)"/>
-    <rect width="120" height="120" rx="27" fill="url(#sheen)"/>
+    <rect width="120" height="120" rx="25" fill="url(#tile)"/>
+    <rect width="120" height="120" rx="25" fill="url(#sheen)"/>
   </g>
   <g id="rings">
     <g mask="url(#cut)">
-      <circle id="blue-ring" cx="47" cy="60" r="19" fill="none" stroke="url(#blue)" stroke-width="8"/>
-      <circle id="green-ring" cx="73" cy="60" r="19" fill="none" stroke="url(#green)" stroke-width="8"/>
+      <circle id="blue-ring" cx="47.75" cy="60" r="18" fill="none" stroke="url(#blue)" stroke-width="8"/>
+      <circle id="green-ring" cx="72.25" cy="60" r="18" fill="none" stroke="url(#green)" stroke-width="8"/>
     </g>
-    <path id="blue-over-pass" d="M52.871 41.929 A19 19 0 0 1 64.616 52.883" fill="none" stroke="url(#blue)" stroke-width="8"/>
+    <path id="blue-over-pass" d="M52.893 42.750 A18 18 0 0 1 64.576 53.608" fill="none" stroke="url(#blue)" stroke-width="8"/>
   </g>
 </svg>

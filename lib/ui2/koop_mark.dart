@@ -44,11 +44,11 @@ class KoopMarkPainter extends CustomPainter {
     this.t = 1,
   });
 
-  static const _r = 19.0;
+  static const _r = 18.0;
   static const _w = 8.0;
   static const _gap = 2.2;
-  static const _left = Offset(47, 60);
-  static const _right = Offset(73, 60);
+  static const _left = Offset(47.75, 60);
+  static const _right = Offset(72.25, 60);
 
   @override
   void paint(Canvas cv, Size s) {
@@ -67,7 +67,7 @@ class KoopMarkPainter extends CustomPainter {
     final rect = Rect.fromLTWH(-inset, -inset, box, box);
     final shape = fullBleed
         ? RRect.fromRectAndRadius(rect, Radius.zero)
-        : RRect.fromRectAndRadius(rect, Radius.circular(box * .225));
+        : RRect.fromRectAndRadius(rect, Radius.circular(box * 25 / 120));
     cv.drawRRect(
         shape,
         Paint()
@@ -131,7 +131,9 @@ class KoopMarkPainter extends CustomPainter {
       // channel a little wider than the ring, then lay the blue arc in it.
       // The arc runs a few degrees past the channel at both ends so its end
       // edges land on blue it is identical to, and no seam shows.
-      const a0 = -70 * math.pi / 180, a1 = -24 * math.pi / 180;
+      // The top crossing sits at -47.1 deg on the left ring (r 18, centres 24.5
+      // apart); the channel spans 24.3 deg either side of it.
+      const a0 = -71.4 * math.pi / 180, a1 = -22.8 * math.pi / 180;
       const pad = 2 * math.pi / 180;
       final rect = Rect.fromCircle(center: _left, radius: _r);
       cv.drawArc(

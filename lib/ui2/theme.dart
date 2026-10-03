@@ -74,12 +74,12 @@ class C {
   /// the route ramp they are not in [all]: a logo is a picture, not ink or a
   /// fill the contrast sweep should judge. Each ring runs light to deep along
   /// its diagonal; the tile runs top to bottom.
-  static const brandBlue0 = Color(0xFF7CC4FF);
-  static const brandBlue1 = Color(0xFF3B6BFF);
-  static const brandGreen0 = Color(0xFF5CF0A0);
-  static const brandGreen1 = Color(0xFF14B8A6);
-  static const brandTile0 = Color(0xFF232C35);
-  static const brandTile1 = Color(0xFF0B0F13);
+  static const brandBlue0 = Color(0xFFF00000);
+  static const brandBlue1 = Color(0xFF280101);
+  static const brandGreen0 = Color(0xFF3F3C2C);
+  static const brandGreen1 = Color(0xFFFBFF00);
+  static const brandTile0 = Color(0xFF000000);
+  static const brandTile1 = Color(0xFF000305);
   static const brandMono = Color(0xFFFFFFFF);
 
   /// The basemap's two ends, which is the whole of the map's styling: every
