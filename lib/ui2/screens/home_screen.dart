@@ -1132,6 +1132,10 @@ class _RingState {
   /// What to sweep, 0…1 — null when there is nothing honest to sweep.
   final double? frac;
 
+  /// An early estimate (short baseline): a real number, drawn faded and
+  /// labelled so it never reads as the settled score.
+  final bool early;
+
   /// The arc is calibration progress, not the metric, and is drawn muted.
   final bool calibrating;
 
@@ -1158,6 +1162,7 @@ class _RingState {
     this.sub = '',
     this.frac,
     this.calibrating = false,
+    this.early = false,
     this.have,
     this.need,
     this.why,
@@ -1169,7 +1174,11 @@ class _RingState {
   /// reading, so it is not one.
   bool get measured => why == null && !calibrating;
 
-  Color arc(P p) => calibrating ? p.ink3 : p.on(color);
+  Color arc(P p) => calibrating
+      ? p.ink3
+      : early
+          ? p.on(color).withValues(alpha: .5)
+          : p.on(color);
   Color ink(P p) => measured ? p.on(color) : p.ink3;
 
   String get spoken => [
@@ -1185,6 +1194,23 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
     case HomeRingKind.recovery:
       final v = d.readiness.value;
       final band = readinessBand(v, l);
+      // Still calibrating, but 4+ nights in: the early estimate, labelled.
+      final e = v == null ? d.readinessEarly.value : null;
+      if (e != null) {
+        final eb = readinessBand(e, l);
+        return _RingState(
+          k,
+          l?.homeRingRecovery ?? 'Recovery',
+          LucideIcons.batteryCharging,
+          eb.color,
+          value: '${e.round()}%',
+          sub: 'Early estimate',
+          frac: e / 100,
+          n: e.toDouble(),
+          fmt: (x) => '${x.round()}%',
+          early: true,
+        );
+      }
       return v == null
           ? _gap(
               k,
@@ -1387,7 +1413,7 @@ class _Dial extends StatelessWidget {
                     stroke: w,
                     t: t,
                     solid: r.measured,
-                    glow: Look.glow,
+                    glow: Look.glow && !r.early,
                   ),
           ),
           if (valueInside && r.measured)
@@ -1541,6 +1567,11 @@ class HomeData {
   final String? name;
   final String? dayId;
   final Metric readiness;
+
+  /// The early readiness estimate (4+ nights of baseline), present only
+  /// while [readiness] is still calibrating. Shown labelled, never as the
+  /// score itself.
+  final Metric readinessEarly;
   final List<Map<String, dynamic>> drivers;
   final Metric sleepMin, rhr, steps, calories, caloriesTotal;
 
@@ -1593,6 +1624,7 @@ class HomeData {
     this.name,
     this.dayId,
     this.readiness = Metric.empty,
+    this.readinessEarly = Metric.empty,
     this.drivers = const [],
     this.sleepMin = Metric.empty,
     this.rhr = Metric.empty,
@@ -1620,6 +1652,7 @@ class HomeData {
     name: name,
     dayId: dayId,
     readiness: readiness,
+    readinessEarly: readinessEarly,
     drivers: drivers,
     sleepMin: sleepMin,
     rhr: rhr,
@@ -1738,6 +1771,7 @@ class HomeData {
       // [overnightMetric]. Steps, active energy and strain are today's own and
       // are read straight.
       readiness: overnightMetric(today, d('readiness'), l),
+      readinessEarly: overnightMetric(today, d('readiness_early'), l),
       drivers: [
         for (final e in (gbDrivers is List ? gbDrivers : const []))
           if (e is Map) e.cast<String, dynamic>(),
@@ -2494,20 +2528,26 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           top: 0,
           left: 0,
           right: 0,
-          child: IgnorePointer(
-            ignoring: !_miniDials,
-            child: AnimatedSlide(
-              offset: _miniDials ? Offset.zero : const Offset(0, -1.2),
-              duration: motion(c, Motion.base),
-              child: MiniDials(
-                d: d,
-                onOpen: (k) => go(c, switch (k) {
-                  HomeRingKind.recovery => const ReadinessDetail(),
-                  HomeRingKind.strain => const DayStrainDetail(),
-                  HomeRingKind.sleep => const SleepDetail(),
-                }),
-              ),
+          // Built only while shown: hidden off-screen it would still be a
+          // second copy of the day's numbers in the tree (and to a screen
+          // reader). It slides in and out on the way.
+          child: AnimatedSwitcher(
+            duration: motion(c, Motion.base),
+            transitionBuilder: (w, a) => SlideTransition(
+              position: Tween(begin: const Offset(0, -1.2), end: Offset.zero)
+                  .animate(a),
+              child: w,
             ),
+            child: _miniDials
+                ? MiniDials(
+                    d: d,
+                    onOpen: (k) => go(c, switch (k) {
+                      HomeRingKind.recovery => const ReadinessDetail(),
+                      HomeRingKind.strain => const DayStrainDetail(),
+                      HomeRingKind.sleep => const SleepDetail(),
+                    }),
+                  )
+                : const SizedBox.shrink(),
           ),
         ),
       ],

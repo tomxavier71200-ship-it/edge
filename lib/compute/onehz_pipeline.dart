@@ -98,6 +98,25 @@ const String kUnknownAbsenceNote = 'unknown_cause';
 /// source is the sibling `fix/readiness-baseline-pollution` work.
 const double kReadinessZCap = 5.0;
 
+/// Nights of personal baseline behind an EARLY readiness estimate, shown while
+/// the full composite (analytics' 14) is still cold-starting. Four is the
+/// shortest window the person chose to see a number from; the composite's own
+/// refusals (quantized dispersion, min inputs/weight) and [kReadinessZCap]
+/// still apply, so a degenerate baseline is refused, not scored.
+const int kReadinessEarlyMinBaseline = 4;
+
+/// The early estimate for [full], or null. Only while [full] is cold-starting
+/// (its need_baseline note); then the same composite over the same [inputs]
+/// with the shorter baseline, through the same z-cap. Pure, for the tests.
+double? earlyReadinessScalar(
+    Metric<Readiness> full, List<ReadinessInput> inputs) {
+  if (full.present || !(full.note?.startsWith('need_baseline') ?? false)) {
+    return null;
+  }
+  return headlineReadinessScalar(
+      readinessComposite(inputs, minBaseline: kReadinessEarlyMinBaseline));
+}
+
 /// The headline readiness scalar for a computed [composite], or null when it must
 /// abstain: absent composite, or one whose |z| exceeds [kReadinessZCap] (a
 /// saturated, degenerate-baseline artefact — see [kReadinessZCap]). Pure so the
@@ -597,7 +616,7 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // lives in `rhr` itself, so this is the same number the card shows.
   final rhrToday = rhr.present ? rhr.value!.low30Mean : null;
   final respToday = resp.present ? resp.value!.brpm : null;
-  final composite = readinessComposite([
+  final readinessInputs = [
     hrvInput(lnToday, d.lnRmssdHistory),
     rhrInput(rhrToday, d.rhrHistory),
     respInput(respToday, d.respHistory),
@@ -614,7 +633,18 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       d.skinTempAdcHistory,
       settledFraction: skinTempSettledFrac,
     ),
-  ]);
+  ];
+  final composite = readinessComposite(readinessInputs);
+  // EARLY ESTIMATE — the same composite, the same inputs, the same refusals,
+  // over a shorter personal baseline ([kReadinessEarlyMinBaseline] nights).
+  // Only while the full one is still COLD-STARTING (its note is the
+  // need_baseline one); a full composite that abstained for any other reason
+  // has a reason, and an early number must not paper over it. Kept under its
+  // own key and NEVER written to the `readiness` series: the 28-day baseline,
+  // streaks, alerts and exports read that series, and a calibrating number
+  // in it would be a fabricated history. The UI labels it "Early estimate".
+  final readinessEarlyScalar =
+      earlyReadinessScalar(composite, readinessInputs);
   // Populated when readiness comes back absent, so the main isolate can log WHY
   // instead of a bare null (this runs inside Isolate.run, so it can't call
   // Firebase directly; it just returns data). TWO consumers now, and the second
@@ -1403,6 +1433,9 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       'rmssd': rmssdScalar,
       'rmssd_whole': rmssdWholeScalar,
       'readiness': readinessScalar,
+      // The early estimate (see where it is computed). Null whenever the full
+      // score exists, and never charted: it is not a reading of the series.
+      'readiness_early': readinessEarlyScalar,
       // Headline 0–21 strain (the screens already expect a 0–21 scale); raw
       // Banister TRIMP stays under `trimp` as the secondary "training load".
       'strain': strainScalar,

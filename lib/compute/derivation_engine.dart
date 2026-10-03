@@ -1725,7 +1725,14 @@ import 'substrate.dart';
 // the same log [20, 600] → 0–100 map (now one shared `_stressScoreOfSi`). Bins
 // too thin for an SI window are `score: null`, never interpolated. The nightly
 // `stress` block is unchanged. kAnalyticsPin/kProtocolPin UNCHANGED.
-const int kAlgoVersion = 98;
+// 98 → 99 (early readiness estimate, edge-only orchestration): while the
+// full composite is cold-starting (need_baseline under analytics' 14 nights),
+// the day bundle gains `readiness_early` — the SAME `readinessComposite` over
+// the SAME inputs with `minBaseline: kReadinessEarlyMinBaseline` (4), through
+// the same z-cap. Bundle-only: never written to the `readiness` series or the
+// day_result column, so baselines, streaks, alerts and exports are untouched.
+// Home labels it "Early estimate". kAnalyticsPin/kProtocolPin UNCHANGED.
+const int kAlgoVersion = 99;
 /// The sibling SHAs this version was derived against, asserted against
 /// pubspec.yaml in test/db_serve_version_and_reads_test.dart.
 ///

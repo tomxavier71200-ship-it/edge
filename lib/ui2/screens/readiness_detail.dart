@@ -21,6 +21,9 @@ import 'metric_detail.dart';
 
 class ReadinessData {
   final Metric readiness;
+
+  /// The early estimate (short baseline) while [readiness] calibrates.
+  final Metric early;
   final List<Map<String, dynamic>> breakdown;
   final int inputsUsed;
 
@@ -50,6 +53,7 @@ class ReadinessData {
 
   const ReadinessData({
     this.readiness = Metric.empty,
+    this.early = Metric.empty,
     this.breakdown = const [],
     this.inputsUsed = 0,
     this.heldOverNight,
@@ -85,6 +89,8 @@ class ReadinessData {
 
     return ReadinessData(
       readiness: readiness,
+      early: overnightMetric(
+          today, daily is Map ? daily['readiness_early'] : null),
       // `narrative` and the glass-box `score` are DELIBERATELY not read. Both
       // belong to the deprecated percentile score, which bands at 70/40 while
       // the headline composite bands at 61/37/26 (see `readinessBand`) —
@@ -169,6 +175,31 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
         const SizedBox(height: S.x8),
         const Center(child: CircularProgressIndicator()),
       ] else ...[
+        if (v == null && d.early.value != null) ...[
+          // Still calibrating, with an early estimate: the same dial, faded,
+          // and saying plainly what it is.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: S.x5),
+            child: Column(children: [
+              Opacity(
+                opacity: .7,
+                child: HeroDial(
+                  value: d.early.normalized(100),
+                  color: readinessBand(d.early.value, l).color,
+                  number: (t) => '${(d.early.value! * t).round()}%',
+                  label: 'Early estimate',
+                ),
+              ),
+              const SizedBox(height: S.x4),
+              Text(
+                'From your first nights only. The full Recovery score '
+                'starts once 14 nights of your own history are in.',
+                textAlign: TextAlign.center,
+                style: F.body.copyWith(color: p.ink3),
+              ),
+            ]),
+          ),
+        ],
         if (v == null) ...[
           // No `why:`. The pipeline records why readiness abstained on every
           // day it does, and the "What was missing" section directly below is

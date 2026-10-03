@@ -385,6 +385,15 @@ class LocalRepositoryImpl extends LocalRepository {
     final daily = <String, dynamic>{
       'readiness': readinessMetric,
       'recovery': readinessMetric,
+      // The early estimate, only while the full score is absent — a frozen or
+      // real headline always wins, and the two are never shown together.
+      'readiness_early': _scalarMetric(
+        readinessScalar == null && showOvernight
+            ? _scalar(sleepBundle, 'readiness_early')
+            : null,
+        'ESTIMATE',
+        note: readinessNote,
+      ),
       'resting_hr': _scalarMetric(
         showOvernight ? _scalar(sleepBundle, 'rhr')?.round() : null,
         'HIGH',

@@ -75,6 +75,44 @@ final _home = HomeData(
   },
 );
 
+final _homeEarly = HomeData(
+  dayId: todayIso(),
+  readiness: const Metric(note: 'need_baseline:have=6,need=14'),
+  readinessEarly: const Metric(value: 58, confidence: .5, tier: MetricTier.estimate),
+  drivers: const [
+    {'label': 'hrv', 'contribution': -1.2},
+  ],
+  sleepMin: const Metric(value: 362, confidence: .8, tier: MetricTier.estimate),
+  strain: const Metric(value: 14.0, confidence: .6, tier: MetricTier.estimate),
+  rhr: const Metric(value: 59, confidence: .8, tier: MetricTier.high),
+  steps: const Metric(value: 4806, confidence: .6, tier: MetricTier.estimate),
+  sleepNeedMin:
+      const Metric(value: 510, confidence: .7, tier: MetricTier.estimate),
+  bedtime: const Metric(value: 1350, confidence: .7, tier: MetricTier.estimate),
+  strainTarget: const {'value': 12.0, 'low': 11.0, 'high': 13.5},
+  timeline: {
+    'date': todayIso(),
+    'sleep': [
+      {'onset_ts': _at(3, 47), 'wake_ts': _at(10, 27)},
+    ],
+    'sessions': [
+      {'title': 'cycling', 'start_ts': _at(12, 9), 'end_ts': _at(12, 36), 'strain': 7.3},
+      {'title': 'cycling', 'start_ts': _at(18, 55), 'end_ts': _at(19, 20), 'strain': 5.9},
+    ],
+  },
+  series: {
+    'hrv': _pts(30, 63, 10),
+    'resting_hr': _pts(30, 57, 4),
+    'resp_rate': _pts(30, 12.7, .6),
+    'steps': _pts(30, 4704, 2000),
+    'strain': _pts(30, 12, 9),
+    'readiness': _pts(30, 52, 40),
+    'sleep': _pts(30, 400, 120),
+    'efficiency': _pts(30, 88, 10),
+    'calories': _pts(30, 2308, 600),
+  },
+);
+
 final _health = HealthData(
   today: {
     'daily': {'resting_hr': _m(59), 'readiness': _m(44)},
@@ -137,6 +175,7 @@ void main() {
     'home': HomeScreen(data: _home, hour: 9),
     'home_long': HomeScreen(data: _home, hour: 9),
     'home_scrolled': HomeScreen(data: _home, hour: 9),
+    'home_early': HomeScreen(data: _homeEarly, hour: 9),
     'stress': ListView(padding: const EdgeInsets.all(16), children: [
       Surface(
         child: StressLine(
