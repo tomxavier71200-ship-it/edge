@@ -55,7 +55,7 @@ import '../profile/alarm.dart' show AlarmScreen;
 import '../profile/customize.dart' show CustomizeScreen;
 import 'calm_breathing.dart';
 import 'home_sections.dart';
-import '../profile/devices.dart' show formatDayTime;
+import '../profile/devices.dart' show formatDayTime, bandLabelFor, MyDevices;
 import '../profile/profile.dart';
 import '../ui2.dart';
 import 'ai_briefing.dart' show AiBriefingScreen;
@@ -278,6 +278,108 @@ Widget syncedThroughLine(
   );
 }
 
+
+/// The band's name for the status line: "WHOOP MG" only once the band has
+/// identified itself as one, else the registry's word for its generation,
+/// else "Your band". Null when nothing is paired.
+String? bandNameOf(BuildContext c) {
+  try {
+    final a = c.watch<AppState>();
+    if (!a.isPaired) return null;
+    if (a.pairedIsMaverick) return 'WHOOP MG';
+    return bandLabelFor(a.device.generation) ?? 'Your band';
+  } catch (_) {
+    return null;
+  }
+}
+
+bool bandConnectedOf(BuildContext c) {
+  try {
+    return c.select<AppState, bool>((a) => a.isConnected);
+  } catch (_) {
+    return false;
+  }
+}
+
+/// One line under Home's header: which band, whether it is connected, and
+/// its battery. A green dot is a live link; grey is paired but away; orange
+/// is no band at all, and the line becomes the way to pair one.
+class BandStatusLine extends StatelessWidget {
+  /// Null when no band is paired.
+  final String? band;
+  final bool connected;
+
+  /// Percent and charging, only when the band has reported them.
+  final (double, bool)? battery;
+  final VoidCallback? onTap;
+
+  const BandStatusLine({
+    super.key,
+    required this.band,
+    required this.connected,
+    this.battery,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final name = band;
+    final dot = name == null
+        ? p.on(C.orange)
+        : (connected ? p.on(C.green) : p.ink3);
+    final state = name == null
+        ? 'Tap to pair'
+        : (connected ? 'Connected' : 'Not connected');
+    final b = battery;
+    final low = b != null && lowBattery(b.$1, b.$2);
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: [
+        name ?? 'No band paired',
+        state,
+        if (b != null) 'battery ${b.$1.round()} percent',
+      ].join(', '),
+      child: Row(children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: S.x2),
+        Flexible(
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                text: name ?? 'No band paired',
+                style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w700),
+              ),
+              TextSpan(
+                text: '  ·  $state',
+                style: F.cap.copyWith(color: p.ink2),
+              ),
+            ]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (b != null) ...[
+          const SizedBox(width: S.x3),
+          Icon(
+            b.$2 ? LucideIcons.batteryCharging : LucideIcons.batteryMedium,
+            size: 16,
+            color: low ? p.on(C.red) : p.ink2,
+          ),
+          const SizedBox(width: 2),
+          Text('${b.$1.round()}%',
+              style: F.cap.copyWith(
+                  color: low ? p.on(C.red) : p.ink2,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ]),
+    );
+  }
+}
 bool derivingOf(BuildContext c) {
   try {
     return c.select<AppState, bool>((a) => a.deriving || a.derivePending);
@@ -1912,6 +2014,22 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   /// silently going back to "No score yet today" as if nothing was tried.
   bool _syncFailed = false;
 
+  /// The streak seen last time Home showed one; a bigger one ignites the chip
+  /// once. Checked once per streak value, so rebuilds do not replay it.
+  static const _kStreakSeen = 'home.streak_seen';
+  int? _streakChecked;
+  bool _ignite = false;
+
+  bool _igniteFor(int n) {
+    if (_streakChecked != n) {
+      _streakChecked = n;
+      final seen = Prefs.getInt(_kStreakSeen, 0);
+      _ignite = n > seen;
+      if (n != seen) Prefs.setInt(_kStreakSeen, n);
+    }
+    return _ignite;
+  }
+
   void _tapSync(VoidCallback sync) {
     sync();
     setState(() {
@@ -2145,43 +2263,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     );
   }
 
-  /// The band's battery as a pill, or null when unpaired or not yet reported
-  /// (rendered as nothing, never a placeholder level). Same reading and same
-  /// low-battery rule as [batteryLine].
-  Widget? _batteryPill(BuildContext c) {
-    final battery = deviceBatteryOf(c);
-    if (battery == null) return null;
-    final (pct, charging) = battery;
-    final p = P.of(c);
-    final low = lowBattery(pct, charging);
-    return Semantics(
-      label: 'Band battery ${pct.round()} percent',
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: S.x3),
-        decoration: BoxDecoration(color: p.card, borderRadius: R.rPill),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              charging ? LucideIcons.batteryCharging : LucideIcons.battery,
-              size: 16,
-              color: low ? p.on(C.red) : p.on(C.green),
-            ),
-            const SizedBox(width: S.x1),
-            Text(
-              '${pct.round()}%',
-              style: F.cap.copyWith(
-                color: low ? p.on(C.red) : p.ink2,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
@@ -2307,18 +2388,24 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                     )
                     case final n when n >= 2) ...[
                   const SizedBox(width: S.x2),
-                  Semantics(
-                    label: '$n days in a row with a recovery score',
-                    child: Container(
-                      padding: const EdgeInsets.all(S.x2),
-                      decoration:
-                          BoxDecoration(color: p.card, borderRadius: R.rMd),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(LucideIcons.flame, size: 16, color: p.on(C.orange)),
-                        const SizedBox(width: S.x1),
-                        Text('$n', style: F.n17.copyWith(color: p.ink)),
-                      ]),
-                    ),
+                  // Ignites once when the streak has grown since last seen;
+                  // opens the streak sheet.
+                  StreakChip(
+                    n: n,
+                    ignite: _igniteFor(n),
+                    onTap: () {
+                      final pts = d.series['readiness'] ?? const <ChartPoint>[];
+                      showStreakSheet(
+                        c,
+                        current: n,
+                        best: bestStreak(pts) > n ? bestStreak(pts) : n,
+                        scoredDays: {
+                          for (final pt in pts)
+                            dayLabelOf(DateTime.fromMillisecondsSinceEpoch(
+                                pt.t * 1000)),
+                        },
+                      );
+                    },
                   ),
                 ],
                 const SizedBox(width: S.x3),
@@ -2346,13 +2433,25 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                         ),
                 ),
                 const SizedBox(width: S.x3),
-                _batteryPill(c) ?? const SizedBox(width: 40),
+                // The battery moved into the band line below; the slot keeps
+                // the day centred.
+                const SizedBox(width: 40),
               ],
+            ),
+          ),
+          // ── the band: which one, connected, battery ──
+          Padding(
+            padding: const EdgeInsets.only(top: S.x3),
+            child: BandStatusLine(
+              band: bandNameOf(c),
+              connected: bandConnectedOf(c),
+              battery: deviceBatteryOf(c),
+              onTap: () => go(c, const MyDevices()),
             ),
           ),
           // ── how far the data reaches · the coach · Customize ──
           Padding(
-            padding: const EdgeInsets.only(top: S.x3, bottom: S.x2),
+            padding: const EdgeInsets.only(bottom: S.x2),
             child: Row(
               children: [
                 Expanded(

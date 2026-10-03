@@ -23,7 +23,7 @@ import '../../state/app_state.dart';
 import '../../theme/theme_switcher.dart' show themedRoute;
 import '../ui2.dart';
 import 'coach.dart';
-import 'home_screen.dart' show go, pad;
+import 'home_screen.dart' show pad;
 
 /// Whether the paired band is a remembered WHOOP MG — false outside an
 /// AppState (goldens), like every other provider read in this folder.
@@ -67,20 +67,117 @@ String _fmtWhen(int epochS) {
 
 // ═══════════════════ entry card (Health overview) ═══════════════════
 
+/// The colour a band category is shown in. Rhythm findings are red, rate-only
+/// findings orange, a clean sinus rhythm green; a reading the band could not
+/// classify stays neutral rather than borrowing a verdict colour.
+Color ecgCategoryColor(P p, EcgCategory c) => switch (c) {
+  EcgCategory.sinusRhythm => p.on(C.green),
+  EcgCategory.possibleAfib || EcgCategory.afibHighHeartRate => p.on(C.red),
+  EcgCategory.lowHeartRate ||
+  EcgCategory.highHeartRate ||
+  EcgCategory.highHeartRateNoAfib => p.on(C.orange),
+  EcgCategory.inconclusive || EcgCategory.unreadable => p.ink3,
+};
+
 /// The Health-overview door. Only built when [pairedIsMaverickOf] is true.
-class EcgEntryCard extends StatelessWidget {
+///
+/// Heart Screener as a card of its own: what it is, the last reading (the
+/// band's own category, in its colour, with the day), and Take ECG. The take
+/// flow itself lives on [EcgHomeScreen], so the button goes there.
+class EcgEntryCard extends StatefulWidget {
   const EcgEntryCard({super.key});
 
   @override
+  State<EcgEntryCard> createState() => _EcgEntryCardState();
+}
+
+class _EcgEntryCardState extends State<EcgEntryCard> {
+  EcgReading? _last;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final rows = await LocalDb.listEcgReadings();
+      final list = [for (final r in rows) ?EcgReading.fromRow(r)]
+        ..sort((a, b) => b.startTs.compareTo(a.startTs));
+      if (mounted && list.isNotEmpty) setState(() => _last = list.first);
+    } catch (_) {
+      // No database (gallery) or no table yet: the card says "no readings".
+    }
+  }
+
+  Future<void> _open(BuildContext c) async {
+    await Navigator.of(c).push(
+      themedRoute((_) => const EcgHomeScreen(), name: 'EcgHomeScreen'),
+    );
+    if (mounted) await _load();
+  }
+
+  @override
   Widget build(BuildContext c) {
+    final p = P.of(c);
     final l = AppLocalizations.of(c);
-    return ActionCard(
-      l?.ecgHeartScreener ?? 'Heart Screener',
-      l?.ecgEntryMeta ?? 'WHOOP MG · band-reported',
-      l?.ecgOpen ?? 'Open',
-      LucideIcons.activity,
-      C.domHealth,
-      onTap: () => go(c, const EcgHomeScreen()),
+    final last = _last;
+    const mo = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', //
+      'Nov', 'Dec',
+    ];
+    String day(int s) {
+      final d = DateTime.fromMillisecondsSinceEpoch(s * 1000);
+      return '${d.day} ${mo[d.month - 1]}';
+    }
+
+    return Surface(
+      onTap: () => _open(c),
+      semanticLabel: l?.ecgHeartScreener ?? 'Heart Screener',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(LucideIcons.heartPulse, color: p.on(C.red), size: 22),
+          const SizedBox(width: S.x2),
+          Expanded(
+            child: Text(
+              (l?.ecgHeartScreener ?? 'Heart Screener').toUpperCase(),
+              style: F.over.copyWith(
+                  color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700),
+            ),
+          ),
+          Icon(LucideIcons.chevronRight, color: p.ink3, size: 18),
+        ]),
+        const SizedBox(height: S.x3),
+        Text('30-second ECG with your WHOOP MG.',
+            style: F.body.copyWith(color: p.ink2)),
+        const SizedBox(height: S.x4),
+        Row(children: [
+          Text('Last reading', style: F.cap.copyWith(color: p.ink3)),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Text(
+              last == null
+                  ? 'None yet'
+                  : '${ecgCategoryLabel(l, last.category)} · '
+                      '${day(last.startTs)}',
+              textAlign: TextAlign.right,
+              style: F.cap.copyWith(
+                color: last == null ? p.ink3 : ecgCategoryColor(p, last.category),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: S.x4),
+        BigButton(l?.ecgTakeEcg ?? 'Take ECG',
+            icon: LucideIcons.heartPulse,
+            color: C.red,
+            onTap: () => _open(c)),
+        const SizedBox(height: S.x2),
+        Text('The result is the band\'s own reading. Not a diagnosis.',
+            style: F.cap.copyWith(color: p.ink3)),
+      ]),
     );
   }
 }

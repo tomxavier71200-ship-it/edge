@@ -333,6 +333,18 @@ Map<String, Widget> goldenCases() => {
       // The newest day: forward is dead, and the label reads Today rather than
       // a date. Both halves of that are the honesty — there is no day after
       // this one, and saying so beats a live arrow that does nothing.
+      // The band under Home's header, in its three states.
+      'band_status_line': const Column(children: [
+        BandStatusLine(band: 'WHOOP MG', connected: true, battery: (84, false)),
+        SizedBox(height: S.x3),
+        BandStatusLine(band: 'WHOOP MG', connected: false),
+        SizedBox(height: S.x3),
+        BandStatusLine(band: null, connected: false),
+      ]),
+      // The streak chip at rest, and the sheet behind it.
+      'streak_chip': const StreakChip(n: 12),
+      'streak_panel': StreakPanel(
+          current: 12, best: 18, scoredDays: {for (final d in _navDays) d}),
       // The calendar behind the stepper: a month of days, the ones with data
       // dotted (coloured when a screen passes colours), the current one filled.
       'day_calendar': DayCalendar(

@@ -949,9 +949,14 @@ List<HealthSource> liveSources(AppState app,
           // link has not said. Never an assertion that an unnamed band is a
           // WHOOP 4.
           kind: [
-            ?bandLabelFor(app.device.generation),
+            // MG only once the band has positively identified itself as one
+            // (its own hello, never the name) — then it also does ECG.
+            app.pairedIsMaverick
+                ? 'WHOOP MG'
+                : bandLabelFor(app.device.generation),
             'wrist optical',
-          ].join(' · '),
+            if (app.pairedIsMaverick) 'ECG',
+          ].nonNulls.join(' · '),
           tier: SourceTier.wristOptical,
           icon: LucideIcons.watch,
           connected: app.isConnected,

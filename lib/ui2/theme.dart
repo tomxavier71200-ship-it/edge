@@ -562,6 +562,10 @@ class Motion {
   /// screen opens. Goes through [motion] like every other animation.
   static const sweep = Duration(milliseconds: 1100);
 
+  /// The streak flame igniting: one bounce and a burst of sparks, played once
+  /// when the streak grows. Never a loop; through [motion] like the rest.
+  static const ignite = Duration(milliseconds: 900);
+
   /// One pulse of the ECG capture screen's contact rings. Phase is owned by
   /// the screen (like [breath]); nothing runs when [enabled] is false.
   static const ecgPulse = Duration(seconds: 2);

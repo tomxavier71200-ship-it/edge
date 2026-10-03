@@ -221,6 +221,27 @@ void main() {
       ]),
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
+    'streak': Builder(builder: (c) {
+      final now = DateTime.now();
+      return ListView(padding: const EdgeInsets.all(16), children: [
+        const Row(children: [
+          StreakChip(n: 12),
+          SizedBox(width: 40),
+          StreakChip(n: 13, ignite: true),
+        ]),
+        const SizedBox(height: 24),
+        Surface(
+          child: StreakPanel(
+            current: 12,
+            best: 18,
+            scoredDays: {
+              for (var i = 0; i < 12; i++)
+                dayLabelOf(DateTime(now.year, now.month, now.day - i)),
+            },
+          ),
+        ),
+      ]);
+    }),
     'day_nav': Builder(builder: (c) {
       final now = DateTime.now();
       final days = [
@@ -271,7 +292,7 @@ void main() {
         await t.pump(const Duration(milliseconds: 200));
         await t.drag(find.byType(Scrollable).first, const Offset(0, -700));
       }
-      for (var i = 0; i < 80; i++) {
+      for (var i = 0; i < (name == 'streak' ? 20 : 80); i++) {
         await t.pump(const Duration(milliseconds: 20));
       }
       final box =
