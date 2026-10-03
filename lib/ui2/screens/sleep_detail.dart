@@ -30,6 +30,8 @@ import '../ui2.dart';
 import 'home_screen.dart';
 import 'investigate.dart';
 import 'detail_trends.dart';
+import 'sleep_whoop.dart';
+import 'stress_detail.dart' show Span, StressReading, stressReadings, timelineSpans;
 import 'metric_detail.dart';
 import 'naps.dart';
 import 'rough_night.dart';
@@ -174,10 +176,23 @@ class SleepData {
   /// Stored series for the weekly trends.
   final Map<String, List<ChartPoint>> trends;
 
+  /// The last nights' windows (oldest first, this night last), the night's
+  /// stress readings and sleep spans, and what the coach says it added to or
+  /// took off the need — the inputs to the WHOOP-style cards.
+  final List<NightWindow> windows;
+  final List<StressReading> stress;
+  final List<Span> sleepSpans;
+  final double? strainBonusMin, napCreditMin;
+
   const SleepData({
     this.week = const [],
     this.sri,
     this.trends = const {},
+    this.windows = const [],
+    this.stress = const [],
+    this.sleepSpans = const [],
+    this.strainBonusMin,
+    this.napCreditMin,
     this.day,
     this.days = const [],
     this.night = const {},
@@ -310,6 +325,31 @@ class SleepData {
       sri: (envValue((await repo.getInsights())['regularity'])?['sri'] as num?)
           ?.toDouble(),
       trends: await loadTrendSeries(repo, const ['sleep', 'efficiency']),
+      windows: () {
+        final out = <NightWindow>[];
+        for (final w in wins) {
+          final on = w['onset_ts'], off = w['wake_ts'], dt = w['date'];
+          if (on is! num || off is! num || dt is! String) continue;
+          if (dt.compareTo(day) > 0) continue;
+          final dd = DateTime.tryParse(dt);
+          if (dd == null) continue;
+          out.add((day: dd, onset: on.round(), wake: off.round()));
+        }
+        out.sort((a, b) => a.onset.compareTo(b.onset));
+        return out.length > 7 ? out.sublist(out.length - 7) : out;
+      }(),
+      stress: await () async {
+        try {
+          return stressReadings(await repo.getDayStress(day), day);
+        } catch (_) {
+          return const <StressReading>[];
+        }
+      }(),
+      sleepSpans: timelineSpans(timeline).sleep,
+      strainBonusMin:
+          coach is Map ? (coach['strain_bonus_min'] as num?)?.toDouble() : null,
+      napCreditMin:
+          coach is Map ? (coach['nap_credit_min'] as num?)?.toDouble() : null,
       tstHistory: tst,
       deepHistory: deep,
       effHistory: eff,
@@ -518,6 +558,9 @@ class _SleepDetailState extends State<SleepDetail> {
       // ── 3 · WHAT IT WAS MADE OF ──
       Section(l?.sleepDetailStagesSection ?? 'Stages', _stages(c, p, n)),
 
+      // ── 3b · WHOOP'S CARDS: need, consistency, efficiency, stress ──
+      ..._whoopCards(c, d, n),
+
       // ── 4 · AGAINST THE USER'S OWN NIGHTS ──
       if (_versusUsual(c, p, d, n) case final versus?)
         Section(l?.sleepDetailVersusUsualSection ?? 'Against your usual', versus),
@@ -624,6 +667,39 @@ class _SleepDetailState extends State<SleepDetail> {
         ),
         const SizedBox(height: S.x4),
       ],
+    ];
+  }
+
+  /// The four detail cards, each only when its inputs exist.
+  List<Widget> _whoopCards(
+      BuildContext c, SleepData d, Map<String, dynamic> n) {
+    final tst = (n['duration_min'] as num?)?.toDouble();
+    final awake = (n['awake_min'] as num?)?.toDouble();
+    final need = d.need.value?.toDouble();
+    final eff = (n['efficiency'] as num?)?.toDouble();
+    final day = DateTime.tryParse(d.day ?? '');
+    final cards = <Widget>[
+      if (tst != null && need != null && need > 0)
+        HoursNeededCard(
+          sleptMin: tst,
+          needMin: need,
+          strainMin: d.strainBonusMin,
+          debtMin: d.debt.value?.toDouble(),
+          napMin: d.napCreditMin,
+        ),
+      if (d.windows.length >= 2) ConsistencyChart(nights: d.windows, sri: d.sri),
+      if (tst != null && awake != null)
+        AsleepAwakeCard(
+          asleepMin: tst,
+          awakeMin: awake,
+          wakeEvents: d.awakenings?.round(),
+          efficiency: eff,
+        ),
+      if (day != null && d.stress.length >= 8)
+        SleepStressCard(readings: d.stress, sleep: d.sleepSpans, day: day),
+    ];
+    return [
+      for (final w in cards) ...[const SizedBox(height: S.x3), w],
     ];
   }
 

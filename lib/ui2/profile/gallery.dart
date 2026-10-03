@@ -57,6 +57,7 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/home_sections.dart' show MonitorTiles;
+import '../screens/sleep_whoop.dart';
 import '../screens/stress_detail.dart';
 import '../screens/screens.dart';
 import '../ui2.dart';
@@ -333,6 +334,41 @@ Map<String, Widget> goldenCases() => {
       // The newest day: forward is dead, and the label reads Today rather than
       // a date. Both halves of that are the honesty — there is no day after
       // this one, and saying so beats a live arrow that does nothing.
+      // WHOOP's sleep cards, with full inputs.
+      'hours_needed': const HoursNeededCard(
+          sleptMin: 289, needMin: 621, strainMin: 30, debtMin: 127, napMin: 0),
+      'consistency_chart': ConsistencyChart(sri: 56, nights: [
+        for (final (d, on, off) in [
+          (29, 1, 9), (30, 4, 12), (1, 2, 8), (2, 3, 10), (3, 6, 12),
+        ])
+          (
+            day: DateTime(2026, d == 29 || d == 30 ? 9 : 10, d),
+            onset: DateTime(2026, d == 29 || d == 30 ? 9 : 10, d, on, 40)
+                    .millisecondsSinceEpoch ~/
+                1000,
+            wake: DateTime(2026, d == 29 || d == 30 ? 9 : 10, d, off, 14)
+                    .millisecondsSinceEpoch ~/
+                1000,
+          ),
+      ]),
+      'asleep_awake': const AsleepAwakeCard(
+          asleepMin: 289, awakeMin: 41, wakeEvents: 11, efficiency: 89),
+      'sleep_stress': SleepStressCard(
+        day: DateTime(2026, 10, 3),
+        sleep: [
+          (
+            from: DateTime(2026, 10, 3, 6, 44).millisecondsSinceEpoch ~/ 1000,
+            to: DateTime(2026, 10, 3, 12, 14).millisecondsSinceEpoch ~/ 1000,
+          ),
+        ],
+        readings: [
+          for (var i = 0; i < 30; i++)
+            (
+              at: DateTime(2026, 10, 3, 5, 44).add(Duration(minutes: 15 * i)),
+              v: i == 27 ? 2.3 : (i % 7 == 0 ? 1.2 : .4),
+            ),
+        ],
+      ),
       // WHOOP-style detail blocks: a week as bars and as a line (one day
       // missing — a gap, not a zero), contributors, the three-step scale.
       'week_trend_bars': WeekTrendCard(

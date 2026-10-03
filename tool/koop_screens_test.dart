@@ -20,6 +20,8 @@ import 'package:openstrap_edge/ui2/screens/home_sections.dart';
 import 'package:openstrap_edge/ui2/screens/metric_detail.dart';
 import 'package:openstrap_edge/ui2/screens/readiness_detail.dart';
 import 'package:openstrap_edge/ui2/screens/streak_screen.dart';
+import 'package:openstrap_edge/ui2/screens/sleep_whoop.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
@@ -223,6 +225,48 @@ void main() {
       ]),
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
+    'sleep_cards': ListView(padding: const EdgeInsets.all(16), children: [
+      const Column(children: [
+        BandRow(LucideIcons.clock, 'Hours vs. needed', '47%', Band3.poor),
+        BandRow(LucideIcons.repeat, 'Sleep consistency', '56%', Band3.poor),
+        BandRow(LucideIcons.bedDouble, 'Sleep efficiency', '89%',
+            Band3.sufficient),
+        BandRow(LucideIcons.sparkles, 'Restorative sleep', '42%',
+            Band3.optimal),
+        BandLegend(),
+      ]),
+      const SizedBox(height: 12),
+      const HoursNeededCard(
+          sleptMin: 289, needMin: 621, strainMin: 30, debtMin: 127),
+      const SizedBox(height: 12),
+      ConsistencyChart(sri: 56, nights: [
+        for (final (d, on, off) in [(29, 1, 9), (30, 4, 12), (1, 2, 8), (2, 3, 10), (3, 6, 12)])
+          (
+            day: DateTime(2026, d > 3 ? 9 : 10, d),
+            onset: DateTime(2026, d > 3 ? 9 : 10, d, on, 40).millisecondsSinceEpoch ~/ 1000,
+            wake: DateTime(2026, d > 3 ? 9 : 10, d, off, 14).millisecondsSinceEpoch ~/ 1000,
+          ),
+      ]),
+      const SizedBox(height: 12),
+      const AsleepAwakeCard(asleepMin: 289, awakeMin: 41, wakeEvents: 11, efficiency: 89),
+      const SizedBox(height: 12),
+      SleepStressCard(
+        day: DateTime(2026, 10, 3),
+        sleep: [
+          (
+            from: DateTime(2026, 10, 3, 6, 44).millisecondsSinceEpoch ~/ 1000,
+            to: DateTime(2026, 10, 3, 12, 14).millisecondsSinceEpoch ~/ 1000,
+          ),
+        ],
+        readings: [
+          for (var i = 0; i < 30; i++)
+            (
+              at: DateTime(2026, 10, 3, 5, 44).add(Duration(minutes: 15 * i)),
+              v: i == 27 ? 2.3 : (i % 7 == 0 ? 1.2 : .4) + (i % 3) * .1,
+            ),
+        ],
+      ),
+    ]),
     'recovery_detail': Builder(builder: (c) {
       final now = DateTime.now();
       List<({int t, double v})> s(double base, double amp, [int skip = -1]) => [
@@ -303,7 +347,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 2700 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));
