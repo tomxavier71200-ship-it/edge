@@ -1010,21 +1010,25 @@ class RingTrio extends StatelessWidget {
   }
 }
 
-/// The pinned row Home shows once the big dials scroll away: three small
-/// rings with their names, in the same order and colours. Absent rings draw
-/// an empty track — no fill without a number behind it.
+/// The pinned row Home shows once the big dials scroll away, WHOOP-style: the
+/// same three rings at small scale — filled to the day's value, the number
+/// inside, the name beside — in the same order and colours. Absent rings draw
+/// an empty track and "—": no fill without a number behind it. Each one is a
+/// door to its screen, like its big twin.
 class MiniDials extends StatelessWidget {
   final HomeData d;
-  const MiniDials({super.key, required this.d});
+  final void Function(HomeRingKind)? onOpen;
+  const MiniDials({super.key, required this.d, this.onOpen});
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
+      padding: EdgeInsets.fromLTRB(
+          S.x4, MediaQuery.paddingOf(c).top + S.x2, S.x4, S.x2),
       decoration: BoxDecoration(
-        color: p.bgTop.withValues(alpha: .96),
+        color: p.bgTop,
         border: Border(bottom: BorderSide(color: p.line)),
       ),
       child: Row(
@@ -1033,24 +1037,42 @@ class MiniDials extends StatelessWidget {
             Builder(
               builder: (c) {
                 final r = _ringOf(k, d, l);
-                // Each third of the row shrinks its own label at large text
-                // rather than the row running off the screen.
+                final open = onOpen;
+                // Each third of the row shrinks itself at large text rather
+                // than the row running off the screen.
                 return Expanded(
-                  child: Semantics(
-                    label: r.spoken,
+                  child: Pressable(
+                    onTap: open == null ? null : () => open(k),
+                    semanticLabel: r.spoken,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SizedBox.square(
-                            dimension: 22,
+                            dimension: 46,
                             child: CustomPaint(
                               painter: Ring(
                                 r.frac ?? 0,
                                 r.arc(p),
                                 p.track,
-                                stroke: 3,
+                                stroke: 4,
+                                solid: r.measured,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(S.x2),
+                                child: Center(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      r.measured ? r.value : '—',
+                                      style: F.n17.copyWith(
+                                          color: !r.measured
+                                              ? p.ink3
+                                              : p.ink),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -1058,7 +1080,7 @@ class MiniDials extends StatelessWidget {
                           Text(
                             r.label.toUpperCase(),
                             style: F.over.copyWith(
-                              color: p.ink,
+                              color: p.ink2,
                               letterSpacing: 1.4,
                               fontWeight: FontWeight.w700,
                             ),
@@ -2477,7 +2499,14 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             child: AnimatedSlide(
               offset: _miniDials ? Offset.zero : const Offset(0, -1.2),
               duration: motion(c, Motion.base),
-              child: MiniDials(d: d),
+              child: MiniDials(
+                d: d,
+                onOpen: (k) => go(c, switch (k) {
+                  HomeRingKind.recovery => const ReadinessDetail(),
+                  HomeRingKind.strain => const DayStrainDetail(),
+                  HomeRingKind.sleep => const SleepDetail(),
+                }),
+              ),
             ),
           ),
         ),

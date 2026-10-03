@@ -135,6 +135,7 @@ void main() {
   final cases = <String, Widget>{
     'home': HomeScreen(data: _home, hour: 9),
     'home_long': HomeScreen(data: _home, hour: 9),
+    'home_scrolled': HomeScreen(data: _home, hour: 9),
     'stress': ListView(padding: const EdgeInsets.all(16), children: [
       Surface(
         child: StressLine(
@@ -191,6 +192,10 @@ void main() {
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));
+      if (name == 'home_scrolled') {
+        await t.pump(const Duration(milliseconds: 200));
+        await t.drag(find.byType(Scrollable).first, const Offset(0, -700));
+      }
       for (var i = 0; i < 80; i++) {
         await t.pump(const Duration(milliseconds: 20));
       }
