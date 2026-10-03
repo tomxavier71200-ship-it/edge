@@ -20,6 +20,7 @@ import 'package:openstrap_edge/ui2/screens/home_sections.dart';
 import 'package:openstrap_edge/ui2/screens/metric_detail.dart';
 import 'package:openstrap_edge/ui2/screens/readiness_detail.dart';
 import 'package:openstrap_edge/ui2/screens/streak_screen.dart';
+import 'package:openstrap_edge/ui2/screens/more_screen.dart';
 import 'package:openstrap_edge/ui2/screens/sleep_whoop.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
@@ -225,6 +226,10 @@ void main() {
       ]),
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
+    'tab_workout': const WorkoutScreen(),
+    'tab_more': const MoreScreen(),
+    'tab_health1': HealthScreen(data: _health, tab: 1),
+    'tab_health2': HealthScreen(data: _health, tab: 2),
     'sleep_cards': ListView(padding: const EdgeInsets.all(16), children: [
       OvernightHrCard(
         onset: DateTime(2026, 10, 3, 6, 44).millisecondsSinceEpoch ~/ 1000,
@@ -361,7 +366,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('tab_') ? 2400 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

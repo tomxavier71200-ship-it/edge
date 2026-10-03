@@ -34,56 +34,218 @@ class MoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     void open(ShellDomain d) => ShellScope.maybeOf(c)?.select(d);
+    final p = P.of(c);
+    Widget grid(List<Widget> tiles) => Column(children: [
+          for (var i = 0; i < tiles.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: S.x3),
+            IntrinsicHeight(
+              child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: tiles[i]),
+                    const SizedBox(width: S.x3),
+                    Expanded(
+                        child: i + 1 < tiles.length
+                            ? tiles[i + 1]
+                            : const SizedBox.shrink()),
+                  ]),
+            ),
+          ],
+        ]);
+    Widget head(String t) => Padding(
+          padding: const EdgeInsets.only(top: S.x6, bottom: S.x3),
+          child: Text(t.toUpperCase(),
+              style: F.over.copyWith(
+                  color: p.ink3,
+                  letterSpacing: 1.8,
+                  fontWeight: FontWeight.w700)),
+        );
+
     return ListView(padding: pad, children: [
       const ScreenTitle('More'),
-      settingsGroup(c, 'Make it yours', [
-        SetRow(LucideIcons.slidersHorizontal, C.blue, 'Customize',
-            sub: 'Theme, accent and Home sections',
+      // You, first: the door every setting is behind.
+      DoorRow(LucideIcons.user, C.blue, 'Profile and settings',
+          'Devices, data, notifications and privacy',
+          onTap: () => go(c, const ProfileHome())),
+      const SizedBox(height: S.x3),
+      // The coach, featured.
+      FeatureCard(
+        icon: LucideIcons.sparkles,
+        color: kCoachAccent,
+        title: 'Coach',
+        sub: 'Ask anything about your sleep, recovery and training.',
+        cta: 'Ask the coach',
+        onTap: () => go(c, const CoachScreen()),
+      ),
+      head('Insights'),
+      grid([
+        DoorTile(LucideIcons.heartHandshake, C.green, 'Healthspan',
+            'Habits vs. published targets',
+            onTap: () => go(c, const HealthspanScreen())),
+        DoorTile(LucideIcons.gauge, C.green, 'VO2 max', 'From your GPS runs',
+            onTap: () => go(c, const Vo2maxScreen())),
+        DoorTile(LucideIcons.dumbbell, C.strain, 'Strength',
+            'Sets per muscle group',
+            onTap: () => go(c, const StrengthScreen())),
+        DoorTile(LucideIcons.scatterChart, C.domMind, 'Journal insights',
+            'What moves your recovery',
+            onTap: () => go(c, const JournalFindings())),
+        DoorTile(LucideIcons.calendarDays, C.blue, 'Weekly report',
+            'This week vs. last',
+            onTap: () => go(c, const PeriodReport(ReportPeriod.week))),
+        DoorTile(LucideIcons.calendarRange, C.blue, 'Monthly report',
+            'This month vs. last',
+            onTap: () => go(c, const PeriodReport(ReportPeriod.month))),
+      ]),
+      head('Track'),
+      grid([
+        DoorTile(LucideIcons.utensils, C.domFood, 'Nutrition',
+            'Meals, water, calories',
+            onTap: () => open(ShellDomain.nutrition)),
+        DoorTile(LucideIcons.leaf, C.domMind, 'Wellness', 'Mind, habits, cycle',
+            onTap: () => open(ShellDomain.wellness)),
+        DoorTile(LucideIcons.alarmClock, C.yellow, 'Smart alarm',
+            'Wake on the band',
+            onTap: () => go(c, const AlarmScreen())),
+        DoorTile(LucideIcons.slidersHorizontal, C.purple, 'Customize',
+            'Theme, rings, Home',
             onTap: () => go(c, const CustomizeScreen())),
       ]),
-      settingsGroup(c, 'Track', [
-        SetRow(LucideIcons.utensils, C.domFood, 'Nutrition',
-            sub: 'Meals, water and calories in',
-            onTap: () => open(ShellDomain.nutrition)),
-        SetRow(LucideIcons.leaf, C.domMind, 'Wellness',
-            sub: 'Mind, habits, medication and cycle',
-            onTap: () => open(ShellDomain.wellness)),
-      ]),
-      settingsGroup(c, 'Insights', [
-        SetRow(LucideIcons.heartHandshake, C.green, 'Healthspan',
-            sub: 'Long-term habits against published targets',
-            onTap: () => go(c, const HealthspanScreen())),
-        SetRow(LucideIcons.dumbbell, C.strain, 'Strength',
-            sub: 'Sets per muscle group this week',
-            onTap: () => go(c, const StrengthScreen())),
-        SetRow(LucideIcons.gauge, C.green, 'VO2 max',
-            sub: 'Estimated from your GPS runs',
-            onTap: () => go(c, const Vo2maxScreen())),
-        SetRow(LucideIcons.calendarDays, C.strain, 'Weekly report',
-            sub: 'Last week against the one before',
-            onTap: () => go(c, const PeriodReport(ReportPeriod.week))),
-        SetRow(LucideIcons.calendarRange, C.strain, 'Monthly report',
-            sub: 'Last month against the one before',
-            onTap: () => go(c, const PeriodReport(ReportPeriod.month))),
-        // The journal analysis already exists; it was three taps deep in
-        // Wellness → Habits. This is a second door to the same screen.
-        SetRow(LucideIcons.scatterChart, C.domMind, 'Journal insights',
-            sub: 'What you log, against your recovery',
-            onTap: () => go(c, const JournalFindings())),
-      ]),
-      settingsGroup(c, 'Tools', [
-        SetRow(LucideIcons.sparkles, kCoachAccent, 'Coach',
-            sub: 'Ask questions about your data',
-            onTap: () => go(c, const CoachScreen())),
-        SetRow(LucideIcons.alarmClock, C.yellow, 'Smart alarm',
-            onTap: () => go(c, const AlarmScreen())),
-      ]),
-      settingsGroup(c, 'You', [
-        SetRow(LucideIcons.user, C.blue, 'Profile and settings',
-            sub: 'Devices, data, notifications and privacy',
-            onTap: () => go(c, const ProfileHome())),
-      ]),
+      const SizedBox(height: S.x8),
     ]);
+  }
+}
+
+/// A door as a tile: the icon in a soft wash of its colour, a title and one
+/// short line. Two to a row.
+class DoorTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title, sub;
+  final VoidCallback? onTap;
+  const DoorTile(this.icon, this.color, this.title, this.sub,
+      {super.key, this.onTap});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Surface(
+      onTap: onTap,
+      semanticLabel: '$title. $sub',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            borderRadius: R.rMd,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [p.wash(color), p.card2],
+            ),
+          ),
+          child: Icon(icon, size: 22, color: p.on(color)),
+        ),
+        const SizedBox(height: S.x4),
+        Text(title,
+            style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(sub, style: F.cap.copyWith(color: p.ink3)),
+      ]),
+    );
+  }
+}
+
+/// A wide door: icon, title and line, chevron.
+class DoorRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title, sub;
+  final VoidCallback? onTap;
+  const DoorRow(this.icon, this.color, this.title, this.sub,
+      {super.key, this.onTap});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Surface(
+      onTap: onTap,
+      semanticLabel: '$title. $sub',
+      child: Row(children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration:
+              BoxDecoration(color: p.wash(color), shape: BoxShape.circle),
+          child: Icon(icon, size: 22, color: p.on(color)),
+        ),
+        const SizedBox(width: S.x3),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: F.head.copyWith(color: p.ink)),
+            Text(sub, style: F.cap.copyWith(color: p.ink3)),
+          ]),
+        ),
+        Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+      ]),
+    );
+  }
+}
+
+/// A featured door: a soft gradient of its colour, a line about it and a
+/// call to action.
+class FeatureCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title, sub, cta;
+  final VoidCallback? onTap;
+  const FeatureCard({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.sub,
+    required this.cta,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: '$title. $sub',
+      child: Container(
+        padding: const EdgeInsets.all(S.x5),
+        decoration: BoxDecoration(
+          borderRadius: R.rLg,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [p.wash(color), p.card],
+          ),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, size: 18, color: p.on(color)),
+            const SizedBox(width: S.x2),
+            Flexible(
+              child: Text(title.toUpperCase(),
+                  style: F.over.copyWith(
+                      color: p.on(color),
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ]),
+          const SizedBox(height: S.x2),
+          Text(sub, style: F.head.copyWith(color: p.ink)),
+          const SizedBox(height: S.x3),
+          Text('$cta  →',
+              style:
+                  F.cap.copyWith(color: p.on(color), fontWeight: FontWeight.w700)),
+        ]),
+      ),
+    );
   }
 }
 
@@ -107,9 +269,16 @@ Future<void> showActionSheet(
         act();
       }
 
-      Widget row(IconData icon, Color color, String title, String sub,
+      Widget tile(IconData icon, Color color, String title, String sub,
               VoidCallback act) =>
-          SetRow(icon, color, title, sub: sub, onTap: () => then(act));
+          DoorTile(icon, color, title, sub, onTap: () => then(act));
+      Widget pair(Widget a, Widget b) => IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(child: a),
+              const SizedBox(width: S.x3),
+              Expanded(child: b),
+            ]),
+          );
       // Scrolls rather than clips: at a large text size four rows outgrow
       // the sheet's default height and the last one was cut off.
       return SafeArea(
@@ -121,18 +290,21 @@ Future<void> showActionSheet(
               height: S.x1,
               decoration: BoxDecoration(color: p.line, borderRadius: R.rPill),
             ),
+            const SizedBox(height: S.x4),
+            pair(
+              tile(LucideIcons.play, C.blue, 'Start workout',
+                  'Track an activity live', () => select(ShellDomain.workout)),
+              tile(LucideIcons.notebookPen, C.purple, 'Log journal',
+                  'How today went', () => go(c, const JournalCompose())),
+            ),
             const SizedBox(height: S.x3),
-            row(LucideIcons.play, C.blue, 'Start workout',
-                'Track an activity live', () => select(ShellDomain.workout)),
-            Divider(color: p.line, height: 1),
-            row(LucideIcons.notebookPen, C.purple, 'Log journal',
-                'How today went', () => go(c, const JournalCompose())),
-            Divider(color: p.line, height: 1),
-            row(LucideIcons.wind, C.teal, 'Breathing session',
-                'A few calm minutes', () => go(c, const CalmBreathing())),
-            Divider(color: p.line, height: 1),
-            row(LucideIcons.utensils, C.domFood, 'Log food',
-                'Add a meal or snack', () => LogFoodSheet.show(c)),
+            pair(
+              tile(LucideIcons.wind, C.teal, 'Breathe',
+                  'A few calm minutes', () => go(c, const CalmBreathing())),
+              tile(LucideIcons.utensils, C.domFood, 'Log food',
+                  'A meal or snack', () => LogFoodSheet.show(c)),
+            ),
+            const SizedBox(height: S.x2),
           ]),
         ),
       );
