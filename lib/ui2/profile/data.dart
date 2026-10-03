@@ -25,6 +25,7 @@ import '../../data/auto_backup.dart';
 import '../../data/csv_export.dart';
 import '../../data/db.dart';
 import '../../import/backup_crypto.dart';
+import '../../cloud/cloud_sync.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../activity/share.dart' show shareOrigin;
@@ -132,6 +133,84 @@ class _DataScreenState extends State<DataScreen> {
     );
   }
 
+
+  // ── Koop Cloud ── the same data on another phone, through the person's own
+  // Google Drive. See lib/cloud/cloud_sync.dart for the model.
+
+  Future<_Note> _cloudOn() async {
+    final pass = await askBackupPassphrase(context, creating: true);
+    if (pass == null) return ('', false);
+    await CloudSync.instance.setPassphrase(pass);
+    try {
+      final email = await CloudSync.instance.signIn();
+      return ('Signed in as $email. Use the same passphrase on your other phones.', false);
+    } catch (e) {
+      return ('Google sign-in did not finish: $e', true);
+    }
+  }
+
+  Future<_Note> _cloudNow(AppState app) async {
+    final o = await CloudSync.instance.run(app.importEdgeBackup);
+    return (o.message, !o.ok);
+  }
+
+  Widget _cloudGroup(BuildContext c, AppState app) {
+    final cs = CloudSync.instance;
+    const title = 'Koop Cloud';
+    if (!cloudConfigured) {
+      return settingsGroup(c, title, [
+        const SetRow(LucideIcons.cloud, C.blue, 'Not set up yet',
+            sub: 'Needs a Google Cloud project before sign-in can work',
+            chevron: false),
+      ]);
+    }
+    if (!cs.on) {
+      return settingsGroup(c, title, [
+        SetRow(LucideIcons.cloud, C.blue, 'Sign in with Google',
+            sub: 'Keep this data on your other phones through your own Google '
+                'Drive. Encrypted with a passphrase only you know. No Koop '
+                'server',
+            onTap: _busy ? null : () => _run(_cloudOn)),
+      ]);
+    }
+    final send = cs.role == CloudRole.send;
+    final last = send ? cs.lastUp : cs.remoteSeen;
+    return ListenableBuilder(
+      listenable: cs,
+      builder: (c, _) => settingsGroup(c, title, [
+        SetRow(LucideIcons.user, C.blue, 'Google account',
+            value: cs.email ?? '—', chevron: false),
+        SetRow(send ? LucideIcons.cloudUpload : LucideIcons.cloudDownload,
+            C.teal, 'This phone',
+            sub: send
+                ? 'Has the band. Sends its data to Drive'
+                : 'Receives the data from the phone with the band',
+            value: send ? 'Sends' : 'Receives',
+            onTap: _busy
+                ? null
+                : () => cs.setRole(send ? CloudRole.receive : CloudRole.send)),
+        if (send)
+          SetRow(LucideIcons.wifi, C.purple, 'Upload on Wi-Fi only',
+              sub: 'Each upload is a full copy of your data',
+              value: cs.wifiOnly ? 'On' : 'Off',
+              onTap: () => cs.setWifiOnly(!cs.wifiOnly)),
+        SetRow(LucideIcons.clock, C.n500, send ? 'Last upload' : 'Last update',
+            sub: cs.lastError ?? '',
+            value: last == null ? 'Never' : _stamp(last),
+            chevron: false),
+        SetRow(LucideIcons.refreshCw, C.green, 'Sync now',
+            onTap: _busy || cs.busy ? null : () => _run(() => _cloudNow(app))),
+        SetRow(LucideIcons.logOut, C.n500, 'Turn off on this phone',
+            sub: 'Your copy in Google Drive stays until you delete it there',
+            onTap: _busy
+                ? null
+                : () => _run(() async {
+                      await cs.signOut();
+                      return ('Koop Cloud is off on this phone.', false);
+                    })),
+      ]),
+    );
+  }
   /// The same VACUUM'd snapshot as [_exportDb], sealed with AES-256-GCM under
   /// a key derived from a passphrase this app never stores.
   ///
@@ -244,6 +323,8 @@ class _DataScreenState extends State<DataScreen> {
                   rebuilt,
                   const SizedBox(height: S.x5),
                 ],
+                _cloudGroup(c, app),
+                const SizedBox(height: S.x5),
                 settingsGroup(c, l?.dataExportGroup ?? 'Export', [
                   SetRow(LucideIcons.fileSpreadsheet, C.green,
                       l?.dataExportSpreadsheets ?? 'Export as spreadsheets',
