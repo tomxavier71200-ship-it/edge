@@ -15,6 +15,8 @@ import '../app_shell.dart';
 import '../grammar.dart';
 import '../profile/alarm.dart';
 import '../profile/customize.dart';
+import '../profile/data.dart' show DataScreen;
+import '../../cloud/cloud_sync.dart';
 import '../profile/profile.dart';
 import '../theme.dart';
 import 'calm_breathing.dart';
@@ -67,6 +69,23 @@ class MoreScreen extends StatelessWidget {
       DoorRow(LucideIcons.user, C.blue, 'Profile and settings',
           'Devices, data, notifications and privacy',
           onTap: () => go(c, const ProfileHome())),
+      const SizedBox(height: S.x3),
+      // Koop Cloud, one tap away: signed in or not, and the account.
+      ListenableBuilder(
+        listenable: CloudSync.instance,
+        builder: (c, _) {
+          final cs = CloudSync.instance;
+          return DoorRow(
+            LucideIcons.cloud,
+            C.teal,
+            'Koop Cloud',
+            cs.on
+                ? '${cs.email ?? 'Signed in'} · ${cs.role == CloudRole.send ? 'Sends' : 'Receives'}'
+                : 'Sign in with Google to use Koop on more phones',
+            onTap: () => go(c, const DataScreen()),
+          );
+        },
+      ),
       const SizedBox(height: S.x3),
       // The coach, featured.
       FeatureCard(
