@@ -10,6 +10,7 @@ import 'dart:convert' show jsonDecode;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/day_label.dart';
 import '../../data/db.dart';
 import '../../data/local_repository.dart';
 import '../../l10n/app_localizations.dart';
@@ -177,7 +178,9 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
     // can no longer BE that night — a date up here now would be labelling
     // today's number with somebody else's day.
     return detailScaffold(c, 'Recovery',
-        info: kInfoRecovery, [
+        info: kInfoRecovery,
+        // Recovery is always today's, so the bar says TODAY, WHOOP-style.
+        center: dayCenter(todayLabel(), const [], (_) {}), [
       if (_loading && _d == null) ...[
         const SizedBox(height: S.x8),
         const Center(child: CircularProgressIndicator()),

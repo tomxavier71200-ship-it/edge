@@ -61,7 +61,7 @@ const kRecoveryInputs = [
 ];
 
 String trendFormat(String key, double v) => switch (key) {
-      'resp_rate' => v.toStringAsFixed(1),
+      'resp_rate' || 'strain' => v.toStringAsFixed(1),
       'sleep' => hmOfMin(v),
       'readiness' || 'efficiency' => '${v.round()}%',
       _ => '${v.round()}',
@@ -108,6 +108,8 @@ List<Widget> weeklyTrendCards(
   Color line(String k) => p.on(switch (k) {
         'sleep' || 'efficiency' => C.sleep,
         'resting_hr' => C.red,
+        'strain' => C.strain,
+        'steps' || 'calories' => C.orange,
         _ => C.blue,
       });
   return [
@@ -120,11 +122,16 @@ List<Widget> weeklyTrendCards(
           'resp_rate' => 'Respiratory rate',
           'sleep' => 'Hours of sleep',
           'efficiency' => 'Sleep efficiency',
+          'strain' => 'Day strain',
+          'steps' => 'Steps',
+          'calories' => 'Calories',
           _ => specOf(k).title,
         },
         days: days,
         values: weekValues(series[k] ?? const [], days),
-        kind: k == 'readiness' || k == 'sleep' ? TrendKind.bars : TrendKind.line,
+        kind: const {'readiness', 'sleep', 'strain', 'steps'}.contains(k)
+            ? TrendKind.bars
+            : TrendKind.line,
         format: (v) => trendFormat(k, v),
         colorOf: (v) =>
             k == 'readiness' ? p.on(readinessBand(v, null).color) : line(k),

@@ -493,8 +493,8 @@ class _SleepDetailState extends State<SleepDetail> {
       final rejectedDay = d.day;
       final rejected =
           (d.night['sleep_source'] as String?) == 'rejected' && rejectedDay != null;
-      return detailScaffold(c, title, info: kInfoSleep, [
-        ...dayNavRow(_day ?? d.day, d.days, _goDay),
+      return detailScaffold(c, title, info: kInfoSleep,
+          center: dayCenter(_day ?? d.day, d.days, _goDay), [
         const SizedBox(height: S.x2),
         // A day CAN be in `availableDays` and still hold no night — the band
         // was worn through the day and off overnight. Stepping onto one of
@@ -533,12 +533,10 @@ class _SleepDetailState extends State<SleepDetail> {
     final n = d.night;
     final unusual = _unusual(c, p, d, n);
 
-    // The stepper names the night, so the nav bar does not say it twice. With
-    // one night on disk there is no stepper, and then the subtitle is the only
-    // thing that dates the screen.
+    // The bar names the night (WHOOP: TODAY / YESTERDAY / the weekday) and is
+    // the stepper; the ring below names the metric.
     return detailScaffold(c, title, info: kInfoSleep,
-        sub: d.days.length < 2 ? (d.day ?? '').toUpperCase() : '', [
-      ...dayNavRow(_day ?? d.day, d.days, _goDay),
+        center: dayCenter(_day ?? d.day, d.days, _goDay), [
 
       // ── 0 · WHOOP'S HEADLINE: performance, and what made it ──
       ..._performance(c, p, d, n),

@@ -1853,7 +1853,7 @@ class _StepGoalGaugeState extends State<_StepGoalGauge> {
 /// in one function is the reason the back affordance is in the same place on
 /// all of them.
 Widget detailScaffold(BuildContext c, String title, List<Widget> body,
-    {String sub = '', Widget? trailing, String? info}) {
+    {String sub = '', Widget? trailing, String? info, Widget? center}) {
   final p = P.of(c);
   return Scaffold(
     backgroundColor: p.bg,
@@ -1863,6 +1863,7 @@ Widget detailScaffold(BuildContext c, String title, List<Widget> body,
           padding: const EdgeInsets.symmetric(horizontal: S.x4),
           child: NavBar(title,
               sub: sub,
+              center: center,
               trailing: info == null
                   ? trailing
                   : Row(mainAxisSize: MainAxisSize.min, children: [
@@ -2158,3 +2159,16 @@ class MonoTable extends StatelessWidget {
     );
   }
 }
+
+/// The detail bar's centre, WHOOP-style: the day stepper, or — with one day
+/// on disk — just the day as a word ("TODAY"). The ring below names the
+/// metric, so the bar names the day.
+Widget dayCenter(String? day, List<String> days, ValueChanged<String> onDay) =>
+    days.length >= 2
+        ? DayNav(day: day, days: days, onDay: onDay)
+        : Builder(
+            builder: (c) => Center(
+              child: Text(dayNavWords(day).$1,
+                  style: F.label.copyWith(color: P.of(c).ink, letterSpacing: 2)),
+            ),
+          );

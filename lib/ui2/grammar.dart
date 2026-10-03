@@ -2442,6 +2442,10 @@ class NavBar extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onBack;
 
+  /// Replaces the title text when given — a detail screen puts its day
+  /// stepper here, WHOOP-style, so the bar names the day it shows.
+  final Widget? center;
+
   /// Width of the trailing slot. Only [ActivitySummary] widens it, to fit a
   /// share icon beside an edit-type one — every other caller keeps the
   /// one-icon default.
@@ -2454,6 +2458,7 @@ class NavBar extends StatelessWidget {
     this.trailing,
     this.onBack,
     this.trailingWidth = S.tap,
+    this.center,
   });
 
   @override
@@ -2469,7 +2474,7 @@ class NavBar extends StatelessWidget {
             child: Icon(LucideIcons.chevronLeft, size: 24, color: p.ink),
           ),
           Expanded(
-            child: Column(
+            child: center ?? Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(

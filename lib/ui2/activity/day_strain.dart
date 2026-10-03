@@ -26,8 +26,9 @@ import '../../data/local_repository.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/metric.dart' show whyFromNote;
 import '../screens/home_screen.dart'
-    show repoOf, monthName, denseDays, pointsOf;
-import '../screens/metric_detail.dart' show detailScaffold;
+    show ChartPoint, repoOf, denseDays, pointsOf;
+import '../screens/detail_trends.dart';
+import '../screens/metric_detail.dart' show dayCenter, detailScaffold;
 import '../ui2.dart';
 import 'catalogue.dart' show zonesWhy;
 import 'zones.dart' show ZonesDetail;
@@ -80,9 +81,13 @@ class DayStrainData {
   /// The last weeks of day strain, dense (see `denseDays`), for the 7-day bars.
   final List<double?> history;
 
+  /// Stored series for the contributors and the weekly trends.
+  final Map<String, List<ChartPoint>> trends;
+
   const DayStrainData({
     this.target,
     this.history = const [],
+    this.trends = const {},
     this.day,
     this.curve = const [],
     this.strain,
@@ -166,6 +171,8 @@ class DayStrainData {
     return DayStrainData(
       target: target,
       history: history,
+      trends: await loadTrendSeries(
+          repo, const ['strain', 'steps', 'calories', 'active_min']),
       day: day,
       curve: grid,
       strain: (s['strain'] as num?)?.toDouble(),
@@ -231,11 +238,6 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
     // The date the drawn day IS. `getDayStrain` serves the last settled bundle
     // while today is still deriving, and a screen headed "Today" over
     // yesterday's trace is the whole reason this is read off the curve.
-    final sub = day == null
-        ? ''
-        : dayLabelOf(day) == todayLabel()
-            ? (l?.dayStrainToday ?? 'TODAY')
-            : '${monthName(day.month, l)} ${day.day}'.toUpperCase();
 
     return detailScaffold(
       c,
@@ -247,28 +249,36 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
           const Center(child: CircularProgressIndicator()),
         ] else ...[
           if (d.strain != null) _hero(c, p, d),
+          // What the day was made of, against your own last 30 days.
+          if ([
+            ?contributorFor(c, 'steps', 'Steps', LucideIcons.footprints, true,
+                d.trends['steps'] ?? const []),
+            ?contributorFor(c, 'active_min', 'Active minutes',
+                LucideIcons.timer, true, d.trends['active_min'] ?? const []),
+            ?contributorFor(c, 'calories', 'Calories', LucideIcons.flame,
+                null, d.trends['calories'] ?? const []),
+          ] case final rows when rows.isNotEmpty) ...[
+            ContributorsCard(rows: rows, footer: 'Today vs. last 30 days'),
+            const SizedBox(height: S.x4),
+          ],
           ..._trace(p, l, d),
           ..._zones(p, l, d),
-          if (d.history.any((v) => v != null))
+          if (d.trends.values.any((s) => s.isNotEmpty))
             Section(
-              'This week',
-              Surface(child: Builder(builder: (c) {
-                final w = lastDays(d.history, 7);
-                return DayBars(
-                  values: w.values,
-                  labels: w.labels,
-                  max: 21,
-                  color: (_) => p.on(C.strain),
-                  fmt: (x) => x.toStringAsFixed(1),
-                  title: 'Day strain',
-                );
-              })),
+              'Weekly trends',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: weeklyTrendCards(
+                    c, d.trends, const ['strain', 'steps', 'calories']),
+              ),
             ),
           Section(l?.dayStrainInputsSection ?? 'What this is made of',
               _inputs(p, l, d)),
         ],
       ],
-      sub: sub,
+      // WHOOP-style: the bar names the day; the ring names the metric.
+      center: dayCenter(day == null ? todayLabel() : dayLabelOf(day), const [],
+          (_) {}),
     );
   }
 
