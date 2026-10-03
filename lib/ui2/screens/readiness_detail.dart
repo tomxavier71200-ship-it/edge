@@ -26,6 +26,10 @@ class ReadinessData {
 
   /// The early estimate (short baseline) while [readiness] calibrates.
   final Metric early;
+
+  /// True when [early] is the population rough guide (nights 1–4) rather
+  /// than the early estimate from the person's own nights.
+  final bool rough;
   final List<Map<String, dynamic>> breakdown;
   final int inputsUsed;
 
@@ -59,6 +63,7 @@ class ReadinessData {
   const ReadinessData({
     this.readiness = Metric.empty,
     this.early = Metric.empty,
+    this.rough = false,
     this.breakdown = const [],
     this.inputsUsed = 0,
     this.heldOverNight,
@@ -96,7 +101,17 @@ class ReadinessData {
     return ReadinessData(
       readiness: readiness,
       early: overnightMetric(
-          today, daily is Map ? daily['readiness_early'] : null),
+                      today, daily is Map ? daily['readiness_early'] : null)
+                  .value !=
+              null
+          ? overnightMetric(
+              today, daily is Map ? daily['readiness_early'] : null)
+          : overnightMetric(
+              today, daily is Map ? daily['readiness_rough'] : null),
+      rough: overnightMetric(
+                  today, daily is Map ? daily['readiness_early'] : null)
+              .value ==
+          null,
       // `narrative` and the glass-box `score` are DELIBERATELY not read. Both
       // belong to the deprecated percentile score, which bands at 70/40 while
       // the headline composite bands at 61/37/26 (see `readinessBand`) —
@@ -197,13 +212,17 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
                   value: d.early.normalized(100),
                   color: readinessBand(d.early.value, l).color,
                   number: (t) => '${(d.early.value! * t).round()}%',
-                  label: 'Early estimate',
+                  label: d.rough ? 'Rough guide' : 'Early estimate',
                 ),
               ),
               const SizedBox(height: S.x4),
               Text(
-                'From your first nights only. The full Recovery score '
-                'starts once 14 nights of your own history are in.',
+                d.rough
+                    ? 'Your resting heart rate and breathing against typical '
+                        'adult values, not yet against you. From night 5 it '
+                        'uses your own nights; from night 15, the full score.'
+                    : 'From your first nights only. The full Recovery score '
+                        'starts once 14 nights of your own history are in.',
                 textAlign: TextAlign.center,
                 style: F.body.copyWith(color: p.ink3),
               ),

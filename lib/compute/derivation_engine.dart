@@ -1732,7 +1732,13 @@ import 'substrate.dart';
 // the same z-cap. Bundle-only: never written to the `readiness` series or the
 // day_result column, so baselines, streaks, alerts and exports are untouched.
 // Home labels it "Early estimate". kAnalyticsPin/kProtocolPin UNCHANGED.
-const int kAlgoVersion = 99;
+// 99 → 100 (rough-guide readiness, edge-only, the person's explicit choice):
+// nights 1–4, before even the early estimate can exist, the bundle gains
+// `readiness_rough` — tonight's sleeping RHR and breathing rate as z against
+// approximate ADULT reference values (`kRoughRhrMean/Sd`, `kRoughRespMean/Sd`,
+// HRV deliberately excluded), the composite's weights and logistic map, the
+// same z-cap. Bundle-only, never the readiness series. UI: "Rough guide".
+const int kAlgoVersion = 100;
 /// The sibling SHAs this version was derived against, asserted against
 /// pubspec.yaml in test/db_serve_version_and_reads_test.dart.
 ///

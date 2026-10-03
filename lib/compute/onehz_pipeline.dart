@@ -105,6 +105,33 @@ const double kReadinessZCap = 5.0;
 /// still apply, so a degenerate baseline is refused, not scored.
 const int kReadinessEarlyMinBaseline = 4;
 
+/// ROUGH GUIDE — nights 1–4, before there is any personal baseline at all.
+///
+/// The person asked for a number from the first night, WHOOP-style, knowing it
+/// rests on population averages rather than on them. These are APPROXIMATE
+/// adult reference values for the two inputs whose norms transfer between
+/// devices — the lowest-30-minute sleeping heart rate and the sleeping
+/// breathing rate — with deliberately wide spreads. HRV is left out: wrist HRV
+/// norms depend on the device and method, so a population value would be a
+/// guess about this band, not about the person. Labelled "Rough guide" in the
+/// UI, never written to the readiness series, and superseded by the early
+/// estimate as soon as four of the person's own nights exist.
+const double kRoughRhrMean = 58, kRoughRhrSd = 8; // bpm, sleeping low-30 min
+const double kRoughRespMean = 14.5, kRoughRespSd = 2; // breaths/min asleep
+
+/// The rough-guide score from tonight's sleeping RHR and breathing rate, or
+/// null without BOTH (two inputs is the composite's own floor). Same weights
+/// (RHR 0.30, RR 0.20, renormalised), same lower-is-better orientation, same
+/// logistic map and z-cap as [readinessComposite].
+double? roughReadinessScalar(double? rhr, double? resp) {
+  if (rhr == null || resp == null) return null;
+  final zRhr = -(rhr - kRoughRhrMean) / kRoughRhrSd;
+  final zResp = -(resp - kRoughRespMean) / kRoughRespSd;
+  final z = (0.30 * zRhr + 0.20 * zResp) / 0.50;
+  if (z.abs() > kReadinessZCap) return null;
+  return 100 / (1 + math.exp(-z));
+}
+
 /// The early estimate for [full], or null. Only while [full] is cold-starting
 /// (its need_baseline note); then the same composite over the same [inputs]
 /// with the shorter baseline, through the same z-cap. Pure, for the tests.
@@ -645,6 +672,14 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // in it would be a fabricated history. The UI labels it "Early estimate".
   final readinessEarlyScalar =
       earlyReadinessScalar(composite, readinessInputs);
+  // Rough guide: only while cold-starting AND before the early estimate can
+  // exist (fewer than kReadinessEarlyMinBaseline nights of history).
+  final readinessRoughScalar = !composite.present &&
+          readinessEarlyScalar == null &&
+          (composite.note?.startsWith('need_baseline') ?? false) &&
+          d.rhrHistory.length < kReadinessEarlyMinBaseline
+      ? roughReadinessScalar(rhrToday, respToday)
+      : null;
   // Populated when readiness comes back absent, so the main isolate can log WHY
   // instead of a bare null (this runs inside Isolate.run, so it can't call
   // Firebase directly; it just returns data). TWO consumers now, and the second
@@ -1436,6 +1471,8 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       // The early estimate (see where it is computed). Null whenever the full
       // score exists, and never charted: it is not a reading of the series.
       'readiness_early': readinessEarlyScalar,
+      // Population rough guide for nights 1–4 (see roughReadinessScalar).
+      'readiness_rough': readinessRoughScalar,
       // Headline 0–21 strain (the screens already expect a 0–21 scale); raw
       // Banister TRIMP stays under `trimp` as the secondary "training load".
       'strain': strainScalar,

@@ -1297,8 +1297,11 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
     case HomeRingKind.recovery:
       final v = d.readiness.value;
       final band = readinessBand(v, l);
-      // Still calibrating, but 4+ nights in: the early estimate, labelled.
-      final e = v == null ? d.readinessEarly.value : null;
+      // Still calibrating: the early estimate (4+ of your own nights), or
+      // before that the population rough guide — each labelled as what it is.
+      final early = v == null ? d.readinessEarly.value : null;
+      final rough = v == null && early == null ? d.readinessRough.value : null;
+      final e = early ?? rough;
       if (e != null) {
         final eb = readinessBand(e, l);
         return _RingState(
@@ -1307,7 +1310,7 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
           LucideIcons.batteryCharging,
           eb.color,
           value: '${e.round()}%',
-          sub: 'Early estimate',
+          sub: early != null ? 'Early estimate' : 'Rough guide',
           frac: e / 100,
           n: e.toDouble(),
           fmt: (x) => '${x.round()}%',
@@ -1675,6 +1678,9 @@ class HomeData {
   /// while [readiness] is still calibrating. Shown labelled, never as the
   /// score itself.
   final Metric readinessEarly;
+
+  /// Nights 1–4: the population rough guide, before any early estimate.
+  final Metric readinessRough;
   final List<Map<String, dynamic>> drivers;
   final Metric sleepMin, rhr, steps, calories, caloriesTotal;
 
@@ -1728,6 +1734,7 @@ class HomeData {
     this.dayId,
     this.readiness = Metric.empty,
     this.readinessEarly = Metric.empty,
+    this.readinessRough = Metric.empty,
     this.drivers = const [],
     this.sleepMin = Metric.empty,
     this.rhr = Metric.empty,
@@ -1756,6 +1763,7 @@ class HomeData {
     dayId: dayId,
     readiness: readiness,
     readinessEarly: readinessEarly,
+    readinessRough: readinessRough,
     drivers: drivers,
     sleepMin: sleepMin,
     rhr: rhr,
@@ -1875,6 +1883,7 @@ class HomeData {
       // are read straight.
       readiness: overnightMetric(today, d('readiness'), l),
       readinessEarly: overnightMetric(today, d('readiness_early'), l),
+      readinessRough: overnightMetric(today, d('readiness_rough'), l),
       drivers: [
         for (final e in (gbDrivers is List ? gbDrivers : const []))
           if (e is Map) e.cast<String, dynamic>(),

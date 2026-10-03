@@ -394,6 +394,14 @@ class LocalRepositoryImpl extends LocalRepository {
         'ESTIMATE',
         note: readinessNote,
       ),
+      // Nights 1–4: the population rough guide, same gating.
+      'readiness_rough': _scalarMetric(
+        readinessScalar == null && showOvernight
+            ? _scalar(sleepBundle, 'readiness_rough')
+            : null,
+        'ESTIMATE',
+        note: readinessNote,
+      ),
       'resting_hr': _scalarMetric(
         showOvernight ? _scalar(sleepBundle, 'rhr')?.round() : null,
         'HIGH',

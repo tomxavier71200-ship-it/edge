@@ -44,6 +44,24 @@ void main() {
     expect(earlyReadinessScalar(full, inputs), isNull);
   });
 
+  group('rough guide (nights 1–4)', () {
+    test('typical values read as the middle of the scale', () {
+      expect(roughReadinessScalar(kRoughRhrMean, kRoughRespMean),
+          closeTo(50, 1e-9));
+    });
+    test('lower resting HR and breathing read as better, higher as worse', () {
+      expect(roughReadinessScalar(50, 13)!, greaterThan(50));
+      expect(roughReadinessScalar(68, 17)!, lessThan(50));
+    });
+    test('needs both inputs — one is not a composite', () {
+      expect(roughReadinessScalar(null, 14), isNull);
+      expect(roughReadinessScalar(55, null), isNull);
+    });
+    test('an absurd night is withheld by the same z-cap', () {
+      expect(roughReadinessScalar(120, 30), isNull);
+    });
+  });
+
   test('absent for another reason (no inputs tonight): no early number', () {
     final inputs = [hrvInput(null, const []), respInput(null, const [])];
     final full = readinessComposite(inputs);
