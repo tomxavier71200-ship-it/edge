@@ -109,10 +109,13 @@ class ImportOutcome {
 /// passphrase prompt. Not a failure to report as one — they cancelled.
 class PassphraseCancelled implements Exception {}
 
-/// Shortest passphrase we will write a file with. Not a policy for its own
-/// sake: PBKDF2 buys time against a guess, and four characters is guessed
-/// before the derivation finishes no matter how many iterations it runs.
-const int kMinPassphraseChars = 8;
+/// Shortest passphrase we will write a file with. Lowered from 8 to 4 at the
+/// owner's request, for a passphrase typed once per browser. Know the cost:
+/// PBKDF2 (210k iterations) only slows a guess down, and four characters
+/// (~1.7M lowercase-and-digit combinations) can be guessed offline by anyone
+/// holding the file — the Drive copy is then protected mainly by the Google
+/// account. Longer is still allowed and still better.
+const int kMinPassphraseChars = 4;
 
 /// Ask for the passphrase. Null when the user closed it.
 ///
