@@ -36,8 +36,10 @@ import 'drive_api.dart';
 /// not set up in this build, and the screen says exactly that instead of
 /// offering a sign-in that cannot work. Client ids are not secrets — they ship
 /// inside every app that uses Google sign-in.
-const kGoogleWebClientId = '';
-const kGoogleIosClientId = '';
+const kGoogleWebClientId =
+    '423346785849-ivk1sk3f16akkejcpb3is6h8qj67mtq7.apps.googleusercontent.com';
+const kGoogleIosClientId =
+    '423346785849-vjgqhnceg5qb1htjo2htenm0clb7h1dc.apps.googleusercontent.com';
 
 bool get cloudConfigured => kGoogleWebClientId.isNotEmpty;
 

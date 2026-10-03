@@ -49,6 +49,21 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GIDClientID</key>
+	<string>423346785849-vjgqhnceg5qb1htjo2htenm0clb7h1dc.apps.googleusercontent.com</string>
+	<key>GIDServerClientID</key>
+	<string>423346785849-ivk1sk3f16akkejcpb3is6h8qj67mtq7.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.423346785849-vjgqhnceg5qb1htjo2htenm0clb7h1dc</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- GENERATED from lib/ble/adapters/_registry.dart — do not hand-edit.
