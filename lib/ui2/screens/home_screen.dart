@@ -2213,6 +2213,27 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   l?.homeProfileSettings ?? 'Profile and settings',
                   () => go(c, const ProfileHome()),
                 ),
+                // The streak: days in a row with a recovery score, from two.
+                if (recoveryStreak(
+                      d.series['readiness'] ?? const [],
+                      DateTime.now(),
+                    )
+                    case final n when n >= 2) ...[
+                  const SizedBox(width: S.x2),
+                  Semantics(
+                    label: '$n days in a row with a recovery score',
+                    child: Container(
+                      padding: const EdgeInsets.all(S.x2),
+                      decoration:
+                          BoxDecoration(color: p.card, borderRadius: R.rMd),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(LucideIcons.flame, size: 16, color: p.on(C.orange)),
+                        const SizedBox(width: S.x1),
+                        Text('$n', style: F.n17.copyWith(color: p.ink)),
+                      ]),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: S.x3),
                 Expanded(
                   child: _days.length < 2

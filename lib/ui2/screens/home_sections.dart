@@ -464,6 +464,22 @@ Widget yourDayCard(BuildContext c, HomeData d) {
   );
 }
 
+/// Days in a row with a recovery score, ending today or yesterday (today's
+/// may not have landed yet). 0 when the run is already broken. Pure.
+int recoveryStreak(List<({int t, double v})> pts, DateTime now) {
+  final days = {
+    for (final p in pts) dayLabelOf(DateTime.fromMillisecondsSinceEpoch(p.t * 1000)),
+  };
+  var d = DateTime(now.year, now.month, now.day);
+  if (!days.contains(dayLabelOf(d))) d = DateTime(d.year, d.month, d.day - 1);
+  var n = 0;
+  while (days.contains(dayLabelOf(d))) {
+    n++;
+    d = DateTime(d.year, d.month, d.day - 1);
+  }
+  return n;
+}
+
 /// The two tiles under the dials, WHOOP-style: Health Monitor (how many of
 /// the overnight vitals sit in the reader's own usual range) and Stress
 /// Monitor (the latest daytime reading, 0–3). Each opens its Health tab.
