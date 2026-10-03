@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Koop Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Montserrat:wght@400;600;700&display=swap">
+<style>
+/* Layout (WHOOP web style): dark header with the three scores as tabs, a light page below with
+   a date switcher, statistics on the left and a chart in the middle, range buttons top right. */
+:root{
+  --head:#1b2026; --head2:#262c33; --page:#f6f7f8; --card:#ffffff; --line:#e3e6e9;
+  --ink:#1b2026; --ink2:#55606b; --ink3:#9aa3ad; --onhead:#f2f4f6;
+  --recovery:#f5d000; --strain:#0093e7; --sleep:#7ba1bb; --up:#16b45d; --down:#e5262e; --today:#e5262e;
+  --bar:#5a7383; --bar2:#c9cdd1;
+  --display:"Montserrat",system-ui,sans-serif; --num:"Barlow Semi Condensed",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--display)}
+.head{background:var(--head);color:var(--onhead)}
+.head .in{max-width:1100px;margin:0 auto;padding:24px 16px 0;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:center}
+.tab{background:none;border:0;color:var(--onhead);cursor:pointer;text-align:center;padding:0 8px 14px;position:relative;font:inherit}
+.tab .cap{font-size:16px;color:#c7ced6;margin-top:6px}
+.tab.on .cap{color:var(--accent,#fff);font-weight:700}
+.tab.on::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);border:9px solid transparent;border-bottom-color:var(--page)}
+.tab:focus-visible{outline:2px solid var(--strain);outline-offset:2px}
+.ring svg{width:130px;height:130px}
+.ring .n{font:600 40px var(--num);fill:var(--onhead)}
+.who{display:flex;gap:14px;align-items:center;padding-bottom:40px}
+.avatar{width:84px;height:84px;border-radius:50%;background:var(--head2);border:5px solid #000;display:grid;place-items:center;font:700 32px var(--display)}
+.who b{display:block;font-size:20px}
+.who span{color:#7fb4d9;font-size:13px}
+.sleepperf{text-align:center;padding-bottom:14px}
+.sleepperf small{color:#7ba1bb;display:block}
+.sleepperf .big{font:600 44px var(--num)}
+.sleepperf .pair{display:flex;gap:28px;justify-content:center}
+.sleepperf .pair div{font:600 26px var(--num)} .sleepperf .pair span{display:block;font:12px var(--display);color:#c7ced6}
+.bar{max-width:1100px;margin:0 auto;padding:18px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.datenav{display:flex;align-items:center;gap:10px}
+.datenav button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer}
+.date{color:var(--today);font-weight:600;font-size:16px}
+.loader{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
+input,select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.open{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer}
+.open.google{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.ranges{display:inline-flex;background:#eceef0;border-radius:999px;padding:2px}
+.ranges button{border:0;background:none;padding:5px 12px;border-radius:999px;font:600 12px var(--display);cursor:pointer;color:var(--ink)}
+.ranges button.on{background:var(--today);color:#fff}
+main{max-width:1100px;margin:0 auto;padding:8px 16px 48px;display:grid;grid-template-columns:260px 1fr;gap:28px;border-top:1px solid var(--line)}
+@media (max-width:760px){main{grid-template-columns:1fr}.ring svg{width:100px;height:100px}}
+.stats h3,.chart h3{font-size:14px;margin:16px 0 0}.stats .vs,.chart .vs{color:var(--ink3);font-size:12px;margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px 12px;text-align:center}
+.stat .l{font-size:12px}.stat .v{font:600 26px var(--num);color:var(--bar)}.stat .p{font-size:12px;color:var(--ink3)}
+.arrow{font-size:11px;margin-left:3px}
+.chart{min-width:0}.chartbox{position:relative;height:330px}
+.donutwrap{display:flex;gap:18px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.legend div{display:flex;justify-content:space-between;gap:18px;font-size:13px;padding:3px 0}
+#status{max-width:1100px;margin:0 auto;padding:0 16px;color:var(--ink2);font-size:12px}
+.tag{font-size:11px;letter-spacing:.1em;text-transform:uppercase;background:#fff3c4;color:#6b5600;border-radius:999px;padding:2px 8px;margin-left:8px}
+.date{position:relative;cursor:pointer}
+.date input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.subtabs{background:var(--strain);display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;justify-content:center}
+.subtabs button{background:none;border:0;color:#cfe8fb;font:600 14px var(--display);padding:6px 12px;border-radius:999px;cursor:pointer}
+.subtabs button.on{color:#fff;background:rgba(255,255,255,.18)}
+.bubbles{position:relative;height:44px;margin-top:6px}.bubbles:empty{display:none}
+.bubble{position:absolute;transform:translateX(-50%);top:0;text-align:center;font:600 12px var(--num);white-space:nowrap}
+.bubble b{display:inline-block;padding:3px 8px;border-radius:6px;color:#fff}
+.zones{margin-top:14px}
+.zones div{display:grid;grid-template-columns:80px 1fr 70px;gap:10px;align-items:center;font-size:13px;padding:3px 0}
+.zones i{display:block;height:10px;border-radius:4px;background:var(--strain)}
+.scrub{max-width:1100px;margin:0 auto;padding:0 16px 40px}
+.scrubin{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px}
+.scrubhead{font-size:12px;color:var(--ink3);margin-bottom:6px}
+.strip{display:flex;gap:2px;align-items:flex-end;height:70px}
+.strip button{flex:1 1 0;border:0;border-radius:3px 3px 0 0;cursor:pointer;min-width:3px;padding:0}
+.strip button.sel{outline:2px solid var(--today);outline-offset:1px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<section class="head"><div class="in">
+  <button class="tab" data-tab="overview" style="--accent:#fff"><div class="who"><div class="avatar" id="initial">K</div><div><b id="name">Koop</b><span>your band, your data</span></div></div><div class="cap" style="margin-top:-30px">Overview</div></button>
+  <button class="tab ring" data-tab="strain" style="--accent:var(--strain)"><svg viewBox="0 0 130 130" id="r-strain"></svg><div class="cap">Strain</div></button>
+  <button class="tab ring" data-tab="recovery" style="--accent:var(--recovery)"><svg viewBox="0 0 130 130" id="r-recovery"></svg><div class="cap">Recovery</div></button>
+  <button class="tab" data-tab="sleep" style="--accent:#7ba1bb"><div class="sleepperf"><small>Sleep Performance</small><div class="big" id="sp">—</div>
+    <div class="pair"><div id="hs">—<span>Hours of Sleep</span></div><div id="hn">—<span>Sleep Needed</span></div></div></div><div class="cap">Sleep</div></button>
+</div></section>
+
+<div class="bar">
+  <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><span class="tag" id="source">Example data</span></div>
+  <form class="loader" id="loader"><button class="open google" type="button" id="gsign">Sign in with Google</button><span>or</span><label for="file">a backup file</label><input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
+    <input id="pass" type="password" placeholder="Passphrase" autocomplete="current-password"><button class="open" type="submit">Open file</button></form>
+  <div class="ranges" id="ranges"><button data-r="180">6m</button><button data-r="90">3m</button><button data-r="30">1m</button><button data-r="14">2w</button><button data-r="7">1w</button><button data-r="1" class="on">1d</button></div>
+</div>
+<div class="subtabs" id="subtabs" hidden></div>
+<div id="status">Showing example data. Enter your Koop Cloud passphrase and sign in with Google to open your own data, or open a backup file. It is decrypted and read in this browser only.</div>
+
+<main>
+  <section class="stats"><h3 id="st-title">Day Statistics</h3><div class="vs" id="st-vs"></div><div class="grid2" id="st"></div></section>
+  <section class="chart"><h3 id="ch-title">Day Recovery</h3><div class="vs" id="ch-vs"></div><div class="bubbles" id="bubbles"></div><div class="chartbox"><canvas id="chart"></canvas></div><div class="zones" id="zones" hidden></div>
+    <div class="donutwrap" id="donutwrap" hidden><div class="legend" id="legend"></div><div style="width:180px;height:180px"><canvas id="donut"></canvas></div></div></section>
+</main>
+<section class="scrub"><div class="scrubin"><div class="scrubhead">Recovery by day · click a day to open it</div><div class="strip" id="strip"></div></div></section>
+
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js"></script>
+<script>
+"use strict";
+const KEYS=["readiness","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min","awakenings","sol_min"];
+const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+let liveDb=null,data={},tab="recovery",range=1,day=null,chart,donut,sri=null,sriDay=null,sess=null;
+const iso=t=>t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
+const shift=(d,n)=>{const t=new Date(d+"T12:00:00");t.setDate(t.getDate()+n);return iso(t);};
+const get=(k,d)=>data[k]?.get(d)??null;
+const hm=m=>m==null?"—":Math.floor(m/60)+":"+String(Math.round(m%60)).padStart(2,"0");
+const nice=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+const clock=t=>{const x=new Date(t*1000);return x.getHours()+":"+String(x.getMinutes()).padStart(2,"0");};
+const secs=t=>t==null?null:t>1e12?t/1000:t; // sessions store seconds; tolerate ms
+const dayBounds=d=>{const a=new Date(d+"T00:00:00"),b=new Date(a);b.setDate(a.getDate()+1);return [a.getTime()/1000,b.getTime()/1000];}; // local midnight to midnight (DST-safe)
+
+// The app stores curves through SeriesCodec: a plain [{t,v}] list, or {t0,dt,v} (regular grid), or {t0,to,v} (offsets).
+function decodeCurve(raw){
+  if(Array.isArray(raw))return raw.filter(e=>typeof e?.t==="number"&&typeof e?.v==="number");
+  if(raw&&typeof raw.t0==="number"&&Array.isArray(raw.v)){
+    if(typeof raw.dt==="number")return raw.v.map((v,i)=>({t:raw.t0+i*raw.dt,v})).filter(e=>typeof e.v==="number");
+    if(Array.isArray(raw.to)&&raw.to.length===raw.v.length)return raw.v.map((v,i)=>({t:raw.t0+raw.to[i],v})).filter(e=>typeof e.v==="number");}
+  return [];}
+
+// ---------- example mode (made-up numbers, labelled as such) ----------
+function example(){const d={};KEYS.concat(["inbed_min"]).forEach(k=>d[k]=new Map());const now=new Date();
+  for(let i=200;i>=0;i--){const t=new Date(now);t.setDate(now.getDate()-i);const s=iso(t);if(i%11===5)continue;const w=Math.sin(i/5);
+    d.readiness.set(s,Math.round(52+22*w));d.strain.set(s,+(9+4*Math.cos(i/3)).toFixed(1));d.rmssd.set(s,Math.round(62+6*w));d.rhr.set(s,Math.round(57-2*w));
+    d.resp_rate.set(s,+(12.7+.3*w).toFixed(1));d.tst_min.set(s,330+45*w);d.deep_min.set(s,85+8*w);d.rem_min.set(s,95+12*w);d.light_min.set(s,150+20*w);
+    d.efficiency.set(s,Math.round(90+3*w));d.sleep_perf.set(s,Math.round(60+15*w));d.steps.set(s,Math.round(7000+2500*w));d.calories.set(s,Math.round(2300+300*w));
+    d.active_min.set(s,Math.round(40+20*w));d.awakenings.set(s,Math.round(9+3*Math.cos(i)));d.sol_min.set(s,Math.round(8+4*w));d.inbed_min.set(s,Math.round((330+45*w)/((90+3*w)/100)));}
+  sri=78;sriDay=iso(now);return d;}
+function exampleDay(d){const [b]=dayBounds(d),pts=[];
+  for(let m=0;m<1440;m++){const asleep=m<420,run=m>=1080&&m<1125;pts.push({t:b+m*60,v:Math.round(run?150+12*Math.sin(m/4):(asleep?55:78)+6*Math.sin(m/37))});}
+  return {pts,on:b+15*60,off:b+420*60};}
+function exampleSessions(d){const [b]=dayBounds(d),hr=[];for(let s=0;s<2700;s+=10)hr.push({t:b+1080*60+s,v:Math.round(140+15*Math.sin(s/300)+(s>1500&&s<2100?18:0))});
+  return [{id:"ex",type:"Running",start:b+1080*60,end:b+1125*60,strain:11.4,max_hr:174,avg_hr:148,calories:512,duration_min:45,zones:[2,6,14,15,7,1],hr}];}
+
+// ---------- reading a backup ----------
+async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuffer());
+  if(String.fromCharCode(...buf.slice(0,4))==="OSBK"){ // magic4 ver1 kdf1 iter4(BE) salt16 nonce12 | AES-256-GCM, header as AAD
+    if(!pass)throw new Error("This file is encrypted. Enter your Koop Cloud passphrase.");
+    const hdr=buf.slice(0,38),dv=new DataView(hdr.buffer),iter=dv.getUint32(6),salt=hdr.slice(10,26),iv=hdr.slice(26,38);
+    status("Unlocking (a few seconds)…");
+    const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+    const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
+    try{buf=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv,additionalData:hdr,tagLength:128},key,buf.slice(38)));}
+    catch{throw new Error("Wrong passphrase, or the file is damaged.");}}
+  if(buf[0]===0x1f&&buf[1]===0x8b){buf=new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());}
+  const SQL=await initSqlJs(),db=new SQL.Database(buf);
+  const res=db.exec(`SELECT date,key,value FROM metric_series WHERE value IS NOT NULL AND key IN (${KEYS.map(k=>`'${k}'`).join(",")})`);
+  let name=null;try{const p=db.exec("SELECT value FROM kv WHERE key='profile_name'");name=p[0]?.values[0][0]??null;}catch{}
+  const d={};KEYS.concat(["inbed_min"]).forEach(k=>d[k]=new Map());(res[0]?.values||[]).forEach(([dt,k,v])=>d[k].set(dt,v));
+  // Time in bed: the night's accounting in the newest stored analysis of each day.
+  try{const r=db.exec("SELECT day_id,payload_json FROM day_result d WHERE algo_version=(SELECT MAX(algo_version) FROM day_result WHERE day_id=d.day_id)");
+    (r[0]?.values||[]).forEach(([id,pj])=>{try{const s=JSON.parse(pj)?.sleep?.accounting?.value?.in_bed_sec;if(typeof s==="number"&&s>0)d.inbed_min.set(id,s/60);}catch{}});}catch{}
+  // Consistency (SRI) exists only as the latest cross-day value, so it is shown for the newest day only.
+  sri=null;sriDay=null;try{const r=db.exec("SELECT payload_json,updated_at FROM baselines WHERE key='crossday'");
+    if(r[0]){const v=JSON.parse(r[0].values[0][0])?.regularity?.value?.sri;if(typeof v==="number")sri=v;}}catch{}
+  liveDb?.close();liveDb=db; // kept open: curves and workouts are read per day
+  return {d,name};}
+
+// ---------- per-day reads ----------
+function dayCurve(d){
+  if(!liveDb)return exampleDay(d);
+  const r=liveDb.exec("SELECT payload_json,window_json FROM day_result WHERE day_id=? ORDER BY algo_version DESC LIMIT 1",[d]);
+  if(!r[0])return {pts:[],on:null,off:null};
+  const [pj,wj]=r[0].values[0];let pts=[],on=null,off=null,p=null;
+  try{p=JSON.parse(pj);pts=decodeCurve(p?.series?.hr_curve);}catch{}
+  const take=v=>{if(v&&typeof v==="object"&&typeof v.onset_ms==="number"&&typeof v.offset_ms==="number"){on=v.onset_ms/1000;off=v.offset_ms/1000;}};
+  take(p?.sleep?.window?.value);if(on==null)try{take(JSON.parse(wj||"{}")?.value);}catch{}
+  return {pts,on,off};}
+
+function sessionsOn(d){
+  if(!liveDb)return exampleSessions(d);
+  const [a,b]=dayBounds(d);let r;
+  try{r=liveDb.exec("SELECT * FROM sessions WHERE (CASE WHEN start_ts>1e12 THEN start_ts/1000 ELSE start_ts END)>=? AND (CASE WHEN start_ts>1e12 THEN start_ts/1000 ELSE start_ts END)<? ORDER BY start_ts",[a,b]);}catch{return [];}
+  if(!r[0])return [];const c=r[0].columns;
+  return r[0].values.map(v=>{const o={};c.forEach((k,i)=>o[k]=v[i]);
+    let zones=[],hr=[];try{const z=JSON.parse(o.zone_min_json||"[]");if(Array.isArray(z))zones=z;}catch{}
+    try{hr=decodeCurve(JSON.parse(o.trace_json||"{}")?.hr);}catch{}
+    if(o.status&&/discard|delet|reject/i.test(o.status))return null;
+    const ty=String(o.type||"workout").replace(/_/g," ");
+    return {id:o.id,type:ty[0].toUpperCase()+ty.slice(1),start:secs(o.start_ts),end:secs(o.end_ts),strain:o.strain,max_hr:o.max_hr,avg_hr:o.avg_hr??null,
+      calories:o.calories,duration_min:o.duration_min,zones,hr};}).filter(Boolean);}
+
+function status(t){document.getElementById("status").textContent=t;}
+function ring(id,frac,color,text){const r=56,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
+  document.getElementById(id).innerHTML=`<circle cx="65" cy="65" r="${r}" fill="none" stroke="#2b323a" stroke-width="7"/><circle cx="65" cy="65" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 65 65)"/><text x="65" y="78" text-anchor="middle" class="n">${text}</text>`;}
+
+function header(){const rc=get("readiness",day),st=get("strain",day),sp=get("sleep_perf",day),ts=get("tst_min",day);
+  ring("r-recovery",rc==null?null:rc/100,css("--recovery"),rc==null?"—":Math.round(rc)+"%");
+  ring("r-strain",st==null?null:st/21,css("--strain"),st==null?"—":(+st).toFixed(1));
+  document.getElementById("sp").textContent=sp==null?"—":Math.round(sp)+"%";
+  document.getElementById("hs").firstChild.textContent=hm(ts);
+  document.getElementById("hn").firstChild.textContent=ts!=null&&sp?hm(ts/(sp/100)):"—";
+  document.getElementById("date").textContent=(day===iso(new Date())?"Today, ":"")+nice(day);
+  const cal=document.getElementById("cal");cal.value=day;cal.max=iso(new Date());
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));}
+
+const TABS={
+  recovery:{title:"Recovery",stats:[["HRV","rmssd",0,1],["Resting HR","rhr",0,-1],["Sleep","sleep_perf",0,1,"%"],["Respiratory Rate","resp_rate",1,0]],
+    bars:[["Heart Rate Variability","rmssd"],["Resting Heart Rate","rhr"],["Sleep Performance","sleep_perf"]],trend:["readiness","Recovery %",[0,100]]},
+  sleep:{title:"Sleep",stats:[["Time in Bed","inbed_min",0,0,"h"],["Hours of Sleep","tst_min",0,1,"h"],["Disturbances","awakenings",0,-1],["Latency","sol_min",0,-1,"m"],
+      ["Sleep Efficiency","efficiency",0,1,"%"],["Consistency","sri",0,1,"%"],["Respiratory Rate","resp_rate",1,0],["Sleep Performance","sleep_perf",0,1,"%"]],
+    trend:["tst_min","Hours of sleep",null],donut:true},
+  strain:{title:"Strain",stats:[["Day Strain","strain",1,0],["Steps","steps",0,1],["Calories","calories",0,0],["Active Minutes","active_min",0,1]],
+    bars:[["Day Strain","strain"],["Active Minutes","active_min"]],trend:["strain","Day strain",[0,21]]},
+  overview:{title:"Overview",stats:[["Recovery","readiness",0,1,"%"],["Day Strain","strain",1,0],["Sleep","sleep_perf",0,1,"%"],["HRV","rmssd",0,1]],
+    trend:["readiness","Recovery %",[0,100]]}};
+
+// SRI is one latest value, not a daily series: only the newest day may show it.
+const val=(k,d)=>k==="sri"?(d===sriDay&&sri!=null?sri:null):get(k,d);
+function fmt(k,v,dp,u){if(v==null)return "—";if(u==="h")return hm(v);if(u==="m")return Math.round(v)+" min";return (+v).toFixed(dp)+(u==="%"?"%":"");}
+const recColor=x=>x>=67?css("--up"):x>=34?css("--recovery"):css("--down");
+const lineOpts=y=>({responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:"index",intersect:false},
+  plugins:{legend:{display:false},tooltip:{displayColors:false,filter:i=>i.raw!=null,callbacks:{title:i=>i[0]?.label??"",label:i=>`${i.dataset.label?i.dataset.label+": ":""}${i.raw} bpm`}}},scales:{y:{grid:{color:css("--line")},title:{display:true,text:"bpm"},...y},x:{ticks:{maxTicksLimit:12,autoSkip:true},grid:{display:false}}}});
+
+function statsGrid(rows,cur,was){document.getElementById("st").innerHTML=rows.map(([l,now,before,dp,better,u])=>{
+  let arr="";if(now!=null&&before!=null&&Math.abs(now-before)>1e-9){const up=now>before,good=better===0?null:(up===(better>0));
+    arr=`<span class="arrow" style="color:${good==null?css("--ink3"):good?css("--up"):css("--down")}">${up?"▲":"▼"}</span>`;}
+  return `<div class="stat"><div class="l">${l}</div><div class="v">${fmt(null,now,dp,u)}${arr}</div><div class="p">${fmt(null,before,dp,u)}</div></div>`;}).join("");}
+
+// Bubbles sit above the chart at the x of the moment they describe.
+function bubbles(items,pts){const box=document.getElementById("bubbles");box.innerHTML="";if(!chart||pts.length<2)return;
+  const a=chart.chartArea,t0=pts[0].t,t1=pts.at(-1).t;box.style.marginLeft="0";
+  items.forEach(it=>{if(it.t<t0||it.t>t1)return;const x=a.left+(it.t-t0)/(t1-t0)*a.width;
+    const el=document.createElement("div");el.className="bubble";el.style.left=x+"px";
+    el.innerHTML=`<b style="background:${it.c}">${it.text}</b><div style="color:${css("--ink3")};font-weight:500">${it.sub}</div>`;
+    if(it.go){el.style.cursor="pointer";el.addEventListener("click",it.go);}box.appendChild(el);});}
+
+Chart.register({id:"crosshair",afterDatasetsDraw(c){const a=c.tooltip?.getActiveElements?.();if(c.config.type!=="line"||!a?.length)return;
+  const x=a[0].element.x,{top,bottom}=c.chartArea,g=c.ctx;g.save();g.strokeStyle=css("--ink3");g.lineWidth=1;g.beginPath();g.moveTo(x,top);g.lineTo(x,bottom);g.stroke();g.restore();}});
+function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));document.getElementById("ch-title").textContent=title;
+  document.getElementById("ch-vs").textContent=pts.length?vs:`${nice(day)} · no heart-rate curve stored for this day`;
+  const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off;
+  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:pts.map(p=>clock(p.t)),datasets:[
+    {label:"Asleep",data:pts.map(p=>inSleep(p)?p.v:null),borderColor:css("--sleep"),backgroundColor:"rgba(123,161,187,.18)",fill:"origin",pointRadius:0,borderWidth:1.2,spanGaps:false},
+    {label:"Awake",data:pts.map(p=>inSleep(p)||inW(p)?null:p.v),borderColor:"#b4bcc4",pointRadius:0,borderWidth:1.2,spanGaps:false},
+    {label:"Workout",data:pts.map(p=>inW(p)&&!inSleep(p)?p.v:null),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.15)",fill:"origin",pointRadius:0,borderWidth:1.6,spanGaps:false}]},options:lineOpts({min:0})});}
+
+function overviewDay(){const {pts,on,off}=dayCurve(day);sess=sessionsOn(day);
+  drawCurve(pts,on,off,"Day heart rate",`${nice(day)} · light blue is sleep, bright blue is a workout · click a workout bubble to open it`,sess);
+  const sp=get("sleep_perf",day),items=[];
+  if(on!=null&&off!=null)items.push({t:(on+off)/2,c:css("--sleep"),text:sp==null?"Sleep":Math.round(sp)+"%",sub:`${clock(on)}–${clock(off)}`,go:()=>{tab="sleep";render();}});
+  sess.forEach((s,i)=>items.push({t:(s.start+(s.end||s.start))/2,c:css("--strain"),text:s.strain==null?"—":(+s.strain).toFixed(1),sub:s.type,go:()=>{tab="strain";workout=i;render();}}));
+  bubbles(items,pts);}
+
+function sleepDay(){const {pts,on,off}=dayCurve(day);const pad=30*60;
+  const night=on!=null&&off!=null?pts.filter(p=>p.t>=on-pad&&p.t<=off+pad):[];
+  drawCurve(night,on,off,"Night heart rate",on==null?`${nice(day)} · no sleep window stored for this night`:`${clock(on)} to ${clock(off)} · blue is asleep`);
+  if(on==null)document.getElementById("ch-vs").textContent=`${nice(day)} · no sleep window stored for this night`;
+  const tib=get("inbed_min",day),tst=get("tst_min",day),awake=tib!=null&&tst!=null&&tib>=tst?tib-tst:null;
+  const st=[["Awake",awake,"#e6e9ec"],["Light",get("light_min",day),"#c9d7e2"],["REM",get("rem_min",day),css("--sleep")],["SWS Deep",get("deep_min",day),"#2f3d4a"]];
+  donut?.destroy();donut=new Chart(document.getElementById("donut"),{type:"doughnut",data:{labels:st.map(s=>s[0]),datasets:[{data:st.map(s=>s[1]),backgroundColor:st.map(s=>s[2])}]},options:{cutout:"70%",animation:false,plugins:{legend:{display:false}}}});
+  document.getElementById("legend").innerHTML=st.map(s=>`<div><span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${s[2]};margin-right:6px"></i>${s[0]}</span><b>${hm(s[1])}</b></div>`).join("");}
+
+let workout=-1;
+function subtabs(){const box=document.getElementById("subtabs");box.hidden=!(tab==="strain"&&range===1);if(box.hidden)return;
+  sess=sessionsOn(day);if(workout>=sess.length)workout=-1;
+  box.innerHTML=`<button data-w="-1" class="${workout<0?"on":""}">Day</button>`+sess.map((s,i)=>`<button data-w="${i}" class="${workout===i?"on":""}">${s.type} ${s.strain==null?"":(+s.strain).toFixed(1)}</button>`).join("");}
+
+// Workout vs the same kind of workout over the previous 7 days (average), or "—" when there is none.
+function workoutView(s){const prior=[];for(let i=1;i<=7;i++)sessionsOn(shift(day,-i)).forEach(x=>{if(x.type===s.type)prior.push(x);});
+  const avg=k=>{const a=prior.map(x=>x[k]).filter(v=>typeof v==="number");return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;};
+  document.getElementById("st-title").textContent=`${s.type} Statistics`;
+  document.getElementById("st-vs").innerHTML=`<b>${clock(s.start)}${s.end?"–"+clock(s.end):""}</b> vs ${prior.length?`your ${prior.length} ${s.type} workout${prior.length>1?"s":""} in the week before (average)`:"no other "+s.type+" workout in the week before"}`;
+  statsGrid([["Strain",s.strain,avg("strain"),1,0],["Duration",s.duration_min,avg("duration_min"),0,0,"h"],["Max HR",s.max_hr,avg("max_hr"),0,0],["Avg HR",s.avg_hr,avg("avg_hr"),0,0],["Calories",s.calories,avg("calories"),0,0]]);
+  document.getElementById("ch-title").textContent=`${s.type} heart rate`;
+  document.getElementById("ch-vs").textContent=s.hr.length?`${nice(day)}, ${clock(s.start)}`:"No heart-rate trace was stored for this workout";
+  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:s.hr.map(p=>clock(p.t)),datasets:[{label:"Heart rate",data:s.hr.map(p=>p.v),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.12)",fill:"origin",pointRadius:0,borderWidth:1.4}]},options:lineOpts({})});
+  const z=document.getElementById("zones"),tot=s.zones.reduce((a,b)=>a+(+b||0),0);z.hidden=!tot;
+  if(tot){const first=s.zones.length===6?0:1,mx=Math.max(...s.zones);
+    z.innerHTML=`<h3 style="font-size:14px;margin:0 0 6px">Heart-rate zones</h3>`+s.zones.map((m,i)=>`<div><span>Zone ${i+first}</span><i style="width:${mx?(m/mx*100):0}%;opacity:${.35+.13*i}"></i><b>${Math.round(m)} min · ${Math.round(m/tot*100)}%</b></div>`).join("");}}
+
+function strip(){const k=tab==="strain"?"strain":tab==="sleep"?"sleep_perf":"readiness",mx=k==="strain"?21:100;
+  document.querySelector(".scrubhead").textContent=`${k==="strain"?"Strain":k==="sleep_perf"?"Sleep performance":"Recovery"} by day, last 60 days · click a day to open it`;
+  const today=iso(new Date()),days=[];for(let i=59;i>=0;i--)days.push(shift(today,-i));
+  const box=document.getElementById("strip");
+  box.innerHTML=days.map(d=>{const v=get(k,d),h=v==null?4:Math.max(6,v/mx*100);
+    const c=v==null?css("--bar2"):k==="readiness"?recColor(v):k==="strain"?css("--strain"):css("--sleep");
+    return `<button data-d="${d}" class="${d===day?"sel":""}" style="height:${h}%;background:${c}" title="${nice(d)}: ${v==null?"—":k==="strain"?(+v).toFixed(1):Math.round(v)+"%"}" aria-label="${nice(d)}"></button>`;}).join("");
+  box.querySelector(".sel")?.scrollIntoView({block:"nearest",inline:"nearest"});}
+
+function render(){const t=TABS[tab],prev=shift(day,-1);header();subtabs();strip();
+  chart?.destroy();chart=null;document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
+  Chart.defaults.font.family=css("--num");Chart.defaults.color=css("--ink2");
+  const dw=document.getElementById("donutwrap");dw.hidden=!(t.donut&&range===1);
+  if(tab==="strain"&&range===1&&workout>=0&&sess[workout])return workoutView(sess[workout]);
+  const prevLbl=range===1?nice(prev):`previous ${range} days`;
+  document.getElementById("st-title").textContent=`${range===1?"Day":"Period"} Statistics`;
+  document.getElementById("st-vs").innerHTML=`<b>${range===1?nice(day):`last ${range} days`}</b> vs ${prevLbl}`;
+  const win=(k,end,n)=>{const a=[];for(let i=0;i<n;i++){const v=val(k,shift(end,-i));if(v!=null)a.push(v);}return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;};
+  statsGrid(t.stats.map(([l,k,dp,better,u])=>[l,win(k,day,range),win(k,shift(day,-range),range),dp,better,u]));
+  const ctx=document.getElementById("chart");
+  if(range===1&&tab==="overview")overviewDay();
+  else if(range===1&&tab==="sleep")sleepDay();
+  else if(range===1){document.getElementById("ch-title").textContent=`Day ${t.title}`;document.getElementById("ch-vs").innerHTML=`<b>${nice(day)}</b> vs ${nice(prev)}`;
+    chart=new Chart(ctx,{type:"bar",data:{labels:t.bars.map(b=>b[0]),datasets:[
+      {label:nice(day),data:t.bars.map(([,k])=>get(k,day)),backgroundColor:css("--bar"),maxBarThickness:24},
+      {label:nice(prev),data:t.bars.map(([,k])=>get(k,prev)),backgroundColor:css("--bar2"),maxBarThickness:24}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{position:"bottom"}},scales:{y:{beginAtZero:true,grid:{color:css("--line")}},x:{grid:{display:false}}}}});
+  }else{const [k,label,mm]=t.trend,ds=[];for(let i=range-1;i>=0;i--)ds.push(shift(day,-i));
+    document.getElementById("ch-title").textContent=`${t.title} trend`;document.getElementById("ch-vs").textContent=`${label}, last ${range} days ending ${nice(day)} (gaps are days with no value) · click a bar to open that day`;
+    const v=ds.map(d=>{const x=get(k,d);return x==null?null:k==="tst_min"?+(x/60).toFixed(2):x;});
+    const col=k==="readiness"?v.map(x=>x==null?null:recColor(x)):css(k==="strain"?"--strain":"--bar");
+    chart=new Chart(ctx,{type:range>30?"line":"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[{label,data:v,backgroundColor:col,borderColor:css("--bar"),pointRadius:range>30?0:3,spanGaps:false}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,onClick:(e,el)=>{if(el[0]){day=ds[el[0].index];setRange(1);}},
+        plugins:{legend:{display:false}},scales:{y:mm?{min:mm[0],max:mm[1]}:{beginAtZero:true},x:{grid:{display:false}}}}});}
+}
+function setRange(r){range=r;document.querySelectorAll("#ranges button").forEach(b=>b.classList.toggle("on",+b.dataset.r===r));render();}
+function goDay(d){if(!d||d>iso(new Date()))return;day=d;workout=-1;render();}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;workout=-1;render();}));
+document.getElementById("ranges").addEventListener("click",e=>{const r=e.target.dataset.r;if(r)setRange(+r);});
+document.getElementById("subtabs").addEventListener("click",e=>{const w=e.target.closest("button")?.dataset.w;if(w!=null){workout=+w;render();}});
+document.getElementById("strip").addEventListener("click",e=>goDay(e.target.closest("button")?.dataset.d));
+document.getElementById("cal").addEventListener("change",e=>goDay(e.target.value));
+document.getElementById("prev").addEventListener("click",()=>goDay(shift(day,-1)));
+document.getElementById("next").addEventListener("click",()=>goDay(shift(day,1)));
+document.addEventListener("keydown",e=>{if(e.target.matches("input"))return;if(e.key==="ArrowLeft")goDay(shift(day,-1));if(e.key==="ArrowRight")goDay(shift(day,1));});
+window.addEventListener("resize",()=>{if(range===1&&tab==="overview")render();});
+async function load(blob,label){
+  status("Reading…");const r=await readBackup(blob,document.getElementById("pass").value);data=r.d;
+  if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
+  const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=dates.at(-1)||iso(new Date());
+  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;workout=-1;
+  document.getElementById("source").hidden=true;status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);render();}
+document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const f=document.getElementById("file").files[0];
+  if(!f){status("Choose your Koop backup file first.");return;}
+  try{await load(f,f.name);}catch(err){status(err.message||String(err));}});
+
+// ---------- Koop Cloud: Google sign-in, then the same file the phones upload ----------
+// Same Google project as the app (KOOP), same drive.file permission: it can see only the
+// files Koop itself created, i.e. Drive > Koop > koop-cloud.kbak. The token lives in memory
+// for this tab only and is never stored.
+const GOOGLE_WEB_CLIENT="423346785849-ivk1sk3f16akkejcpb3is6h8qj67mtq7.apps.googleusercontent.com";
+const DRIVE="https://www.googleapis.com/drive/v3/files";
+let token=null,tokenClient=null;
+function askToken(){return new Promise((ok,fail)=>{
+  if(!window.google?.accounts?.oauth2){fail(new Error("Google sign-in did not load. Check your connection and reload the page."));return;}
+  tokenClient??=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_WEB_CLIENT,scope:"https://www.googleapis.com/auth/drive.file",callback:()=>{}});
+  tokenClient.callback=r=>r.error?fail(new Error(r.error==="access_denied"?"Google sign-in was cancelled.":"Google sign-in failed: "+r.error)):ok(r.access_token);
+  tokenClient.error_callback=e=>fail(new Error(e.type==="popup_closed"?"Google sign-in was closed.":e.type==="popup_failed_to_open"?"Allow pop-ups for this page, then try again.":"Google sign-in failed."));
+  tokenClient.requestAccessToken({prompt:token?"":"select_account"});});}
+async function drive(url,asBlob){let r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+  if(r.status===401){token=await askToken();r=await fetch(url,{headers:{Authorization:"Bearer "+token}});}
+  if(!r.ok)throw new Error(`Google Drive answered ${r.status}.`);return asBlob?r.blob():r.json();}
+document.getElementById("gsign").addEventListener("click",async()=>{
+  if(location.protocol==="file:"){status("Google sign-in works on the hosted dashboard page, not on a file opened from disk. Use 'a backup file' here instead.");return;}
+  const pass=document.getElementById("pass");
+  if(!pass.value){status("Type your Koop Cloud passphrase first (the one set in the app under Koop Cloud), then sign in.");pass.focus();return;}
+  try{if(!token){status("Signing in with Google…");token=await askToken();}
+    status("Looking for your Koop Cloud copy…");
+    const q=encodeURIComponent("name = 'koop-cloud.kbak' and trashed = false");
+    const list=await drive(`${DRIVE}?q=${q}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=1&fields=files(id,modifiedTime,size)`);
+    const f=list.files?.[0];
+    if(!f){status("No Koop Cloud copy found in this Google account. On the phone with the band, open Koop Cloud and tap Sync now, then try again.");return;}
+    status("Downloading your Koop Cloud copy…");
+    const blob=await drive(`${DRIVE}/${f.id}?alt=media`,true);
+    await load(blob,`Koop Cloud copy saved ${new Date(f.modifiedTime).toLocaleString()}`);
+    document.getElementById("gsign").textContent="Reload from Drive";}
+  catch(err){status(err.message||String(err));}});
+data=example();day=iso(new Date());render();
+</script>
+</body>
+</html>
