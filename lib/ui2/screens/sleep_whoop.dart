@@ -362,7 +362,21 @@ class SleepStressCard extends StatelessWidget {
         Text('of the night at high stress',
             style: F.cap.copyWith(color: p.ink3)),
         const SizedBox(height: S.x3),
-        StressLine(readings: readings, sleep: sleep, work: const [], day: day),
+        StressLine(
+          readings: readings,
+          sleep: sleep,
+          work: const [],
+          day: day,
+          // The night only, an hour either side of the sleep.
+          from: sleep.isEmpty
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(
+                  (sleep.map((s) => s.from).reduce(math.min) - 3600) * 1000),
+          to: sleep.isEmpty
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(
+                  (sleep.map((s) => s.to).reduce(math.max) + 3600) * 1000),
+        ),
         row('HIGH', split[2], p.on(kStressLevelColors[2])),
         row('MEDIUM', split[1], p.on(kStressLevelColors[1])),
         row('LOW', split[0], p.on(kStressLevelColors[0])),

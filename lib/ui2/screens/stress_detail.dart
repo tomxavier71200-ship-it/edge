@@ -105,12 +105,36 @@ class StressLine extends StatelessWidget {
   final List<StressReading> readings;
   final List<Span> sleep, work;
   final DateTime day;
+
+  /// An optional window narrower than the day — the sleep screen draws the
+  /// night only. Null draws midnight to midnight.
+  final DateTime? from, to;
   const StressLine(
       {super.key,
       required this.readings,
       required this.sleep,
       required this.work,
-      required this.day});
+      required this.day,
+      this.from,
+      this.to});
+
+  /// Five evenly spaced clock labels over the drawn window.
+  List<String> _labels() {
+    final a = from, b = to;
+    if (a == null || b == null) {
+      return const ['00:00', '06:00', '12:00', '18:00', '24:00'];
+    }
+    final span = b.difference(a).inSeconds;
+    return [
+      for (var i = 0; i <= 4; i++)
+        () {
+          final t = DateTime.fromMillisecondsSinceEpoch(
+              a.millisecondsSinceEpoch + span * 1000 * i ~/ 4);
+          return '${t.hour.toString().padLeft(2, '0')}:'
+              '${t.minute.toString().padLeft(2, '0')}';
+        }(),
+    ];
+  }
 
   @override
   Widget build(BuildContext c) {
@@ -122,7 +146,7 @@ class StressLine extends StatelessWidget {
           height: 150,
           child: CustomPaint(
             size: Size.infinite,
-            painter: _LinePainter(readings, sleep, work, day, p),
+            painter: _LinePainter(readings, sleep, work, day, p, from, to),
           ),
         ),
         const SizedBox(height: S.x2),
@@ -131,8 +155,7 @@ class StressLine extends StatelessWidget {
           // Each label owns a fifth of the width and shrinks inside it at
           // large text, rather than the row running off the card.
           child: Row(children: [
-            for (final (i, t) in const ['00:00', '06:00', '12:00', '18:00', '24:00']
-                .indexed)
+            for (final (i, t) in _labels().indexed)
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
@@ -156,14 +179,16 @@ class _LinePainter extends CustomPainter {
   final List<Span> sleep, work;
   final DateTime day;
   final P p;
-  _LinePainter(this.r, this.sleep, this.work, this.day, this.p);
+  final DateTime? from, to;
+  _LinePainter(this.r, this.sleep, this.work, this.day, this.p,
+      [this.from, this.to]);
 
   @override
   void paint(Canvas cv, Size s) {
     const left = 26.0, top = 14.0;
     final w = s.width - left, h = s.height - top;
-    final start = DateTime(day.year, day.month, day.day);
-    final end = DateTime(day.year, day.month, day.day + 1);
+    final start = from ?? DateTime(day.year, day.month, day.day);
+    final end = to ?? DateTime(day.year, day.month, day.day + 1);
     final spanSec = end.difference(start).inSeconds.toDouble();
     double x(int sec) =>
         left + w * ((sec - start.millisecondsSinceEpoch ~/ 1000) / spanSec).clamp(0.0, 1.0);
