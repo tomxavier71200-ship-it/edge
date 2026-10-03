@@ -171,6 +171,84 @@ class RangeRow extends StatelessWidget {
   }
 }
 
+/// One vital as a WHOOP-style tile: icon and name in spaced capitals, a
+/// large value, and a chip saying where it sits against the reader's usual
+/// range ("within 12.5–12.8", "above 51–57").
+class RangeTile extends StatelessWidget {
+  final IconData icon;
+  final String name, unit;
+  final double value;
+  final NormalRange range;
+  final String Function(double) fmt;
+  final VoidCallback? onTap;
+
+  const RangeTile({
+    super.key,
+    required this.icon,
+    required this.name,
+    required this.value,
+    required this.unit,
+    required this.range,
+    required this.fmt,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final inside = range.contains(value);
+    final word = inside ? 'within' : (value > range.hi ? 'above' : 'below');
+    final col = inside ? p.on(C.green) : p.on(C.orange);
+    return Surface(
+      onTap: onTap,
+      semanticLabel: '$name, ${fmt(value)} $unit, $word your usual '
+          '${fmt(range.lo)} to ${fmt(range.hi)}',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, size: 18, color: p.ink3),
+          const SizedBox(width: S.x2),
+          Expanded(
+            child: Text(name.toUpperCase(),
+                maxLines: 2,
+                style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4)),
+          ),
+        ]),
+        const SizedBox(height: S.x3),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(fmt(value), style: F.n48.copyWith(color: p.ink)),
+              if (unit.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Text(unit, style: F.body.copyWith(color: p.ink2)),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: S.x3),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: S.x1),
+          decoration: BoxDecoration(color: col.withValues(alpha: .16), borderRadius: R.rSm),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(inside ? LucideIcons.check : LucideIcons.triangleAlert,
+                size: 13, color: col),
+            const SizedBox(width: S.x1),
+            Flexible(
+              child: Text('$word ${fmt(range.lo)}–${fmt(range.hi)}',
+                  maxLines: 2,
+                  style: F.cap.copyWith(color: col, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
 /// A track, the usual band shaded on it, and a dot for the value. The scale
 /// is the band widened to three times its width, and further if the value
 /// sits outside that, so the band always has room on both sides and the dot

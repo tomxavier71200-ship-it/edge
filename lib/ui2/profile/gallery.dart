@@ -942,6 +942,31 @@ Map<String, Widget> extraCases() => {
         Expanded(child: ScreenTitle('Recovery', info: kInfoRecovery)),
         InfoButton('Strain', kInfoStrain),
       ]),
+      'range_tiles': IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(
+            child: RangeTile(
+              icon: LucideIcons.wind,
+              name: 'Respiratory rate',
+              value: 12.8,
+              unit: 'rpm',
+              range: const NormalRange(12.5, 12.8, 21),
+              fmt: (x) => x.toStringAsFixed(1),
+            ),
+          ),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: RangeTile(
+              icon: LucideIcons.heart,
+              name: 'Resting heart rate',
+              value: 61,
+              unit: 'bpm',
+              range: const NormalRange(51, 57, 21),
+              fmt: (x) => x.round().toString(),
+            ),
+          ),
+        ]),
+      ),
       // One inside its usual range, one above it.
       'range_rows': Column(children: [
         const RangeBanner(inside: 1, total: 2, when: 'Last night'),

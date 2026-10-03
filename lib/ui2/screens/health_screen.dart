@@ -884,6 +884,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     final rows = <Widget>[];
     final gaps = <Widget>[];
     var ranged = 0, inRange = 0;
+    final tiles = <Widget>[];
 
     // ALL FIVE ROWS ARE READ FROM THE NIGHT, so all five take the same
     // measured gap. `overnight: false` is for a row that is not — a hole at
@@ -916,11 +917,10 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
       if (nr.range != null && v != null) {
         ranged++;
         if (nr.range!.contains(v.toDouble())) inRange++;
-        rows.add(RangeRow(
+        // A WHOOP-style tile once there is a range to stand it against.
+        tiles.add(RangeTile(
             icon: icon,
-            color: col,
             name: name,
-            sub: sub,
             value: v.toDouble(),
             unit: unit,
             range: nr.range!,
@@ -1106,6 +1106,18 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
             when: night == null
                 ? (l?.healthSubLastNight ?? 'Last night')
                 : prettyDay(night)),
+        const SizedBox(height: S.x3),
+      ],
+      // Two tiles to a row, WHOOP's Health Monitor grid.
+      for (var i = 0; i < tiles.length; i += 2) ...[
+        IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: tiles[i]),
+            const SizedBox(width: S.x3),
+            Expanded(
+                child: i + 1 < tiles.length ? tiles[i + 1] : const SizedBox()),
+          ]),
+        ),
         const SizedBox(height: S.x3),
       ],
       if (rows.isNotEmpty)
