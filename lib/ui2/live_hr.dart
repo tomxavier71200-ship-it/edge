@@ -160,89 +160,65 @@ class LiveHrCard extends StatelessWidget {
               );
             }),
         ]),
-        const SizedBox(height: S.x4),
-        // The number and the zone it sits in, on one line — the way a watch
-        // face reads: big figure left, the zone as a coloured chip right.
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Expanded(
-            // At 3.1x text the numeral scales down inside the width rather
-            // than overflowing it.
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text('$hr', style: F.hero.copyWith(color: p.ink)),
-                  const SizedBox(width: S.x2),
-                  Text('BPM', style: F.over.copyWith(color: p.ink3)),
-                ],
-              ),
-            ),
+        const SizedBox(height: S.x5),
+        // WHOOP-quiet: one centred number, its unit, the zone in its colour.
+        // At 3.1x text the numeral scales down inside the width.
+        Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('$hr', style: F.hero.copyWith(color: p.ink)),
           ),
-          const SizedBox(width: S.x2),
-          Flexible(
-            child: Container(
-              alignment: Alignment.bottomRight,
-              padding: const EdgeInsets.only(bottom: S.x2),
-              child: zone == null
-                  ? Text(
-                      _preview || c.read<AppState>().hasLiveZones
-                          ? 'Below zone 1'
-                          : 'Zones need your age in Profile',
-                      textAlign: TextAlign.right,
-                      style: F.cap.copyWith(color: p.ink3))
-                  : Pill('ZONE $zone · ${_zoneNames[zone - 1]}',
-                      ZoneBar.pigment[zone - 1]),
-            ),
+        ),
+        const SizedBox(height: S.x1),
+        Center(
+          child: Text('BPM',
+              style: F.over.copyWith(color: p.ink3, letterSpacing: 2)),
+        ),
+        const SizedBox(height: S.x3),
+        Center(
+          child: Text(
+            zone == null
+                ? (_preview || c.read<AppState>().hasLiveZones
+                    ? 'Below zone 1'
+                    : 'Zones need your age in Profile')
+                : 'ZONE $zone  ·  ${_zoneNames[zone - 1].toUpperCase()}',
+            textAlign: TextAlign.center,
+            style: F.over.copyWith(
+                color: zone == null ? p.ink3 : zc,
+                letterSpacing: 1.6,
+                fontWeight: FontWeight.w700),
           ),
-        ]),
+        ),
         const SizedBox(height: S.x4),
-        // The zone scale, Z1…Z5, the current one lit. With no table (no age,
-        // unstamped band) it stays grey rather than banding against a
-        // stranger's maximum.
+        // The zone scale: five hairlines, the current one lit. With no table
+        // (no age, unstamped band) it stays grey rather than banding against
+        // a stranger's maximum.
         Row(children: [
           for (var i = 0; i < 5; i++) ...[
-            if (i > 0) const SizedBox(width: 3),
+            if (i > 0) const SizedBox(width: S.x1),
             Expanded(
-              child: Column(children: [
-                AnimatedContainer(
-                  duration: motion(c, Motion.base),
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: zone == i + 1
-                        ? zc
-                        : (zone != null && i + 1 < zone
-                            ? zc.withValues(alpha: .25)
-                            : p.track),
-                    borderRadius: R.rPill,
-                  ),
+              child: AnimatedContainer(
+                duration: motion(c, Motion.base),
+                height: 3,
+                decoration: BoxDecoration(
+                  color: zone == i + 1 ? zc : p.track,
+                  borderRadius: R.rPill,
                 ),
-                const SizedBox(height: S.x1),
-                Text('Z${i + 1}',
-                    style: F.over.copyWith(
-                        color: zone == i + 1 ? zc : p.ink3)),
-              ]),
+              ),
             ),
           ],
         ]),
         if (trace.length > 2) ...[
           const SizedBox(height: S.x5),
-          // A real scale, not a free-floating squiggle: the frame labels the
-          // bpm gridlines the line is drawn against.
-          ChartFrame(
-            title: 'Last ${trace.length} readings',
-            unit: 'bpm',
-            height: 110,
-            yAxis: _axisOf(trace),
-            series: [for (final v in trace) v.toDouble()],
-            xLabels: const ['Earlier', 'Now'],
+          // A sparkline: no grid, no fill. It auto-scales, which is right for
+          // a sparkline — the numbers under it carry the scale.
+          SizedBox(
+            height: 64,
             child: CustomPaint(
               painter: LineChart(
                 [for (final v in trace) v.toDouble()],
                 zone == null ? p.on(C.red) : zc,
-                axis: _axisOf(trace),
+                fill: false,
                 dots: true,
                 dotInk: p.card,
               ),
@@ -257,23 +233,17 @@ class LiveHrCard extends StatelessWidget {
                 '${(trace.reduce((a, b) => a + b) / trace.length).round()}'),
             _stat(p, 'MAX', '${trace.reduce(math.max)}'),
           ]),
-          const SizedBox(height: S.x3),
-          Text('Live from the band. Not stored.',
-              style: F.cap.copyWith(color: p.ink3)),
         ],
       ]),
     );
   }
 
-  static AxisSpec? _axisOf(List<int> t) =>
-      AxisSpec.of([for (final v in t) v.toDouble()], ticks: 3);
-
   Widget _stat(P p, String label, String v) => Expanded(
         child: Column(children: [
+          Text(v, style: F.n17.copyWith(color: p.ink)),
+          const SizedBox(height: S.x1),
           Text(label,
               style: F.over.copyWith(color: p.ink3, letterSpacing: 1.4)),
-          const SizedBox(height: S.x1),
-          Text(v, style: F.n24.copyWith(color: p.ink)),
         ]),
       );
 
