@@ -78,16 +78,15 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
         val dial: Int,
         val cap: Int,
         val value: Int,
-        val sub: Int,
     )
 
     private val slots = listOf(
         Slot("recovery", "RECOVERY", R.drawable.ic_widget_recovery,
-            R.id.dial_recovery, R.id.cap_recovery, R.id.val_recovery, R.id.sub_recovery),
+            R.id.dial_recovery, R.id.cap_recovery, R.id.val_recovery),
         Slot("strain", "STRAIN", R.drawable.ic_widget_strain,
-            R.id.dial_strain, R.id.cap_strain, R.id.val_strain, R.id.sub_strain),
+            R.id.dial_strain, R.id.cap_strain, R.id.val_strain),
         Slot("sleep", "SLEEP", R.drawable.ic_widget_sleep,
-            R.id.dial_sleep, R.id.cap_sleep, R.id.val_sleep, R.id.sub_sleep),
+            R.id.dial_sleep, R.id.cap_sleep, R.id.val_sleep),
     )
 
     private fun build(context: Context, prefs: SharedPreferences, small: Boolean): RemoteViews {
@@ -101,7 +100,7 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
         if (!w.fresh(prefs)) return buildNoData(context, pal)
 
         val layout = if (small) R.layout.widget_openstrap_small else R.layout.widget_openstrap
-        val dialDp = if (small) 30 else 44
+        val dialDp = if (small) 30 else 68
         val strokeDp = if (small) 4.5f else 6f
         val views = RemoteViews(context.packageName, layout)
         views.setInt(R.id.widget_root, "setBackgroundResource", pal.bgRes)
@@ -110,7 +109,6 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
         // Recovery wears its band's colour (from the published tier — the
         // cut-offs are never re-derived here), the other two their domain accent.
         val tier = w.readInt(prefs, "readiness_tier", -1)
-        var gap: Pair<String, String>? = null
 
         for (slot in slots) {
             val r = w.ring(prefs, slot.key)
@@ -122,35 +120,44 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
             val tint = r.color(accent, pal)
             views.setImageViewBitmap(
                 slot.dial,
-                w.dialBitmap(context, dialDp, strokeDp, pal.track, tint, r.frac, slot.iconRes),
+                // Wide face: WHOOP-style plain dial, the number inside it.
+                // Small face: the icon in the dial, the number under it.
+                if (small) w.dialBitmap(context, dialDp, strokeDp, pal.track, tint, r.frac, slot.iconRes)
+                else w.ringBitmap(context, dialDp, strokeDp, pal.track, tint, r.frac),
             )
             views.setTextViewText(slot.cap, slot.label)
-            views.setTextColor(slot.cap, pal.inkMuted)
+            views.setTextColor(slot.cap, if (small) pal.inkMuted else pal.ink)
             // The absence takes the SENTENCE colour rather than the numeral
             // one, because it is a sentence: "No sleep" in full-weight ink
-            // would read as a score.
-            views.setTextViewText(slot.value, r.value)
+            // would read as a score. Inside a dial there is room for a number
+            // or a dash, never a sentence.
+            val shown = if (!small && !r.measured) "—" else r.value
+            views.setTextViewText(slot.value, shown)
             views.setTextColor(slot.value, if (r.measured) pal.ink else pal.ink2)
-            if (!small) {
-                views.setTextViewText(slot.sub, r.sub)
-                views.setTextColor(slot.sub, pal.inkMuted)
-            }
-            if (gap == null && r.why.isNotEmpty()) gap = slot.label to r.why
         }
 
-        // The first ring that is missing and said why. One line is what a
-        // widget can afford; the rest is one tap away in the app.
-        if (!small) {
-            val g = gap
-            if (g == null) {
-                views.setViewVisibility(R.id.gap_row, View.GONE)
-            } else {
-                views.setViewVisibility(R.id.gap_row, View.VISIBLE)
-                views.setTextViewText(R.id.gap_row, "${g.first} · ${g.second}")
-                views.setTextColor(R.id.gap_row, pal.inkMuted)
-            }
-        }
+        if (!small) header(views, prefs, pal)
         return views
+    }
+
+    /**
+     * The wide face's top line: the recovery streak (only from 2 days, the
+     * same rule as Home's chip), the name, and the band's battery (red at 20%
+     * or less, absent when the band has never reported one).
+     */
+    private fun header(views: RemoteViews, prefs: SharedPreferences, pal: StrapWidgets.Pal) {
+        val w = StrapWidgets
+        val streak = w.readInt(prefs, "streak", -1)
+        views.setTextViewText(R.id.hdr_streak, if (streak >= 2) "🔥 $streak" else "")
+        views.setTextColor(R.id.hdr_streak, pal.ink)
+        views.setTextColor(R.id.hdr_brand, pal.inkMuted)
+        val pct = w.readInt(prefs, "batt_pct", -1)
+        val charging = prefs.getBoolean("batt_charging", false)
+        views.setTextViewText(
+            R.id.hdr_battery,
+            if (pct < 0) "" else (if (charging) "⚡ " else "") + "$pct%",
+        )
+        views.setTextColor(R.id.hdr_battery, if (pct in 0..20 && !charging) pal.bad else pal.ink2)
     }
 
     private fun buildNoData(context: Context, pal: StrapWidgets.Pal): RemoteViews {

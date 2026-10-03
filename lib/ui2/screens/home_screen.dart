@@ -39,6 +39,7 @@ import '../../ai/briefing.dart'
         BriefingStore,
         currentBriefingPeriod,
         resolveBriefingToShow;
+import '../../widget/widget_service.dart';
 import '../../data/day_label.dart' show todayLabel, calendarDaysBetween, dayLabelOf;
 import '../../data/db.dart' show DbRebuild;
 import '../../data/journal_fields.dart' show formatMinuteOfDay;
@@ -2363,6 +2364,11 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     // Above the greeting, not below it: if the app had to rebuild the database
     // to start, that outranks anything else this screen has to say today.
     final rebuilt = dbRebuiltCard(dbRebuildOf(c), l);
+    // The home widget's streak follows Home's (written only on a change).
+    if (isToday && widget.data == null) {
+      unawaited(WidgetService.pushStreak(
+          recoveryStreak(d.series['readiness'] ?? const [], DateTime.now())));
+    }
 
     final list = _refreshable(
       ListView(

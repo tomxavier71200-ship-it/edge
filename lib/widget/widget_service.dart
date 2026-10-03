@@ -436,6 +436,19 @@ class WidgetService {
     }
   }
 
+  /// The recovery streak for the home widget's header (Home's rule: shown from
+  /// 2 days). Written only when it changed, since Home rebuilds often.
+  static int? _lastStreak;
+  static Future<void> pushStreak(int days) async {
+    if (_lastStreak == days) return;
+    _lastStreak = days;
+    try {
+      await init();
+      await HomeWidget.saveWidgetData<int>('streak', days);
+      await HomeWidget.updateWidget(iOSName: _iOSName, androidName: _androidName);
+    } catch (_) {/* widgets unavailable / not configured yet — ignore */}
+  }
+
   /// Push the band's battery snapshot for the lock-screen Band Battery widget.
   /// Battery is a live BLE value (not in /today), so that widget never refreshes
   /// over the network — it renders whatever we last wrote here. Call from the
