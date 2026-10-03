@@ -136,7 +136,7 @@ function example(){const d={};KEYS.concat(["inbed_min"]).forEach(k=>d[k]=new Map
     d.active_min.set(s,Math.round(40+20*w));d.awakenings.set(s,Math.round(9+3*Math.cos(i)));d.sol_min.set(s,Math.round(8+4*w));d.inbed_min.set(s,Math.round((330+45*w)/((90+3*w)/100)));}
   sri=78;sriDay=iso(now);return d;}
 function exampleDay(d){const [b]=dayBounds(d),pts=[];
-  for(let m=0;m<1440;m+=5){const asleep=m<420,run=m>=1080&&m<1125;pts.push({t:b+m*60,v:Math.round(run?150+12*Math.sin(m/4):(asleep?55:78)+6*Math.sin(m/37))});}
+  for(let m=0;m<1440;m++){const asleep=m<420,run=m>=1080&&m<1125;pts.push({t:b+m*60,v:Math.round(run?150+12*Math.sin(m/4):(asleep?55:78)+6*Math.sin(m/37))});}
   return {pts,on:b+15*60,off:b+420*60};}
 function exampleSessions(d){const [b]=dayBounds(d),hr=[];for(let s=0;s<2700;s+=10)hr.push({t:b+1080*60+s,v:Math.round(140+15*Math.sin(s/300)+(s>1500&&s<2100?18:0))});
   return [{id:"ex",type:"Running",start:b+1080*60,end:b+1125*60,strain:11.4,max_hr:174,avg_hr:148,calories:512,duration_min:45,zones:[2,6,14,15,7,1],hr}];}
@@ -218,7 +218,8 @@ const TABS={
 const val=(k,d)=>k==="sri"?(d===sriDay&&sri!=null?sri:null):get(k,d);
 function fmt(k,v,dp,u){if(v==null)return "—";if(u==="h")return hm(v);if(u==="m")return Math.round(v)+" min";return (+v).toFixed(dp)+(u==="%"?"%":"");}
 const recColor=x=>x>=67?css("--up"):x>=34?css("--recovery"):css("--down");
-const lineOpts=y=>({responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:css("--line")},title:{display:true,text:"bpm"},...y},x:{ticks:{maxTicksLimit:12,autoSkip:true},grid:{display:false}}}});
+const lineOpts=y=>({responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:"index",intersect:false},
+  plugins:{legend:{display:false},tooltip:{displayColors:false,filter:i=>i.raw!=null,callbacks:{title:i=>i[0]?.label??"",label:i=>`${i.dataset.label?i.dataset.label+": ":""}${i.raw} bpm`}}},scales:{y:{grid:{color:css("--line")},title:{display:true,text:"bpm"},...y},x:{ticks:{maxTicksLimit:12,autoSkip:true},grid:{display:false}}}});
 
 function statsGrid(rows,cur,was){document.getElementById("st").innerHTML=rows.map(([l,now,before,dp,better,u])=>{
   let arr="";if(now!=null&&before!=null&&Math.abs(now-before)>1e-9){const up=now>before,good=better===0?null:(up===(better>0));
@@ -233,6 +234,8 @@ function bubbles(items,pts){const box=document.getElementById("bubbles");box.inn
     el.innerHTML=`<b style="background:${it.c}">${it.text}</b><div style="color:${css("--ink3")};font-weight:500">${it.sub}</div>`;
     if(it.go){el.style.cursor="pointer";el.addEventListener("click",it.go);}box.appendChild(el);});}
 
+Chart.register({id:"crosshair",afterDatasetsDraw(c){const a=c.tooltip?.getActiveElements?.();if(c.config.type!=="line"||!a?.length)return;
+  const x=a[0].element.x,{top,bottom}=c.chartArea,g=c.ctx;g.save();g.strokeStyle=css("--ink3");g.lineWidth=1;g.beginPath();g.moveTo(x,top);g.lineTo(x,bottom);g.stroke();g.restore();}});
 function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));document.getElementById("ch-title").textContent=title;
   document.getElementById("ch-vs").textContent=pts.length?vs:`${nice(day)} · no heart-rate curve stored for this day`;
   const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off;
@@ -270,7 +273,7 @@ function workoutView(s){const prior=[];for(let i=1;i<=7;i++)sessionsOn(shift(day
   statsGrid([["Strain",s.strain,avg("strain"),1,0],["Duration",s.duration_min,avg("duration_min"),0,0,"h"],["Max HR",s.max_hr,avg("max_hr"),0,0],["Avg HR",s.avg_hr,avg("avg_hr"),0,0],["Calories",s.calories,avg("calories"),0,0]]);
   document.getElementById("ch-title").textContent=`${s.type} heart rate`;
   document.getElementById("ch-vs").textContent=s.hr.length?`${nice(day)}, ${clock(s.start)}`:"No heart-rate trace was stored for this workout";
-  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:s.hr.map(p=>clock(p.t)),datasets:[{data:s.hr.map(p=>p.v),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.12)",fill:"origin",pointRadius:0,borderWidth:1.4}]},options:lineOpts({})});
+  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:s.hr.map(p=>clock(p.t)),datasets:[{label:"Heart rate",data:s.hr.map(p=>p.v),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.12)",fill:"origin",pointRadius:0,borderWidth:1.4}]},options:lineOpts({})});
   const z=document.getElementById("zones"),tot=s.zones.reduce((a,b)=>a+(+b||0),0);z.hidden=!tot;
   if(tot){const first=s.zones.length===6?0:1,mx=Math.max(...s.zones);
     z.innerHTML=`<h3 style="font-size:14px;margin:0 0 6px">Heart-rate zones</h3>`+s.zones.map((m,i)=>`<div><span>Zone ${i+first}</span><i style="width:${mx?(m/mx*100):0}%;opacity:${.35+.13*i}"></i><b>${Math.round(m)} min · ${Math.round(m/tot*100)}%</b></div>`).join("");}}
