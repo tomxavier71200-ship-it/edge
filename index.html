@@ -10,7 +10,7 @@
 /* Layout (WHOOP web style): dark header with the three scores as tabs, a light page below with
    a date switcher, statistics on the left and a chart in the middle, range buttons top right. */
 :root{
-  --head:#1b2026; --head2:#262c33; --page:#f6f7f8; --card:#ffffff; --line:#e3e6e9;
+  --head:#1b2026; --head2:#262c33; --page:#ffffff; --card:#ffffff; --line:#e3e6e9;
   --ink:#1b2026; --ink2:#55606b; --ink3:#9aa3ad; --onhead:#f2f4f6;
   --recovery:#f5d000; --strain:#0093e7; --sleep:#7ba1bb; --up:#16b45d; --down:#e5262e; --today:#e5262e;
   --bar:#5a7383; --bar2:#c9cdd1;
@@ -40,7 +40,7 @@ body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--displ
 .sleepperf .big{font:600 44px var(--num)}
 .sleepperf .pair{display:flex;gap:28px;justify-content:center}
 .sleepperf .pair div{font:600 26px var(--num)} .sleepperf .pair span{display:block;font:12px var(--display);color:#c7ced6}
-.bar{max-width:1100px;margin:0 auto;padding:18px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.bar{max-width:1100px;margin:0 auto;padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
 .datenav{display:flex;align-items:center;gap:10px}
 .datenav button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer}
 .date{color:var(--today);font-weight:600;font-size:16px}
@@ -52,7 +52,24 @@ input,select{font:inherit;color:var(--ink);background:var(--card);border:1px sol
 .ranges button{border:0;background:none;padding:5px 12px;border-radius:999px;font:600 12px var(--display);cursor:pointer;color:var(--ink)}
 .ranges button.on{background:var(--today);color:#fff}
 main{max-width:1100px;margin:0 auto;padding:8px 16px 20px;display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px;align-items:start}
-main>section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 20px 20px;box-shadow:0 1px 2px rgba(20,30,40,.04),0 6px 24px rgba(20,30,40,.05)}
+main>section{background:none;padding:0}
+body[data-tab=overview] main{grid-template-columns:1fr}
+body[data-tab=overview] main>.stats{display:none}
+.band{background:#f6f7f8;border-bottom:1px solid var(--line)}
+.calic{display:inline-grid;place-items:center;width:22px;height:22px;border:2px solid var(--today);border-top-width:5px;border-radius:3px;font:700 11px var(--display);color:var(--today);margin-right:8px;vertical-align:-4px;line-height:1}
+.rangerow{max-width:1100px;margin:0 auto;padding:18px 16px 4px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.rangerow .ranges{margin-left:auto}
+.rem{display:inline-flex;gap:5px;align-items:center;cursor:pointer;font-size:12px;color:var(--ink2);margin-left:6px}
+.rem input{padding:0;accent-color:var(--strain)}
+.forget{border:0;background:none;color:var(--ink3);font:600 11px var(--display);cursor:pointer;text-decoration:underline}
+.filelink{font:600 12px var(--display);color:var(--ink2);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.filelink:hover{color:var(--ink)}
+.open.google{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--ink);border:1px solid #d5d9dd;border-radius:999px;padding:7px 14px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.open.google:hover{background:#f8f9fa}
+#status{max-width:1100px;margin:10px auto 0;padding:8px 16px;font-size:12px;color:var(--ink2)}
+.hrtip{position:absolute;pointer-events:none;transform:translate(10px,-100%);min-width:80px;text-align:center;border-radius:3px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.15);color:#fff;transition:opacity .1s;z-index:5}
+.hrtip b{display:block;font:600 20px var(--num);padding:5px 14px 3px}.hrtip b small{font-size:12px;margin-left:3px}
+.hrtip i{display:block;font:600 12px var(--display);font-style:normal;padding:3px 10px;background:rgba(0,0,0,.18);color:#1b2026}
 @media (max-width:760px){main{grid-template-columns:1fr}.ring svg{width:100px;height:100px}}
 .stats h3,.chart h3{font-size:14px;margin:16px 0 0}.stats .vs,.chart .vs{color:var(--ink3);font-size:12px;margin-bottom:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px 12px;text-align:center}
@@ -116,14 +133,16 @@ main>section{background:var(--card);border:1px solid var(--line);border-radius:1
     <div class="pair"><div id="hs">—<span>Hours of Sleep</span></div><div id="hn">—<span>Sleep Needed</span></div></div></div><div class="cap">Sleep</div></button>
 </div></section>
 
-<div class="bar">
-  <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><button class="today" id="today" hidden>Today</button><span class="tag" id="source">Example data</span></div>
-  <form class="loader" id="loader"><button class="open google" type="button" id="gsign">Sign in with Google</button><span>or</span><label for="file">a backup file</label><input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
-    <span id="passwrap"><input id="pass" type="password" placeholder="Passphrase" autocomplete="current-password"> <label style="display:inline-flex;gap:4px;align-items:center;cursor:pointer"><input type="checkbox" id="remember" checked style="padding:0">Remember</label></span><span id="saved" hidden>Passphrase remembered · <button type="button" class="back" id="forget" style="margin:0">Forget</button></span><button class="open" type="submit">Open file</button></form>
-  <div class="ranges" id="ranges"><button data-r="180">6m</button><button data-r="90">3m</button><button data-r="30">1m</button><button data-r="14">2w</button><button data-r="7">1w</button><button data-r="1" class="on">1d</button></div>
-</div>
-<div class="subtabs" id="subtabs" hidden></div>
-<div id="status">Showing example data. Enter your Koop Cloud passphrase and sign in with Google to open your own data, or open a backup file. It is decrypted and read in this browser only.</div>
+<div class="band"><div class="bar">
+  <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span class="calic" id="calic">1</span><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><button class="today" id="today" hidden>Today</button></div>
+  <form class="loader" id="loader"><span class="tag" id="source">Example data</span>
+    <span id="passwrap"><input id="pass" type="password" placeholder="Koop Cloud passphrase" autocomplete="current-password" aria-label="Koop Cloud passphrase"><label class="rem"><input type="checkbox" id="remember" checked>Remember</label></span>
+    <span id="saved" hidden></span><button type="button" class="forget" id="forget" hidden>Forget passphrase</button>
+    <button class="open google" type="button" id="gsign"><svg width="15" height="15" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Sign in with Google</button>
+    <label class="filelink" title="Open a Koop backup file instead">Open file<input id="file" type="file" accept=".kbak,.osbk,.db,.gz" hidden></label></form>
+</div></div>
+<div id="status" hidden></div>
+<div class="rangerow"><div class="subtabs" id="subtabs" hidden></div><div class="ranges" id="ranges"><button data-r="180">6m</button><button data-r="90">3m</button><button data-r="30">1m</button><button data-r="14">2w</button><button data-r="7">1w</button><button data-r="1" class="on">1d</button></div></div>
 
 <main>
   <section class="stats"><h3 id="st-title">Day Statistics</h3><div class="vs" id="st-vs"></div><div class="grid2" id="st"></div></section>
@@ -165,11 +184,22 @@ function example(){const d={};KEYS.concat(["inbed_min"]).forEach(k=>d[k]=new Map
     d.efficiency.set(s,Math.round(90+3*w));d.sleep_perf.set(s,Math.round(60+15*w));d.steps.set(s,Math.round(7000+2500*w));d.calories.set(s,Math.round(2300+300*w));
     d.active_min.set(s,Math.round(40+20*w));d.awakenings.set(s,Math.round(9+3*Math.cos(i)));d.sol_min.set(s,Math.round(8+4*w));d.inbed_min.set(s,Math.round((330+45*w)/((90+3*w)/100)));}
   sri=78;sriDay=iso(now);return d;}
-function exampleDay(d){const [b]=dayBounds(d),pts=[];
-  for(let m=0;m<1440;m++){const asleep=m<420,run=m>=1080&&m<1125;pts.push({t:b+m*60,v:Math.round(run?150+12*Math.sin(m/4):(asleep?55:78)+6*Math.sin(m/37))});}
-  return {pts,on:b+15*60,off:b+420*60};}
-function exampleSessions(d){const [b]=dayBounds(d),hr=[];for(let s=0;s<2700;s+=10)hr.push({t:b+1080*60+s,v:Math.round(140+15*Math.sin(s/300)+(s>1500&&s<2100?18:0))});
-  return [{id:"ex",type:"Running",start:b+1080*60,end:b+1125*60,strain:11.4,max_hr:174,avg_hr:148,calories:512,duration_min:45,zones:[2,6,14,15,7,1],hr}];}
+// Made-up but realistic-looking days (labelled "Example data"): noisy minute-by-minute heart
+// rate, a night, a lunchtime ride and an evening one, a charging gap. Seeded by the date so a
+// day always looks the same.
+function rng(d){let s=+d.replaceAll("-","")%2147483647||1;return ()=>((s=s*48271%2147483647)/2147483647);}
+function exampleShape(d){const r=rng(d),onM=60+Math.floor(r()*90),offM=onM+330+Math.floor(r()*120),ride1=780+Math.floor(r()*60),ride2=1260+Math.floor(r()*40),gap=1180;
+  return {r,onM,offM,rides:[[ride1,ride1+38],[ride2,ride2+14]],gap};}
+function exampleDay(d){const [b]=dayBounds(d),{r,onM,offM,rides,gap}=exampleShape(d),pts=[];let drift=0;
+  for(let m=0;m<1440;m++){if(m>=gap&&m<gap+25)continue;drift=drift*.97+(r()-.5)*2.2;
+    const asleep=m>=onM&&m<offM,ride=rides.find(([a,z])=>m>=a&&m<z),day=m>offM?Math.min(1,(m-offM)/240):0;
+    let v=asleep?56+drift*.8+(r()<.03?r()*22:0):70+day*28+drift*2+(r()<.06?r()*30:0);
+    if(ride)v=118+Math.min(1,(m-ride[0])/6)*14+drift*2+r()*8;
+    pts.push({t:b+m*60,v:Math.round(v)});}
+  return {pts,on:b+onM*60,off:b+offM*60};}
+function exampleSessions(d){const [b]=dayBounds(d),{rides}=exampleShape(d);
+  return rides.map(([a,z],i)=>{const hr=[];const r=rng(d+i);for(let s=a*60;s<z*60;s+=10)hr.push({t:b+s,v:Math.round(120+14*Math.min(1,(s-a*60)/360)+r()*10)});
+    return {id:"ex"+i,type:"Cycling",start:b+a*60,end:b+z*60,strain:i?5.5:6.4,max_hr:i?138:146,avg_hr:i?124:131,calories:i?140:385,duration_min:z-a,zones:i?[2,6,4,2,0,0]:[3,9,14,10,2,0],hr};});}
 
 // ---------- reading a backup ----------
 async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuffer());
@@ -219,13 +249,13 @@ function sessionsOn(d){
     return {id:o.id,type:ty[0].toUpperCase()+ty.slice(1),start:secs(o.start_ts),end:secs(o.end_ts),strain:o.strain,max_hr:o.max_hr,avg_hr:o.avg_hr??null,
       calories:o.calories,duration_min:o.duration_min,zones,hr};}).filter(Boolean);}
 
-function status(t){document.getElementById("status").textContent=t;}
+function status(t){const s=document.getElementById("status");s.textContent=t;s.hidden=!t;}
 // The passphrase can be remembered in THIS browser (the person's choice, on by default), so later
 // visits are one click: Sign in with Google. It is never sent anywhere. Storage can be blocked or
 // empty (private windows); every access is guarded and the field simply asks again.
 const PASS_KEY="koop.passphrase";
 const savedPass=()=>{try{return localStorage.getItem(PASS_KEY)||"";}catch{return "";}};
-function showSaved(){const s=!!savedPass();document.getElementById("saved").hidden=!s;document.getElementById("passwrap").hidden=s;}
+function showSaved(){const s=!!savedPass();document.getElementById("forget").hidden=!s;document.getElementById("passwrap").hidden=s;}
 const passphrase=()=>document.getElementById("pass").value||savedPass();
 function ring(id,frac,color,text){const r=56,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
   document.getElementById(id).innerHTML=`<circle cx="65" cy="65" r="${r}" fill="none" stroke="#2b323a" stroke-width="7"/><circle cx="65" cy="65" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 65 65)"/><text x="65" y="78" text-anchor="middle" class="n">${text}</text>`;}
@@ -236,7 +266,7 @@ function header(){const rc=get("readiness",day),st=get("strain",day),sp=get("sle
   document.getElementById("sp").textContent=sp==null?"—":Math.round(sp)+"%";
   document.getElementById("hs").firstChild.textContent=hm(ts);
   document.getElementById("hn").firstChild.textContent=ts!=null&&sp?hm(ts/(sp/100)):"—";
-  document.getElementById("date").textContent=(day===iso(new Date())?"Today, ":"")+nice(day);
+  document.getElementById("date").textContent=(day===iso(new Date())?"Today, ":"")+nice(day);document.getElementById("calic").textContent=+day.slice(8);
   const cal=document.getElementById("cal");cal.value=day;cal.max=iso(new Date());
   document.getElementById("today").hidden=day===iso(new Date());document.getElementById("next").disabled=day===iso(new Date());
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));}
@@ -282,24 +312,28 @@ Chart.register({id:"crosshair",afterDatasetsDraw(c){const a=c.tooltip?.getActive
 // One day's heart rate on a real time axis (ticks every 4 hours, local time), 0–225 bpm like WHOOP.
 function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));document.getElementById("ch-title").textContent=title;
   document.getElementById("ch-vs").textContent=pts.length?vs:`${nice(day)} · no heart-rate curve stored for this day`;
-  const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off,seg=f=>pts.map(p=>({x:p.t,y:f(p)?p.v:null}));
+  const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off;
+  // A minute the band was off is a BREAK in the line and its fill (as on WHOOP), never a bridge.
+  const seg=f=>{const out=[];pts.forEach((p,i)=>{if(i&&p.t-pts[i-1].t>300)out.push({x:(p.t+pts[i-1].t)/2,y:null});out.push({x:p.t,y:f(p)?p.v:null});});return out;};
   const t0=pts[0]?.t??dayBounds(day)[0],t1=pts.at(-1)?.t??dayBounds(day)[1],top=Math.max(225,Math.ceil(Math.max(0,...pts.map(p=>p.v))/25)*25);
-  const name=d=>d?.dataset?.label;
-  chart=new Chart(document.getElementById("chart"),{type:"line",data:{datasets:[
-    {label:"Asleep",data:seg(inSleep),borderColor:"#7ba1bb",backgroundColor:"rgba(123,161,187,.15)",fill:"origin",pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:"#7ba1bb",borderWidth:1.1,spanGaps:false},
-    {label:"Awake",data:seg(p=>!inSleep(p)&&!inW(p)),borderColor:"#bcc3ca",backgroundColor:"rgba(188,195,202,.13)",fill:"origin",pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:"#9aa3ad",borderWidth:1.1,spanGaps:false},
-    {label:"Workout",data:seg(p=>inW(p)&&!inSleep(p)),borderColor:"#0093e7",backgroundColor:"rgba(0,0,0,0)",fill:false,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:"#0093e7",borderWidth:1.5,spanGaps:false}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},interaction:{mode:"index",intersect:false},
-      plugins:{legend:{display:false},bands:{list:ws.map(s=>({a:s.start,b:s.end||s.start,c:"rgba(0,147,231,.11)"}))},
-        tooltip:{filter:i=>i.raw?.y!=null,displayColors:false,xAlign:"left",yAlign:"bottom",caretSize:0,padding:{x:14,y:6},cornerRadius:3,
-          backgroundColor:c=>{const l=name(c.tooltip?.dataPoints?.[0]);return l==="Asleep"?"#7d9bb0":l==="Workout"?"#0093e7":"#8d969f";},
-          titleFont:{family:css("--num"),size:20,weight:"600"},titleAlign:"center",bodyAlign:"center",bodyFont:{size:12},
-          callbacks:{title:i=>i[0]?`${i[0].raw.y} bpm`:"",label:i=>ampm(i.raw.x)}}},
-      scales:{x:{type:"linear",min:t0,max:t1,grid:{color:"#eef0f2"},border:{color:"#d5d9dd"},
+  const look={Asleep:["#7e9fb8","#e9eff4","#7d9bb0"],Awake:["#c3c8cd","#f2f3f4","#9aa2aa"],Workout:["#0093e7","rgba(0,0,0,0)","#0093e7"]};
+  const ds=(label,f)=>({label,data:seg(f),borderColor:look[label][0],backgroundColor:look[label][1],fill:label==="Workout"?false:"origin",
+    pointRadius:0,pointHoverRadius:4.5,pointHoverBorderWidth:2,pointHoverBorderColor:"#fff",pointHoverBackgroundColor:look[label][2],borderWidth:1,tension:0,spanGaps:false});
+  chart=new Chart(document.getElementById("chart"),{type:"line",data:{datasets:[ds("Asleep",inSleep),ds("Awake",p=>!inSleep(p)&&!inW(p)),ds("Workout",p=>inW(p)&&!inSleep(p))]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},interaction:{mode:"index",intersect:false},
+      plugins:{legend:{display:false},bands:{list:ws.map(s=>({a:s.start,b:s.end||s.start,c:"rgba(0,147,231,.10)"}))},
+        // WHOOP's two-part box: the bpm on top, the time in a darker strip under it.
+        tooltip:{enabled:false,filter:i=>i.raw?.y!=null,external:({chart:c,tooltip:tt})=>{let el=c.canvas.parentNode.querySelector(".hrtip");
+          if(!el){el=document.createElement("div");el.className="hrtip";c.canvas.parentNode.appendChild(el);}
+          const d=tt.dataPoints?.[0];if(!tt.opacity||!d){el.style.opacity=0;return;}
+          el.style.background=look[d.dataset.label][2];el.innerHTML=`<b>${d.raw.y}<small>bpm</small></b><i>${ampm(d.raw.x)}</i>`;
+          const x=d.element.x,flip=x>c.chartArea.right-110;el.style.left=x+"px";el.style.top=Math.max(c.chartArea.top+46,d.element.y-12)+"px";
+          el.style.transform=flip?"translate(calc(-100% - 10px),-100%)":"translate(10px,-100%)";el.style.opacity=1;}}},
+      scales:{x:{type:"linear",min:t0,max:t1,grid:{color:"#f0f1f3"},border:{color:"#cfd4d9"},
           afterBuildTicks:ax=>{const out=[],d=new Date(t0*1000);d.setMinutes(0,0,0);while(d.getHours()%4)d.setHours(d.getHours()+1);
             for(;d.getTime()/1000<=t1;d.setHours(d.getHours()+4))if(d.getTime()/1000>=t0)out.push({value:d.getTime()/1000});ax.ticks=out;},
           ticks:{callback:v=>ampm(v),maxRotation:0,color:css("--ink2")}},
-        y:{min:0,max:top,ticks:{stepSize:25,color:css("--ink3"),font:{size:11}},grid:{color:"#eef0f2"},border:{display:false}}}}});}
+        y:{min:0,max:top,ticks:{stepSize:25,color:"#9aa3ad",font:{size:11}},grid:{color:"#f0f1f3"},border:{display:false}}}}});}
 
 // The WHOOP activity line above the chart: a dashed day, the sleep span as a solid bar with a
 // moon badge (performance above, hours below), each workout as a blue badge over its span with
@@ -374,7 +408,7 @@ function strip(){const today=iso(new Date());let end=shift(day,1);if(end>today)e
   document.getElementById("slabels").innerHTML=scrubDays.map(d=>`<button data-d="${d}" class="${d===day?"sel":""}">${new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</button>`).join("");
   document.getElementById("snext").disabled=day>=today;}
 
-function render(){const t=TABS[tab],prev=shift(day,-1);header();subtabs();strip();
+function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();
   chart?.destroy();chart=null;document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
   Chart.defaults.font.family=css("--num");Chart.defaults.font.size=12;Chart.defaults.color=css("--ink2");Chart.defaults.elements.bar.borderRadius=4;
   Object.assign(Chart.defaults.plugins.tooltip,{backgroundColor:"#1b2026",titleColor:"#fff",bodyColor:"#d6dde3",padding:10,cornerRadius:8,displayColors:false,titleFont:{weight:"600"}});
@@ -444,6 +478,7 @@ async function load(blob,label){
   const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=dates.at(-1)||iso(new Date());
   if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;workout=-1;
   document.getElementById("source").hidden=true;status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);render();}
+document.getElementById("file").addEventListener("change",()=>document.getElementById("loader").requestSubmit());
 document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const f=document.getElementById("file").files[0];
   if(!f){status("Choose your Koop backup file first.");return;}
   try{await load(f,f.name);}catch(err){status(err.message||String(err));}});
