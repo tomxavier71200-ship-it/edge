@@ -28,7 +28,7 @@ final class WatchBridge: NSObject, WCSessionDelegate {
   private static let boolKeys = ["has_data", "batt_charging", "theme_dark"]
 
   private var appGroupId: String {
-    Bundle.main.object(forInfoDictionaryKey: "OpenStrapAppGroupIdentifier") as? String
+    (AppGroupResolver.identifier.isEmpty ? nil : AppGroupResolver.identifier)
       // Same fallback as AppGroup.swift and WidgetService.fallbackAppGroupId —
       // see the note there.
       ?? "group.com.example.openstrap"

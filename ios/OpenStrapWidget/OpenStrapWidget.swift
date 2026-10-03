@@ -152,28 +152,82 @@ private struct SmallView: View {
   }
 }
 
+/// The wide face, same as the Android 4x2: a header (streak, name, band
+/// battery) over three plain dials with the number INSIDE, Sleep · Recovery ·
+/// Strain. An absent ring shows a dash in the dial and its reason IN WORDS
+/// under the label, so an empty dial never reads as a score of zero.
 private struct MediumView: View {
   let snap: SW.Snapshot
 
-  /// The first ring that is missing and said why. One line is what a medium
-  /// widget can afford; the rest is one tap away in the app.
-  private var gap: Trio? {
-    Trio.allCases.first { !$0.data(snap).why.isEmpty }
-  }
+  private static let order: [Trio] = [.sleep, .recovery, .strain]
 
   var body: some View {
-    VStack(spacing: 8) {
-      HStack(alignment: .top, spacing: 4) {
-        ForEach(Array(Trio.allCases.enumerated()), id: \.offset) { _, k in
-          RingColumn(kind: k, snap: snap)
+    let p = SW.pal
+    let d = UserDefaults(suiteName: SW.appGroup)
+    let streak = d?.object(forKey: "streak") as? Int ?? -1
+    let batt = d?.object(forKey: "batt_pct") as? Int ?? -1
+    let charging = d?.bool(forKey: "batt_charging") ?? false
+    VStack(spacing: 10) {
+      HStack {
+        // The streak only from 2 days, the same rule as Home's chip.
+        Group {
+          if streak >= 2 {
+            Text("\(Image(systemName: "flame.fill")) \(streak)").foregroundStyle(p.ink)
+          } else {
+            Text(" ")
+          }
+        }
+        .frame(width: 60, alignment: .leading)
+        Spacer()
+        Text("KOOP").font(.system(size: 12, weight: .heavy)).tracking(2.5)
+          .foregroundStyle(p.ink3)
+        Spacer()
+        Group {
+          if batt < 0 {
+            Text(" ")
+          } else if charging {
+            Text("\(Image(systemName: "bolt.fill")) \(batt)%").foregroundStyle(p.ink2)
+          } else {
+            Text("\(batt)%").foregroundStyle(batt <= 20 ? SW.tierColor(0, p) : p.ink2)
+          }
+        }
+        .frame(width: 60, alignment: .trailing)
+      }
+      .font(.system(size: 12, weight: .semibold))
+      HStack(alignment: .top, spacing: 6) {
+        ForEach(Array(Self.order.enumerated()), id: \.offset) { _, k in
+          WideDial(kind: k, snap: snap)
         }
       }
-      if let g = gap {
-        SW.GapRow(label: g.label, symbol: g.symbol, why: g.data(snap).why)
-          .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .padding(.horizontal, 14).padding(.vertical, 12)
+  }
+}
+
+private struct WideDial: View {
+  let kind: Trio
+  let snap: SW.Snapshot
+
+  var body: some View {
+    let p = SW.pal
+    let r = kind.data(snap)
+    VStack(spacing: 5) {
+      ZStack {
+        SW.Ring(frac: r.frac, color: r.color(kind.accent(snap, p), p), lineWidth: 6)
+        Text(r.measured ? r.value : "—")
+          .font(SW.num(r.measured && r.value.count > 4 ? 15 : 20))
+          .foregroundStyle(r.measured ? p.ink : p.ink3)
+          .lineLimit(1).minimumScaleFactor(0.5)
+          .padding(.horizontal, 9)
+      }
+      .frame(width: 62, height: 62)
+      Text(kind.label.uppercased()).font(SW.over).tracking(0.6).foregroundStyle(p.ink)
+      if !r.measured {
+        Text(r.value).font(.system(size: 10)).foregroundStyle(p.ink3)
+          .lineLimit(1).minimumScaleFactor(0.7)
       }
     }
-    .padding(14)
+    .frame(maxWidth: .infinity)
   }
 }
 
@@ -256,7 +310,7 @@ struct OpenStrapWidgetEntryView: View {
       case .accessoryInline:
         Text(entry.snap.recovery.measured
              ? "Recovery \(entry.snap.recovery.value)"
-             : "OpenStrap · \(entry.snap.recovery.value.lowercased())")
+             : "Koop · \(entry.snap.recovery.value.lowercased())")
       default: SmallView(snap: entry.snap)
       }
     }
@@ -270,7 +324,7 @@ struct OpenStrapWidget: Widget {
     StaticConfiguration(kind: kind, provider: Provider()) { entry in
       OpenStrapWidgetEntryView(entry: entry)
     }
-    .configurationDisplayName("OpenStrap")
+    .configurationDisplayName("Koop")
     .description("Recovery, strain and sleep at a glance.")
     .supportedFamilies([.systemSmall, .systemMedium,
                         .accessoryCircular, .accessoryRectangular, .accessoryInline])

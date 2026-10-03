@@ -13,7 +13,7 @@ import Foundation
 
 enum OpenStrapShared {
   static var appGroup: String {
-    Bundle.main.object(forInfoDictionaryKey: "OpenStrapAppGroupIdentifier") as? String
+    (AppGroupResolver.identifier.isEmpty ? nil : AppGroupResolver.identifier)
       // Same fallback as AppGroup.swift and WidgetService.fallbackAppGroupId:
       // the build-configured default (ios/Config/Signing.defaults.xcconfig).
       // Three different fallbacks for one group meant that if Info.plist ever

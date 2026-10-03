@@ -130,7 +130,7 @@ enum ConfigBridge {
     channel.setMethodCallHandler { call, result in
       switch call.method {
       case "appGroupIdentifier":
-        result(Bundle.main.object(forInfoDictionaryKey: "OpenStrapAppGroupIdentifier") as? String ?? "")
+        result(AppGroupResolver.identifier)
       case "syncWatch":
         // Dart calls this right after writing the widget snapshot; mirror it to
         // the paired Apple Watch. Best-effort, never fails the Dart caller.
@@ -340,4 +340,30 @@ enum AppIconBridge {
       }
     }
   }
+}
+
+/// The App Group shared with the widget. Mirror of OpenStrapWidget/AppGroup.swift
+/// (the two targets cannot share a file); keep the lookup order identical.
+///
+/// A sideload re-signs with the person's own Apple ID and SideStore/AltStore
+/// rename the group, so the build-time Info.plist value is wrong there. Order:
+/// `ALTAppGroups` (written by SideStore/AltStore), then the signed
+/// entitlements in `embedded.mobileprovision`, then `OpenStrapAppGroupIdentifier`.
+enum AppGroupResolver {
+  static let identifier: String = {
+    let b = Bundle.main
+    if let g = (b.object(forInfoDictionaryKey: "ALTAppGroups") as? [String])?.first, !g.isEmpty {
+      return g
+    }
+    if let data = try? Data(contentsOf: b.bundleURL.appendingPathComponent("embedded.mobileprovision")),
+       let start = data.range(of: Data("<?xml".utf8)),
+       let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound..<data.endIndex),
+       let plist = try? PropertyListSerialization.propertyList(
+         from: data.subdata(in: start.lowerBound..<end.upperBound), format: nil) as? [String: Any],
+       let ent = plist["Entitlements"] as? [String: Any],
+       let g = (ent["com.apple.security.application-groups"] as? [String])?.first, !g.isEmpty {
+      return g
+    }
+    return b.object(forInfoDictionaryKey: "OpenStrapAppGroupIdentifier") as? String ?? ""
+  }()
 }

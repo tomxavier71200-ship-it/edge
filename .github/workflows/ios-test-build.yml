@@ -56,11 +56,37 @@ jobs:
       - name: Strip Watch companion
         run: rm -rf "build/ios/iphoneos/Runner.app/Watch"
 
-      # The home-screen widget extension uses an App Group, which a free
-      # Apple ID often cannot sign; a sideload then fails with "No code
-      # signature found". A test copy does not need the widget.
-      - name: Strip app extensions
-        run: rm -rf "build/ios/iphoneos/Runner.app/PlugIns"
+      # The home-screen widget ships. It used to be stripped: --no-codesign
+      # leaves the .appex with no signature at all, SideStore failed with
+      # "No code signature found", and with no entitlements in the binaries it
+      # could not have known the app and widget share an App Group anyway.
+      # ldid gives both a placeholder signature CARRYING the App Group
+      # entitlement; SideStore reads it, registers the group under the
+      # person's own team (renamed, recorded as ALTAppGroups — which
+      # AppGroup.swift / AppGroupResolver read) and re-signs everything.
+      # Only the widget extension is kept: every extension costs one of a
+      # free Apple ID's three App IDs (SideStore, Koop, widget).
+      - name: Sign the app and widget with their App Group
+        run: |
+          brew install ldid
+          app=build/ios/iphoneos/Runner.app
+          find "$app/PlugIns" -mindepth 1 -maxdepth 1 ! -name 'OpenStrapWidgetExtension.appex' -exec rm -rf {} +
+          cat > ent.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.security.application-groups</key>
+            <array><string>group.com.example.openstrap</string></array>
+          </dict></plist>
+          EOF
+          appex="$app/PlugIns/OpenStrapWidgetExtension.appex"
+          if [ -d "$appex" ]; then
+            ldid -Sent.plist "$appex/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$appex/Info.plist")"
+          else
+            echo "::warning::widget extension not found in the build"
+          fi
+          ldid -Sent.plist "$app/Runner"
+          ldid -e "$app/Runner"
 
       - name: Package unsigned IPA
         run: |

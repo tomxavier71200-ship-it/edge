@@ -314,16 +314,16 @@ enum SW {
       case .accessoryRectangular:
         VStack(alignment: .leading, spacing: 2) {
           Text("No recent data").font(.system(size: 13, weight: .bold)).widgetAccentable()
-          Text("Open OpenStrap and sync your band.")
+          Text("Open Koop and sync your band.")
             .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
         }
       case .accessoryInline:
-        Text("OpenStrap · no recent data")
+        Text("Koop · no recent data")
       default:
         VStack(spacing: 6) {
           Image(systemName: "bolt.heart").font(.system(size: 22)).foregroundStyle(p.ink3)
           Text("No recent data").font(.system(size: 14, weight: .semibold)).foregroundStyle(p.ink)
-          Text("Open OpenStrap and sync your band.")
+          Text("Open Koop and sync your band.")
             .font(.system(size: 11)).multilineTextAlignment(.center).foregroundStyle(p.ink3)
         }
         .padding(12)

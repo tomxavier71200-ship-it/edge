@@ -116,7 +116,7 @@ struct OpenStrapSleepWidgetEntryView: View {
       case .accessoryInline:
         Text(entry.snap.sleep.measured
              ? "Slept \(entry.snap.sleep.value)"
-             : "OpenStrap · \(entry.snap.sleep.value.lowercased())")
+             : "Koop · \(entry.snap.sleep.value.lowercased())")
       default: SleepSmallView(snap: entry.snap)
       }
     }

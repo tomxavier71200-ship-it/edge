@@ -164,7 +164,7 @@ struct OpenStrapOvernightWidgetEntryView: View {
             .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
         }
       case .accessoryInline:
-        Text(entry.snap.hrv >= 0 ? "HRV \(entry.snap.hrv) ms" : "OpenStrap · HRV not measured")
+        Text(entry.snap.hrv >= 0 ? "HRV \(entry.snap.hrv) ms" : "Koop · HRV not measured")
       default: OvernightSmallView(e: entry)
       }
     }
