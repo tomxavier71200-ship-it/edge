@@ -75,9 +75,24 @@ main>section{background:var(--card);border:1px solid var(--line);border-radius:1
 .subtabs{background:var(--strain);display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;justify-content:center}
 .subtabs button{background:none;border:0;color:#cfe8fb;font:600 14px var(--display);padding:6px 12px;border-radius:999px;cursor:pointer}
 .subtabs button.on{color:#fff;background:rgba(255,255,255,.18)}
-.bubbles{position:relative;height:44px;margin-top:6px}.bubbles:empty{display:none}
-.bubble{position:absolute;transform:translateX(-50%);top:0;text-align:center;font:600 12px var(--num);white-space:nowrap}
-.bubble b{display:inline-block;padding:3px 8px;border-radius:6px;color:#fff}
+.bubbles{position:relative;height:96px;margin-top:8px}.bubbles:empty{display:none}
+.tl-base{position:absolute;top:70px;border-top:1.5px dashed #c9cdd1}
+.tl-seg{position:absolute;top:69px;height:3px;border-radius:2px}
+.tl-dot{position:absolute;top:67px;width:7px;height:7px;border-radius:50%;transform:translateX(-50%)}
+.tl-badge{position:absolute;top:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;background:none;border:0;padding:0;cursor:pointer;transition:transform .15s}
+.tl-badge:hover{transform:translateX(-50%) translateY(-2px)}
+.tl-top{font:600 17px var(--num);height:20px;line-height:20px}.tl-top small{font-size:11px}
+.tl-ic{width:38px;height:34px;border-radius:4px;background:var(--c);display:grid;place-items:center;position:relative;margin-top:2px}
+.tl-ic::after{content:"";position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid var(--c)}
+.tl-below{position:absolute;top:78px;transform:translateX(-50%);font:600 17px var(--num)}
+.scr{display:flex;align-items:stretch;border:1px solid #1b2026;border-radius:3px;overflow:hidden;background:#eef0f2}
+.sarrow{width:38px;border:0;background:#e3e6e9;font-size:22px;color:var(--ink2);cursor:pointer}
+.sarrow:hover{background:#d7dbdf}.sarrow:disabled{opacity:.35;cursor:default}
+.smid{flex:1;min-width:0;display:flex;flex-direction:column}
+#scrub{width:100%;height:96px;display:block;cursor:pointer}
+.slabels{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid #c9cdd1;background:#fff}
+.slabels button{border:0;border-left:1px solid #e3e6e9;background:none;font:600 11px var(--display);color:var(--ink);padding:7px 2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slabels button:hover{background:#f4f6f7}.slabels button.sel{color:#c3c9cf;background:#fafbfb}
 .zones{margin-top:14px}
 .zones div{display:grid;grid-template-columns:80px 1fr 70px;gap:10px;align-items:center;font-size:13px;padding:3px 0}
 .zones i{display:block;height:10px;border-radius:4px;background:var(--strain)}
@@ -115,7 +130,7 @@ main>section{background:var(--card);border:1px solid var(--line);border-radius:1
   <section class="chart"><h3 id="ch-title">Day Recovery</h3><div class="vs" id="ch-vs"></div><div class="bubbles" id="bubbles"></div><div class="chartbox"><canvas id="chart"></canvas></div><div class="zones" id="zones" hidden></div>
     <div class="donutwrap" id="donutwrap" hidden><div class="legend" id="legend"></div><div style="width:180px;height:180px"><canvas id="donut"></canvas></div></div></section>
 </main>
-<section class="scrub"><div class="scrubin"><div class="scrubhead">Recovery by day · click a day to open it</div><div class="strip" id="strip"></div><div class="ticks" id="ticks"></div></div></section>
+<section class="scrub"><div class="scrubin"><div class="scr"><button class="sarrow" id="sprev" aria-label="Previous day">‹</button><div class="smid"><canvas id="scrub" aria-label="Seven days of heart rate; click a day to open it"></canvas><div class="slabels" id="slabels"></div></div><button class="sarrow" id="snext" aria-label="Next day">›</button></div></div></section>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -177,7 +192,7 @@ async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuff
   // Consistency (SRI) exists only as the latest cross-day value, so it is shown for the newest day only.
   sri=null;sriDay=null;try{const r=db.exec("SELECT payload_json,updated_at FROM baselines WHERE key='crossday'");
     if(r[0]){const v=JSON.parse(r[0].values[0][0])?.regularity?.value?.sri;if(typeof v==="number")sri=v;}}catch{}
-  liveDb?.close();liveDb=db; // kept open: curves and workouts are read per day
+  liveDb?.close();liveDb=db;curveCache.clear(); // kept open: curves and workouts are read per day
   return {d,name};}
 
 // ---------- per-day reads ----------
@@ -250,30 +265,62 @@ function statsGrid(rows,cur,was){document.getElementById("st").innerHTML=rows.ma
     arr=`<span class="arrow" style="color:${good==null?css("--ink3"):good?css("--up"):css("--down")}">${up?"▲":"▼"}</span>`;}
   return `<div class="stat${k&&focus?.k===k?" sel":""}"${k?` data-k="${k}" data-l="${l}" data-dp="${dp}" data-u="${u??""}" title="Chart ${l} over time"`:""}><div class="l">${l}</div><div class="v">${fmt(null,now,dp,u)}${arr}</div><div class="p">${fmt(null,before,dp,u)}</div></div>`;}).join("");}
 
-// Bubbles sit above the chart at the x of the moment they describe.
-function bubbles(items,pts){const box=document.getElementById("bubbles");box.innerHTML="";if(!chart||pts.length<2)return;
-  const a=chart.chartArea,t0=pts[0].t,t1=pts.at(-1).t;box.style.marginLeft="0";
-  items.forEach(it=>{if(it.t<t0||it.t>t1)return;const x=a.left+(it.t-t0)/(t1-t0)*a.width;
-    const el=document.createElement("div");el.className="bubble";el.style.left=x+"px";
-    el.innerHTML=`<b style="background:${it.c}">${it.text}</b><div style="color:${css("--ink3")};font-weight:500">${it.sub}</div>`;
-    if(it.go){el.style.cursor="pointer";el.addEventListener("click",it.go);}box.appendChild(el);});}
+const ampm=t=>{const x=new Date(t*1000);let h=x.getHours();const ap=h<12?"am":"pm";h=h%12||12;return `${h}:${String(x.getMinutes()).padStart(2,"0")}${ap}`;};
+const ICON={
+  sleep:'<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z"/></svg>',
+  bike:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><circle cx="15" cy="5" r="1.4" fill="#fff"/><path d="M12 17V13l-3-3 4-3 2 3h3"/></svg>',
+  run:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="4" r="1.6" fill="#fff"/><path d="M5 21l3.5-5 3 2 1.5-5 3 3h3M9.5 12l2-4 3 1 2 3"/></svg>',
+  other:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>'};
+const sportIcon=t=>/cycl|bike|ride|spin/i.test(t)?ICON.bike:/run|walk|hike|jog/i.test(t)?ICON.run:ICON.other;
 
+// WHOOP-style bands behind the line (workouts, pale blue, full height) and a vertical crosshair.
+Chart.register({id:"bands",beforeDatasetsDraw(c,_,o){if(!o?.list?.length)return;const {top,bottom}=c.chartArea,x=c.scales.x,g=c.ctx;g.save();
+  o.list.forEach(r=>{const a=x.getPixelForValue(r.a),z=x.getPixelForValue(r.b);g.fillStyle=r.c;g.fillRect(a,top,Math.max(3,z-a),bottom-top);});g.restore();}});
 Chart.register({id:"crosshair",afterDatasetsDraw(c){const a=c.tooltip?.getActiveElements?.();if(c.config.type!=="line"||!a?.length)return;
-  const x=a[0].element.x,{top,bottom}=c.chartArea,g=c.ctx;g.save();g.strokeStyle=css("--ink3");g.lineWidth=1;g.beginPath();g.moveTo(x,top);g.lineTo(x,bottom);g.stroke();g.restore();}});
+  const x=a[0].element.x,{top,bottom}=c.chartArea,g=c.ctx;g.save();g.strokeStyle="#9aa3ad";g.lineWidth=1;g.beginPath();g.moveTo(x,top);g.lineTo(x,bottom);g.stroke();g.restore();}});
+
+// One day's heart rate on a real time axis (ticks every 4 hours, local time), 0–225 bpm like WHOOP.
 function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));document.getElementById("ch-title").textContent=title;
   document.getElementById("ch-vs").textContent=pts.length?vs:`${nice(day)} · no heart-rate curve stored for this day`;
-  const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off;
-  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:pts.map(p=>clock(p.t)),datasets:[
-    {label:"Asleep",data:pts.map(p=>inSleep(p)?p.v:null),borderColor:css("--sleep"),backgroundColor:"rgba(123,161,187,.18)",fill:"origin",pointRadius:0,borderWidth:1.2,spanGaps:false},
-    {label:"Awake",data:pts.map(p=>inSleep(p)||inW(p)?null:p.v),borderColor:"#b4bcc4",pointRadius:0,borderWidth:1.2,spanGaps:false},
-    {label:"Workout",data:pts.map(p=>inW(p)&&!inSleep(p)?p.v:null),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.15)",fill:"origin",pointRadius:0,borderWidth:1.6,spanGaps:false}]},options:lineOpts({min:0})});}
+  const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off,seg=f=>pts.map(p=>({x:p.t,y:f(p)?p.v:null}));
+  const t0=pts[0]?.t??dayBounds(day)[0],t1=pts.at(-1)?.t??dayBounds(day)[1],top=Math.max(225,Math.ceil(Math.max(0,...pts.map(p=>p.v))/25)*25);
+  const name=d=>d?.dataset?.label;
+  chart=new Chart(document.getElementById("chart"),{type:"line",data:{datasets:[
+    {label:"Asleep",data:seg(inSleep),borderColor:"#7ba1bb",backgroundColor:"rgba(123,161,187,.15)",fill:"origin",pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:"#7ba1bb",borderWidth:1.1,spanGaps:false},
+    {label:"Awake",data:seg(p=>!inSleep(p)&&!inW(p)),borderColor:"#bcc3ca",backgroundColor:"rgba(188,195,202,.13)",fill:"origin",pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:"#9aa3ad",borderWidth:1.1,spanGaps:false},
+    {label:"Workout",data:seg(p=>inW(p)&&!inSleep(p)),borderColor:"#0093e7",backgroundColor:"rgba(0,0,0,0)",fill:false,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:"#0093e7",borderWidth:1.5,spanGaps:false}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},interaction:{mode:"index",intersect:false},
+      plugins:{legend:{display:false},bands:{list:ws.map(s=>({a:s.start,b:s.end||s.start,c:"rgba(0,147,231,.11)"}))},
+        tooltip:{filter:i=>i.raw?.y!=null,displayColors:false,xAlign:"left",yAlign:"bottom",caretSize:0,padding:{x:14,y:6},cornerRadius:3,
+          backgroundColor:c=>{const l=name(c.tooltip?.dataPoints?.[0]);return l==="Asleep"?"#7d9bb0":l==="Workout"?"#0093e7":"#8d969f";},
+          titleFont:{family:css("--num"),size:20,weight:"600"},titleAlign:"center",bodyAlign:"center",bodyFont:{size:12},
+          callbacks:{title:i=>i[0]?`${i[0].raw.y} bpm`:"",label:i=>ampm(i.raw.x)}}},
+      scales:{x:{type:"linear",min:t0,max:t1,grid:{color:"#eef0f2"},border:{color:"#d5d9dd"},
+          afterBuildTicks:ax=>{const out=[],d=new Date(t0*1000);d.setMinutes(0,0,0);while(d.getHours()%4)d.setHours(d.getHours()+1);
+            for(;d.getTime()/1000<=t1;d.setHours(d.getHours()+4))if(d.getTime()/1000>=t0)out.push({value:d.getTime()/1000});ax.ticks=out;},
+          ticks:{callback:v=>ampm(v),maxRotation:0,color:css("--ink2")}},
+        y:{min:0,max:top,ticks:{stepSize:25,color:css("--ink3"),font:{size:11}},grid:{color:"#eef0f2"},border:{display:false}}}}});}
+
+// The WHOOP activity line above the chart: a dashed day, the sleep span as a solid bar with a
+// moon badge (performance above, hours below), each workout as a blue badge over its span with
+// the strain below. Positions come from the chart's own time axis, so they line up with the curve.
+function timeline(items){const box=document.getElementById("bubbles");box.innerHTML="";if(!chart)return;
+  const x=chart.scales.x,px=t=>x.getPixelForValue(t),L=chart.chartArea.left,R=chart.chartArea.right;
+  let h=`<div class="tl-base" style="left:${L}px;width:${R-L}px"></div><span class="tl-dot" style="left:${L}px;background:#c9cdd1"></span><span class="tl-dot" style="left:${R}px;background:#c9cdd1"></span>`;
+  items.forEach((it,i)=>{const a=Math.max(L,px(it.a)),b=Math.min(R,px(it.b));if(b<L||a>R)return;const m=(a+b)/2;
+    h+=`<div class="tl-seg" style="left:${a}px;width:${Math.max(2,b-a)}px;background:${it.c}"></div><span class="tl-dot" style="left:${a}px;background:${it.c}"></span><span class="tl-dot" style="left:${b}px;background:${it.c}"></span>
+      <button class="tl-badge" data-i="${i}" style="left:${m}px;--c:${it.c}" title="${it.title}"><span class="tl-top" style="color:${it.c}">${it.top||"&nbsp;"}</span><span class="tl-ic">${it.icon}</span></button>
+      <span class="tl-below" style="left:${m}px;color:${it.c}">${it.below}</span>`;});
+  box.innerHTML=h;box.querySelectorAll(".tl-badge").forEach(b=>b.addEventListener("click",items[+b.dataset.i].go));}
 
 function overviewDay(){const {pts,on,off}=dayCurve(day);sess=sessionsOn(day);
-  drawCurve(pts,on,off,"Day heart rate",`${nice(day)} · light blue is sleep, bright blue is a workout · click a workout bubble to open it`,sess);
-  const sp=get("sleep_perf",day),items=[];
-  if(on!=null&&off!=null)items.push({t:(on+off)/2,c:css("--sleep"),text:sp==null?"Sleep":Math.round(sp)+"%",sub:`${clock(on)}–${clock(off)}`,go:()=>{tab="sleep";render();}});
-  sess.forEach((s,i)=>items.push({t:(s.start+(s.end||s.start))/2,c:css("--strain"),text:s.strain==null?"—":(+s.strain).toFixed(1),sub:s.type,go:()=>{tab="strain";workout=i;render();}}));
-  bubbles(items,pts);}
+  drawCurve(pts,on,off,"Day heart rate",`${nice(day)} · hover the line for each minute · click a badge to open it`,sess);
+  const sp=get("sleep_perf",day),tst=get("tst_min",day),items=[];
+  if(on!=null&&off!=null)items.push({a:on,b:off,c:"#7ba1bb",icon:ICON.sleep,top:sp==null?"":`${Math.round(sp)}<small>%</small>`,below:hm(tst??(off-on)/60),
+    title:`Sleep ${ampm(on)} – ${ampm(off)}`,go:()=>{tab="sleep";focus=null;render();}});
+  sess.forEach((s,i)=>items.push({a:s.start,b:s.end||s.start,c:"#0093e7",icon:sportIcon(s.type),top:"",below:s.strain==null?"—":(+s.strain).toFixed(1),
+    title:`${s.type} ${ampm(s.start)}${s.end?" – "+ampm(s.end):""}`,go:()=>{tab="strain";workout=i;focus=null;render();}}));
+  timeline(items);}
 
 function sleepDay(){const {pts,on,off}=dayCurve(day);const pad=30*60;
   const night=on!=null&&off!=null?pts.filter(p=>p.t>=on-pad&&p.t<=off+pad):[];
@@ -302,16 +349,30 @@ function workoutView(s){const prior=[];for(let i=1;i<=7;i++)sessionsOn(shift(day
   if(tot){const first=s.zones.length===6?0:1,mx=Math.max(...s.zones);
     z.innerHTML=`<h3 style="font-size:14px;margin:0 0 6px">Heart-rate zones</h3>`+s.zones.map((m,i)=>`<div><span>Zone ${i+first}</span><i style="width:${mx?(m/mx*100):0}%;opacity:${.35+.13*i}"></i><b>${Math.round(m)} min · ${Math.round(m/tot*100)}%</b></div>`).join("");}}
 
-function strip(){const k=tab==="strain"?"strain":tab==="sleep"?"sleep_perf":"readiness",mx=k==="strain"?21:100;
-  document.querySelector(".scrubhead").textContent=`${k==="strain"?"Strain":k==="sleep_perf"?"Sleep performance":"Recovery"} by day, last 60 days · click a day to open it`;
-  const today=iso(new Date()),days=[];for(let i=59;i>=0;i--)days.push(shift(today,-i));
-  const box=document.getElementById("strip");
-  box.innerHTML=days.map(d=>{const v=get(k,d),h=v==null?4:Math.max(6,v/mx*100);
-    const c=v==null?css("--bar2"):k==="readiness"?recColor(v):k==="strain"?css("--strain"):css("--sleep");
-    return `<button data-d="${d}" class="${d===day?"sel":""}" style="height:${h}%;background:${c}" title="${nice(d)}: ${v==null?"—":k==="strain"?(+v).toFixed(1):Math.round(v)+"%"}" aria-label="${nice(d)}"></button>`;}).join("");
-  box.querySelector(".sel")?.scrollIntoView({block:"nearest",inline:"nearest"});
-  const sh=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric"});
-  document.getElementById("ticks").innerHTML=[0,15,30,45,59].map(i=>`<span>${i===59?"Today":sh(days[i])}</span>`).join("");}
+// WHOOP's bottom scrubber: seven days of heart rate as one continuous line, the selected day
+// lifted out in red between two handles. Click a day (or use the arrows) to open it.
+const curveCache=new Map();
+function curveFor(d){if(!curveCache.has(d)){const {pts}=dayCurve(d),b=new Map();
+    pts.forEach(p=>{const k=Math.floor(p.t/600);const e=b.get(k)||[0,0];e[0]+=p.v;e[1]++;b.set(k,e);}); // 10-minute means: plenty for a 7-day overview
+    curveCache.set(d,[...b].map(([k,[s,n]])=>({t:k*600+300,v:s/n})));}
+  return curveCache.get(d);}
+let scrubDays=[];
+function strip(){const today=iso(new Date());let end=shift(day,1);if(end>today)end=today;
+  scrubDays=[];for(let i=6;i>=0;i--)scrubDays.push(shift(end,-i));
+  const cv=document.getElementById("scrub"),w=cv.clientWidth,h=cv.clientHeight,r=window.devicePixelRatio||1;if(!w)return;
+  cv.width=w*r;cv.height=h*r;const g=cv.getContext("2d");g.scale(r,r);g.clearRect(0,0,w,h);
+  const cw=w/7,data=scrubDays.map(curveFor),all=data.flat().map(p=>p.v),lo=40,hi=Math.max(140,...all)+8,Y=v=>h-4-(v-lo)/(hi-lo)*(h-14);
+  scrubDays.forEach((d,i)=>{const [a,b]=dayBounds(d),X=t=>i*cw+(t-a)/(b-a)*cw,sel=d===day,pts=data[i];
+    g.fillStyle=sel?"#ffffff":"#eef0f2";g.fillRect(i*cw,0,cw,h);
+    if(pts.length){g.beginPath();pts.forEach((p,j)=>{const x=X(p.t),y=Y(p.v);j?g.lineTo(x,y):g.moveTo(x,y);});
+      g.strokeStyle=sel?"#e5262e":"#a9b1b9";g.lineWidth=sel?1.3:1;g.stroke();
+      g.lineTo(X(pts.at(-1).t),h);g.lineTo(X(pts[0].t),h);g.closePath();g.fillStyle=sel?"rgba(229,38,46,.13)":"rgba(169,177,185,.18)";g.fill();}});
+  const si=scrubDays.indexOf(day);
+  if(si>=0)[si*cw,(si+1)*cw].forEach(x=>{g.fillStyle="#1b2026";g.fillRect(x-.75,0,1.5,h);
+    g.fillStyle="#fff";g.strokeStyle="#1b2026";g.lineWidth=1;g.beginPath();g.roundRect(x-5,h/2-11,10,22,3);g.fill();g.stroke();
+    g.beginPath();g.moveTo(x-1.5,h/2-5);g.lineTo(x-1.5,h/2+5);g.moveTo(x+1.5,h/2-5);g.lineTo(x+1.5,h/2+5);g.stroke();});
+  document.getElementById("slabels").innerHTML=scrubDays.map(d=>`<button data-d="${d}" class="${d===day?"sel":""}">${new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</button>`).join("");
+  document.getElementById("snext").disabled=day>=today;}
 
 function render(){const t=TABS[tab],prev=shift(day,-1);header();subtabs();strip();
   chart?.destroy();chart=null;document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
@@ -366,13 +427,16 @@ function goDay(d){if(!d||d>iso(new Date()))return;day=d;workout=-1;render();}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;workout=-1;focus=null;render();}));
 document.getElementById("ranges").addEventListener("click",e=>{const r=e.target.dataset.r;if(r)setRange(+r);});
 document.getElementById("subtabs").addEventListener("click",e=>{const w=e.target.closest("button")?.dataset.w;if(w!=null){workout=+w;render();}});
-document.getElementById("strip").addEventListener("click",e=>goDay(e.target.closest("button")?.dataset.d));
+document.getElementById("scrub").addEventListener("click",e=>{const r=e.target.getBoundingClientRect();goDay(scrubDays[Math.min(6,Math.floor((e.clientX-r.left)/r.width*7))]);});
+document.getElementById("slabels").addEventListener("click",e=>goDay(e.target.closest("button")?.dataset.d));
+document.getElementById("sprev").addEventListener("click",()=>goDay(shift(day,-1)));
+document.getElementById("snext").addEventListener("click",()=>goDay(shift(day,1)));
 document.getElementById("cal").addEventListener("change",e=>goDay(e.target.value));
 document.getElementById("prev").addEventListener("click",()=>goDay(shift(day,-1)));
 document.getElementById("next").addEventListener("click",()=>goDay(shift(day,1)));
 document.getElementById("today").addEventListener("click",()=>goDay(iso(new Date())));
 document.addEventListener("keydown",e=>{if(e.target.matches("input"))return;if(e.key==="ArrowLeft")goDay(shift(day,-1));if(e.key==="ArrowRight")goDay(shift(day,1));});
-window.addEventListener("resize",()=>{if(range===1&&tab==="overview")render();});
+let rz;window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(render,150);});
 async function load(blob,label){
   status("Reading…");const pass=passphrase(),r=await readBackup(blob,pass);data=r.d;
   try{if(document.getElementById("remember").checked&&pass)localStorage.setItem(PASS_KEY,pass);}catch{}showSaved();
