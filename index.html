@@ -4,105 +4,242 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Koop Dashboard</title>
+<meta name="theme-color" content="#0b0e12">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='27' fill='%230b0f13'/%3E%3Ccircle cx='47' cy='60' r='19' fill='none' stroke='%237cc4ff' stroke-width='8'/%3E%3Ccircle cx='73' cy='60' r='19' fill='none' stroke='%235cf0a0' stroke-width='8'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Montserrat:wght@400;600;700&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
-/* Layout (WHOOP web style): dark header with the three scores as tabs, a light page below with
-   a date switcher, statistics on the left and a chart in the middle, range buttons top right. */
+/* One deliberate look: WHOOP's dark, high-contrast instrument panel. Every colour is a token. */
 :root{
-  --head:#1b2026; --head2:#262c33; --page:#f6f7f8; --card:#ffffff; --line:#e3e6e9;
-  --ink:#1b2026; --ink2:#55606b; --ink3:#9aa3ad; --onhead:#f2f4f6;
-  --recovery:#f5d000; --strain:#0093e7; --sleep:#7ba1bb; --up:#16b45d; --down:#e5262e; --today:#e5262e;
-  --bar:#5a7383; --bar2:#c9cdd1;
-  --display:"Montserrat",system-ui,sans-serif; --num:"Barlow Semi Condensed",system-ui,sans-serif;
-  color-scheme:light;
+  --bg:#0b0e12; --bg2:#0f1318; --card:#141920; --card2:#1a2029; --raise:#212833; --line:#232b35; --line2:#2e3742;
+  --ink:#f3f6f8; --ink2:#aab5c0; --ink3:#6c7886;
+  --good:#2bd67b; --mid:#f5c842; --low:#f0475a; --strain:#2e9bff; --sleep:#8ab4d6; --deep:#3c5a78; --rem:#8ab4d6; --light:#c6d8e8; --awake:#4a5562;
+  --brandA:#7cc4ff; --brandB:#5cf0a0;
+  --ui:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif; --num:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --r:16px; color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--display)}
-.head{background:var(--head);color:var(--onhead)}
-.head .in{max-width:1100px;margin:0 auto;padding:24px 16px 0;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:center}
-.tab{background:none;border:0;color:var(--onhead);cursor:pointer;text-align:center;padding:0 8px 14px;position:relative;font:inherit}
-.tab .cap{font-size:16px;color:#c7ced6;margin-top:6px}
-.tab.on .cap{color:var(--accent,#fff);font-weight:700}
-.tab.on::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);border:9px solid transparent;border-bottom-color:var(--page)}
-.tab:focus-visible{outline:2px solid var(--strain);outline-offset:2px}
-.ring svg{width:130px;height:130px}
-.ring .n{font:600 40px var(--num);fill:var(--onhead)}
-.who{display:flex;gap:14px;align-items:center;padding-bottom:40px}
-.avatar{width:84px;height:84px;border-radius:50%;background:var(--head2);border:5px solid #000;display:grid;place-items:center;font:700 32px var(--display)}
-.who b{display:block;font-size:20px}
-.who span{color:#7fb4d9;font-size:13px}
-.sleepperf{text-align:center;padding-bottom:14px}
-.sleepperf small{color:#7ba1bb;display:block}
-.sleepperf .big{font:600 44px var(--num)}
-.sleepperf .pair{display:flex;gap:28px;justify-content:center}
-.sleepperf .pair div{font:600 26px var(--num)} .sleepperf .pair span{display:block;font:12px var(--display);color:#c7ced6}
-.bar{max-width:1100px;margin:0 auto;padding:18px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
-.datenav{display:flex;align-items:center;gap:10px}
-.datenav button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer}
-.date{color:var(--today);font-weight:600;font-size:16px}
-.loader{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
-input,select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
-.open{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer}
-.open.google{background:var(--card);color:var(--ink);border:1px solid var(--line)}
-.ranges{display:inline-flex;background:#eceef0;border-radius:999px;padding:2px}
-.ranges button{border:0;background:none;padding:5px 12px;border-radius:999px;font:600 12px var(--display);cursor:pointer;color:var(--ink)}
-.ranges button.on{background:var(--today);color:#fff}
-main{max-width:1100px;margin:0 auto;padding:8px 16px 48px;display:grid;grid-template-columns:260px 1fr;gap:28px;border-top:1px solid var(--line)}
-@media (max-width:760px){main{grid-template-columns:1fr}.ring svg{width:100px;height:100px}}
-.stats h3,.chart h3{font-size:14px;margin:16px 0 0}.stats .vs,.chart .vs{color:var(--ink3);font-size:12px;margin-bottom:12px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px 12px;text-align:center}
-.stat .l{font-size:12px}.stat .v{font:600 26px var(--num);color:var(--bar)}.stat .p{font-size:12px;color:var(--ink3)}
-.arrow{font-size:11px;margin-left:3px}
-.chart{min-width:0}.chartbox{position:relative;height:330px}
-.donutwrap{display:flex;gap:18px;align-items:center;margin-top:18px;flex-wrap:wrap}
-.legend div{display:flex;justify-content:space-between;gap:18px;font-size:13px;padding:3px 0}
-#status{max-width:1100px;margin:0 auto;padding:0 16px;color:var(--ink2);font-size:12px}
-.tag{font-size:11px;letter-spacing:.1em;text-transform:uppercase;background:#fff3c4;color:#6b5600;border-radius:999px;padding:2px 8px;margin-left:8px}
-.date{position:relative;cursor:pointer}
-.date input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
-.subtabs{background:var(--strain);display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;justify-content:center}
-.subtabs button{background:none;border:0;color:#cfe8fb;font:600 14px var(--display);padding:6px 12px;border-radius:999px;cursor:pointer}
-.subtabs button.on{color:#fff;background:rgba(255,255,255,.18)}
-.bubbles{position:relative;height:44px;margin-top:6px}.bubbles:empty{display:none}
-.bubble{position:absolute;transform:translateX(-50%);top:0;text-align:center;font:600 12px var(--num);white-space:nowrap}
-.bubble b{display:inline-block;padding:3px 8px;border-radius:6px;color:#fff}
-.zones{margin-top:14px}
-.zones div{display:grid;grid-template-columns:80px 1fr 70px;gap:10px;align-items:center;font-size:13px;padding:3px 0}
-.zones i{display:block;height:10px;border-radius:4px;background:var(--strain)}
-.scrub{max-width:1100px;margin:0 auto;padding:0 16px 40px}
-.scrubin{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px}
-.scrubhead{font-size:12px;color:var(--ink3);margin-bottom:6px}
-.strip{display:flex;gap:2px;align-items:flex-end;height:70px}
-.strip button{flex:1 1 0;border:0;border-radius:3px 3px 0 0;cursor:pointer;min-width:3px;padding:0}
-.strip button.sel{outline:2px solid var(--today);outline-offset:1px}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:radial-gradient(1200px 500px at 50% -120px,#18212c 0%,var(--bg) 60%) no-repeat,var(--bg);color:var(--ink);font:14px/1.5 var(--ui);-webkit-font-smoothing:antialiased;min-height:100vh}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--strain);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.over{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(11,14,18,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:18px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.28em;font-size:13px;flex:none}
+.brand svg{width:30px;height:30px}
+.tabs{display:flex;gap:4px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;overflow-x:auto;scrollbar-width:none}
+.tabs button{border:0;background:none;padding:7px 16px;border-radius:999px;font-weight:600;font-size:13px;color:var(--ink2);cursor:pointer;white-space:nowrap;transition:background .2s,color .2s}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{background:var(--raise);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
+.right{display:flex;align-items:center;gap:10px;flex:none}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--ink2);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 11px;white-space:nowrap}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--mid);box-shadow:0 0 10px var(--mid)}
+.chip.live i{background:var(--good);box-shadow:0 0 10px var(--good)}
+.btn{border:0;border-radius:999px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;background:var(--ink);color:#0b0e12;transition:transform .15s,opacity .15s}
+.btn:hover{opacity:.92}.btn:active{transform:scale(.97)}
+.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line2)}
+.avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;background:linear-gradient(135deg,var(--brandA),var(--brandB));color:#0b0e12}
+
+/* date row */
+.daterow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:22px 6px;flex-wrap:wrap}
+.datenav{display:flex;align-items:center;gap:8px}
+.iconbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line2);background:var(--card);cursor:pointer;display:grid;place-items:center;color:var(--ink2);transition:background .15s}
+.iconbtn:hover{background:var(--raise);color:var(--ink)}
+.iconbtn:disabled{opacity:.35;cursor:default}
+.date{position:relative;display:flex;align-items:baseline;gap:10px;cursor:pointer;padding:4px 6px;border-radius:10px}
+.date:hover{background:var(--card)}
+.date b{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.date span{color:var(--ink3);font-weight:500}
+.date input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;color-scheme:dark}
+.today{font-size:12px;font-weight:700;color:var(--strain);background:none;border:0;cursor:pointer;padding:6px 8px}
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{border:0;background:none;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;color:var(--ink3);cursor:pointer;letter-spacing:.04em}
+.seg button.on{background:var(--ink);color:#0b0e12}
+
+/* score cards */
+.scores{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding-block:14px 18px}
+.score{position:relative;display:flex;align-items:center;gap:18px;padding:18px 20px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:var(--r);cursor:pointer;text-align:left;transition:border-color .2s,transform .2s;overflow:hidden}
+.score:hover{border-color:var(--line2);transform:translateY(-1px)}
+.score.on{border-color:color-mix(in srgb,var(--acc) 55%,var(--line))}
+.score.on::before{content:"";position:absolute;inset:0;background:radial-gradient(400px 140px at 20% 0%,color-mix(in srgb,var(--acc) 14%,transparent),transparent 70%);pointer-events:none}
+.score svg{width:96px;height:96px;flex:none;overflow:visible}
+.score .meta{min-width:0;position:relative}
+.score .big{font-family:var(--num);font-size:40px;font-weight:600;line-height:1;margin-top:4px;font-variant-numeric:tabular-nums}
+.score .sub{color:var(--ink2);font-size:13px;margin-top:6px}
+.score .sub b{color:var(--ink);font-weight:600}
+
+/* main grid */
+.grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:14px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.card h2{margin:0;font-size:15px;font-weight:700;letter-spacing:-.005em}
+.card .vs{color:var(--ink3);font-size:12px;margin-top:3px}
+.card .vs b{color:var(--ink2);font-weight:600}
+.side{display:grid;gap:14px}
+.stats{margin-top:12px}
+.stat{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 10px;padding:12px 0;border-top:1px solid var(--line)}
+.stat:first-child{border-top:0}
+.stat .l{font-size:13px;color:var(--ink2);font-weight:500}
+.stat .v{font-family:var(--num);font-size:26px;font-weight:600;line-height:1.05;text-align:right;font-variant-numeric:tabular-nums}
+.stat .p{font-size:12px;color:var(--ink3)}
+.delta{justify-self:end;font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--raise);color:var(--ink3);white-space:nowrap}
+.delta.good{color:var(--good);background:color-mix(in srgb,var(--good) 13%,transparent)}
+.delta.bad{color:var(--low);background:color-mix(in srgb,var(--low) 13%,transparent)}
+.chead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.chips button{border:1px solid var(--line2);background:var(--card2);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer}
+.chips button.on{background:color-mix(in srgb,var(--strain) 18%,var(--card2));border-color:var(--strain);color:var(--ink)}
+.chips button b{font-family:var(--num);font-size:14px;margin-left:5px;color:var(--strain)}
+.bubbles{position:relative;height:48px;margin-top:14px}
+.bubbles:empty{display:none}
+.bubble{position:absolute;transform:translateX(-50%);top:0;text-align:center;white-space:nowrap;font-size:11px;color:var(--ink3);transition:transform .15s}
+.bubble:hover{transform:translateX(-50%) translateY(-2px)}
+.bubble b{display:inline-block;font-family:var(--num);font-size:15px;font-weight:700;padding:2px 9px;border-radius:7px;color:#0b0e12;margin-bottom:2px}
+.chartbox{position:relative;height:340px;margin-top:10px}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--ink3);font-size:13px;padding:20px}
+.empty[hidden]{display:none}
+.rows{display:grid;gap:12px;margin-top:14px}
+.row{display:grid;grid-template-columns:110px minmax(0,1fr) 92px;gap:12px;align-items:center;font-size:13px}
+.row .bar{position:relative;height:8px;border-radius:99px;background:var(--raise);overflow:hidden}
+.row .bar i{position:absolute;top:0;bottom:0;border-radius:99px}
+.row .bar .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line2)}
+.row b{font-family:var(--num);font-size:16px;font-weight:600;text-align:right}
+.row small{display:block;color:var(--ink3);font-size:11px;text-align:right;font-family:var(--ui);font-weight:500}
+.donutbox{display:flex;align-items:center;gap:18px;margin-top:12px}
+.donutbox .d{width:150px;height:150px;position:relative;flex:none}
+.donutbox .c{position:absolute;inset:0;display:grid;place-items:center;text-align:center;pointer-events:none}
+.legend{flex:1;display:grid;gap:8px}
+.legend div{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink2)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:8px}
+.legend b{font-family:var(--num);font-size:16px;color:var(--ink);font-weight:600}
+
+/* 60-day strip */
+.stripcard{margin-block:14px 30px}
+.strip{display:flex;gap:3px;align-items:flex-end;height:78px;margin-top:14px}
+.strip button{flex:1 1 0;min-width:3px;border:0;border-radius:3px 3px 1px 1px;cursor:pointer;padding:0;opacity:.55;transition:opacity .15s}
+.strip button:hover{opacity:.9}
+.strip button.sel{opacity:1;box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--ink)}
+.ticks{display:flex;justify-content:space-between;color:var(--ink3);font-size:11px;margin-top:8px}
+footer{color:var(--ink3);font-size:12px;text-align:center;padding-block:0 40px}
+
+/* connect dialog */
+dialog{border:1px solid var(--line2);border-radius:20px;background:var(--card);color:var(--ink);padding:0;width:min(420px,calc(100vw - 32px));box-shadow:0 30px 80px rgba(0,0,0,.6)}
+dialog::backdrop{background:rgba(5,7,10,.7);backdrop-filter:blur(4px)}
+.dlg{padding:26px}
+.dlg h3{margin:0 0 4px;font-size:19px}
+.dlg p{margin:0;color:var(--ink2);font-size:13px}
+.field{display:grid;gap:6px;margin-top:18px}
+.field label{font-size:12px;font-weight:600;color:var(--ink2)}
+.field input{background:var(--bg2);border:1px solid var(--line2);border-radius:12px;padding:12px 14px;color:var(--ink);font:inherit;font-size:14px}
+.field input:focus{outline:none;border-color:var(--strain);box-shadow:0 0 0 3px color-mix(in srgb,var(--strain) 25%,transparent)}
+.gbtn{width:100%;margin-top:16px;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;border-radius:12px;font-size:14px}
+.or{display:flex;align-items:center;gap:10px;color:var(--ink3);font-size:12px;margin:16px 0}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line2)}
+.filebtn{width:100%;border-radius:12px;padding:11px}
+.remember{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--ink2);cursor:pointer}
+.remember input{accent-color:var(--strain);width:15px;height:15px}
+.saved{margin-top:16px;font-size:12px;color:var(--ink2);background:var(--bg2);border:1px solid var(--line2);border-radius:12px;padding:10px 12px}
+.saved button{border:0;background:none;color:var(--strain);font-weight:700;cursor:pointer;padding:0}
+.msg{margin-top:14px;font-size:13px;color:var(--ink2);min-height:20px}
+.msg.err{color:var(--low)}
+.fine{margin-top:14px;font-size:11px;color:var(--ink3);line-height:1.5}
+.x{position:absolute;top:14px;right:14px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line2);border-top-color:var(--ink);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;background:var(--raise);border:1px solid var(--line2);border-radius:12px;padding:10px 16px;font-size:13px;box-shadow:0 12px 30px rgba(0,0,0,.5);transition:all .25s;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:960px){.grid{grid-template-columns:1fr}.side{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){
+  .top .wrap{height:auto;flex-wrap:wrap;padding-block:10px;gap:10px}
+  .tabs{order:3;width:100%;margin:0}
+  .right{margin-left:auto}
+  .scores{grid-template-columns:1fr;gap:10px}
+  .score{padding:14px 16px}.score svg{width:76px;height:76px}.score .big{font-size:32px}
+  .side{grid-template-columns:1fr}
+  .chartbox{height:260px}
+  .row{grid-template-columns:90px minmax(0,1fr) 80px}
+  .chip .t{display:none}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<section class="head"><div class="in">
-  <button class="tab" data-tab="overview" style="--accent:#fff"><div class="who"><div class="avatar" id="initial">K</div><div><b id="name">Koop</b><span>your band, your data</span></div></div><div class="cap" style="margin-top:-30px">Overview</div></button>
-  <button class="tab ring" data-tab="strain" style="--accent:var(--strain)"><svg viewBox="0 0 130 130" id="r-strain"></svg><div class="cap">Strain</div></button>
-  <button class="tab ring" data-tab="recovery" style="--accent:var(--recovery)"><svg viewBox="0 0 130 130" id="r-recovery"></svg><div class="cap">Recovery</div></button>
-  <button class="tab" data-tab="sleep" style="--accent:#7ba1bb"><div class="sleepperf"><small>Sleep Performance</small><div class="big" id="sp">—</div>
-    <div class="pair"><div id="hs">—<span>Hours of Sleep</span></div><div id="hn">—<span>Sleep Needed</span></div></div></div><div class="cap">Sleep</div></button>
-</div></section>
+<header class="top"><div class="wrap">
+  <div class="brand"><svg viewBox="0 0 120 120" aria-hidden="true"><defs>
+    <linearGradient id="ga" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#3b6bff"/></linearGradient>
+    <linearGradient id="gb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5cf0a0"/><stop offset="1" stop-color="#14b8a6"/></linearGradient></defs>
+    <circle cx="47" cy="60" r="19" fill="none" stroke="url(#ga)" stroke-width="8"/><circle cx="73" cy="60" r="19" fill="none" stroke="url(#gb)" stroke-width="8"/></svg>KOOP</div>
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <button data-tab="overview">Overview</button><button data-tab="sleep">Sleep</button><button data-tab="recovery" class="on">Recovery</button><button data-tab="strain">Strain</button>
+  </nav>
+  <div class="right">
+    <span class="chip" id="source"><i></i><span class="t" id="sourcet">Example data</span></span>
+    <button class="btn" id="connect">Open my data</button>
+    <div class="avatar" id="initial" hidden>K</div>
+  </div>
+</div></header>
 
-<div class="bar">
-  <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><span class="tag" id="source">Example data</span></div>
-  <form class="loader" id="loader"><button class="open google" type="button" id="gsign">Sign in with Google</button><span>or</span><label for="file">a backup file</label><input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
-    <input id="pass" type="password" placeholder="Passphrase" autocomplete="current-password"><button class="open" type="submit">Open file</button></form>
-  <div class="ranges" id="ranges"><button data-r="180">6m</button><button data-r="90">3m</button><button data-r="30">1m</button><button data-r="14">2w</button><button data-r="7">1w</button><button data-r="1" class="on">1d</button></div>
-</div>
-<div class="subtabs" id="subtabs" hidden></div>
-<div id="status">Showing example data. Enter your Koop Cloud passphrase and sign in with Google to open your own data, or open a backup file. It is decrypted and read in this browser only.</div>
+<main class="wrap">
+  <div class="daterow">
+    <div class="datenav">
+      <button class="iconbtn" id="prev" aria-label="Previous day"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <label class="date" for="cal" title="Pick a day"><b id="date">—</b><span id="date2"></span><input id="cal" type="date" aria-label="Pick a day"></label>
+      <button class="iconbtn" id="next" aria-label="Next day"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg></button>
+      <button class="today" id="today" hidden>Today</button>
+    </div>
+    <div class="seg" id="ranges" role="group" aria-label="Range"><button data-r="1" class="on">1D</button><button data-r="7">1W</button><button data-r="14">2W</button><button data-r="30">1M</button><button data-r="90">3M</button><button data-r="180">6M</button></div>
+  </div>
 
-<main>
-  <section class="stats"><h3 id="st-title">Day Statistics</h3><div class="vs" id="st-vs"></div><div class="grid2" id="st"></div></section>
-  <section class="chart"><h3 id="ch-title">Day Recovery</h3><div class="vs" id="ch-vs"></div><div class="bubbles" id="bubbles"></div><div class="chartbox"><canvas id="chart"></canvas></div><div class="zones" id="zones" hidden></div>
-    <div class="donutwrap" id="donutwrap" hidden><div class="legend" id="legend"></div><div style="width:180px;height:180px"><canvas id="donut"></canvas></div></div></section>
+  <section class="scores">
+    <button class="score" data-tab="sleep" style="--acc:var(--sleep)"><svg viewBox="0 0 100 100" id="r-sleep"></svg><div class="meta"><div class="over">Sleep</div><div class="big" id="sp">—</div><div class="sub" id="spsub">—</div></div></button>
+    <button class="score on" data-tab="recovery" style="--acc:var(--good)" id="rc-card"><svg viewBox="0 0 100 100" id="r-recovery"></svg><div class="meta"><div class="over">Recovery</div><div class="big" id="rc">—</div><div class="sub" id="rcsub">—</div></div></button>
+    <button class="score" data-tab="strain" style="--acc:var(--strain)"><svg viewBox="0 0 100 100" id="r-strain"></svg><div class="meta"><div class="over">Strain</div><div class="big" id="stv">—</div><div class="sub" id="stsub">—</div></div></button>
+  </section>
+
+  <div class="grid">
+    <div class="side">
+      <section class="card"><h2 id="st-title">Day statistics</h2><div class="vs" id="st-vs"></div><div class="stats" id="st"></div></section>
+      <section class="card" id="donutcard" hidden><h2>Sleep stages</h2><div class="vs">Share of time in bed</div>
+        <div class="donutbox"><div class="d"><canvas id="donut"></canvas><div class="c"><div><div class="num" style="font-size:24px;font-weight:600" id="dtot">—</div><div class="over" style="font-size:9px">asleep</div></div></div></div><div class="legend" id="legend"></div></div></section>
+    </div>
+    <div class="side" style="grid-template-columns:1fr">
+      <section class="card">
+        <div class="chead"><div><h2 id="ch-title">—</h2><div class="vs" id="ch-vs"></div></div></div>
+        <div class="chips" id="subtabs" hidden></div>
+        <div class="bubbles" id="bubbles"></div>
+        <div class="chartbox"><canvas id="chart"></canvas><div class="empty" id="chempty" hidden></div></div>
+      </section>
+      <section class="card" id="rowscard" hidden><h2 id="rows-title">Contributors</h2><div class="vs" id="rows-vs"></div><div class="rows" id="rows"></div></section>
+    </div>
+  </div>
+
+  <section class="card stripcard"><div class="chead"><div><h2 id="strip-title">Recovery, last 60 days</h2><div class="vs">Click a day to open it · ← → keys move a day</div></div></div>
+    <div class="strip" id="strip"></div><div class="ticks" id="ticks"></div></section>
 </main>
-<section class="scrub"><div class="scrubin"><div class="scrubhead">Recovery by day · click a day to open it</div><div class="strip" id="strip"></div></div></section>
+<footer>Koop reads your data in this browser only. Nothing is uploaded, and nothing is stored after you close the tab.</footer>
+
+<dialog id="dlg"><form method="dialog" class="dlg" id="dlgform" style="position:relative">
+  <button class="iconbtn x" value="close" aria-label="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <h3>Open your Koop data</h3>
+  <p>Your Koop Cloud copy is encrypted. It is unlocked here, in this browser, with your passphrase.</p>
+  <div id="passwrap"><div class="field"><label for="pass">Koop Cloud passphrase</label><input id="pass" type="password" autocomplete="current-password" placeholder="The passphrase set in the app"></div>
+  <label class="remember"><input type="checkbox" id="remember" checked> Remember on this browser</label></div>
+  <div class="saved" id="saved" hidden>Passphrase remembered on this browser · <button type="button" id="forget">Forget it</button></div>
+  <button type="button" class="btn gbtn" id="gsign"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg><span id="gsignt">Continue with Google</span></button>
+  <div class="or">or</div>
+  <button type="button" class="btn ghost filebtn" id="pick">Open a backup file…</button>
+  <input id="file" type="file" accept=".kbak,.osbk,.db,.gz" hidden>
+  <div class="msg" id="status" role="status"></div>
+  <div class="fine">Google sign-in asks only for Koop's own Drive files (the Koop folder). The sign-in lasts until you close this tab and is never saved.</div>
+</form></dialog>
+<div class="toast" id="toast" role="status"></div>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -111,15 +248,20 @@ main{max-width:1100px;margin:0 auto;padding:8px 16px 48px;display:grid;grid-temp
 "use strict";
 const KEYS=["readiness","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min","awakenings","sol_min"];
 const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
-let liveDb=null,data={},tab="recovery",range=1,day=null,chart,donut,sri=null,sriDay=null,sess=null;
+const $=id=>document.getElementById(id);
+let liveDb=null,data={},tab="recovery",range=1,day=null,chart,donut,sri=null,sriDay=null,sess=[],workout=-1,firstDraw=true;
 const iso=t=>t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
 const shift=(d,n)=>{const t=new Date(d+"T12:00:00");t.setDate(t.getDate()+n);return iso(t);};
 const get=(k,d)=>data[k]?.get(d)??null;
 const hm=m=>m==null?"—":Math.floor(m/60)+":"+String(Math.round(m%60)).padStart(2,"0");
+const hmw=m=>m==null?"—":`${Math.floor(m/60)}h ${String(Math.round(m%60)).padStart(2,"0")}m`;
 const nice=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+const long=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"long"});
+const short=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric"});
 const clock=t=>{const x=new Date(t*1000);return x.getHours()+":"+String(x.getMinutes()).padStart(2,"0");};
 const secs=t=>t==null?null:t>1e12?t/1000:t; // sessions store seconds; tolerate ms
 const dayBounds=d=>{const a=new Date(d+"T00:00:00"),b=new Date(a);b.setDate(a.getDate()+1);return [a.getTime()/1000,b.getTime()/1000];}; // local midnight to midnight (DST-safe)
+const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
 
 // The app stores curves through SeriesCodec: a plain [{t,v}] list, or {t0,dt,v} (regular grid), or {t0,to,v} (offsets).
 function decodeCurve(raw){
@@ -148,12 +290,13 @@ async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuff
   if(String.fromCharCode(...buf.slice(0,4))==="OSBK"){ // magic4 ver1 kdf1 iter4(BE) salt16 nonce12 | AES-256-GCM, header as AAD
     if(!pass)throw new Error("This file is encrypted. Enter your Koop Cloud passphrase.");
     const hdr=buf.slice(0,38),dv=new DataView(hdr.buffer),iter=dv.getUint32(6),salt=hdr.slice(10,26),iv=hdr.slice(26,38);
-    status("Unlocking (a few seconds)…");
+    status("Unlocking…",true);
     const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
     const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
     try{buf=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv,additionalData:hdr,tagLength:128},key,buf.slice(38)));}
     catch{throw new Error("Wrong passphrase, or the file is damaged.");}}
   if(buf[0]===0x1f&&buf[1]===0x8b){buf=new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());}
+  status("Reading your data…",true);
   const SQL=await initSqlJs(),db=new SQL.Database(buf);
   const res=db.exec(`SELECT date,key,value FROM metric_series WHERE value IS NOT NULL AND key IN (${KEYS.map(k=>`'${k}'`).join(",")})`);
   let name=null;try{const p=db.exec("SELECT value FROM kv WHERE key='profile_name'");name=p[0]?.values[0][0]??null;}catch{}
@@ -191,150 +334,227 @@ function sessionsOn(d){
     return {id:o.id,type:ty[0].toUpperCase()+ty.slice(1),start:secs(o.start_ts),end:secs(o.end_ts),strain:o.strain,max_hr:o.max_hr,avg_hr:o.avg_hr??null,
       calories:o.calories,duration_min:o.duration_min,zones,hr};}).filter(Boolean);}
 
-function status(t){document.getElementById("status").textContent=t;}
-function ring(id,frac,color,text){const r=56,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
-  document.getElementById(id).innerHTML=`<circle cx="65" cy="65" r="${r}" fill="none" stroke="#2b323a" stroke-width="7"/><circle cx="65" cy="65" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 65 65)"/><text x="65" y="78" text-anchor="middle" class="n">${text}</text>`;}
+// ---------- status ----------
+function status(t,busy=false,err=false){const m=$("status");m.className="msg"+(err?" err":"");m.innerHTML=(busy?'<span class="spin"></span>':"")+t;
+  if(t&&!$("dlg").open)toast(t);}
+
+// The passphrase can be remembered in THIS browser (the person's choice, on by default), so
+// later visits are one click: Google sign-in only. It is never sent anywhere. Storage can be
+// blocked or empty (private windows): every access is guarded, and without it the dialog asks.
+const PASS_KEY="koop.passphrase";
+const savedPass=()=>{try{return localStorage.getItem(PASS_KEY)||"";}catch{return "";}};
+function rememberPass(p){try{if($("remember").checked&&p)localStorage.setItem(PASS_KEY,p);}catch{}}
+function forgetPass(){try{localStorage.removeItem(PASS_KEY);}catch{}$("pass").value="";showSaved();}
+function showSaved(){const s=!!savedPass();$("saved").hidden=!s;$("passwrap").hidden=s;if(s)$("pass").value=savedPass();}
+const passphrase=()=>$("pass").value||savedPass();
+let toastT;function toast(t){const e=$("toast");e.textContent=t;e.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove("show"),3800);}
+
+// ---------- header: three score rings ----------
+const tierColor=x=>x>=67?css("--good"):x>=34?css("--mid"):css("--low");
+const tierWord=x=>x>=67?"Primed for strain":x>=34?"Maintaining":"Prioritise rest";
+function ring(id,frac,color){const r=42,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
+  $(id).innerHTML=`<circle cx="50" cy="50" r="${r}" fill="none" stroke="${css("--raise")}" stroke-width="8"/>`+
+    (frac==null?"":`<circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 50 50)" style="filter:drop-shadow(0 0 6px ${color}66);transition:stroke-dasharray .6s cubic-bezier(.2,.8,.2,1)"/>`);}
 
 function header(){const rc=get("readiness",day),st=get("strain",day),sp=get("sleep_perf",day),ts=get("tst_min",day);
-  ring("r-recovery",rc==null?null:rc/100,css("--recovery"),rc==null?"—":Math.round(rc)+"%");
-  ring("r-strain",st==null?null:st/21,css("--strain"),st==null?"—":(+st).toFixed(1));
-  document.getElementById("sp").textContent=sp==null?"—":Math.round(sp)+"%";
-  document.getElementById("hs").firstChild.textContent=hm(ts);
-  document.getElementById("hn").firstChild.textContent=ts!=null&&sp?hm(ts/(sp/100)):"—";
-  document.getElementById("date").textContent=(day===iso(new Date())?"Today, ":"")+nice(day);
-  const cal=document.getElementById("cal");cal.value=day;cal.max=iso(new Date());
-  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));}
+  const rcol=rc==null?css("--ink3"):tierColor(rc);
+  ring("r-recovery",rc==null?null:rc/100,rcol);$("rc").textContent=rc==null?"—":Math.round(rc)+"%";$("rc").style.color=rc==null?"":rcol;
+  $("rcsub").textContent=rc==null?"Not scored for this day":tierWord(rc);$("rc-card").style.setProperty("--acc",rc==null?css("--line2"):rcol);
+  ring("r-strain",st==null?null:st/21,css("--strain"));$("stv").textContent=st==null?"—":(+st).toFixed(1);
+  $("stsub").innerHTML=st==null?"No strain recorded":`of 21 · <b>${st>=14?"High":st>=10?"Moderate":"Light"}</b>`;
+  ring("r-sleep",sp==null?null:sp/100,css("--sleep"));$("sp").textContent=sp==null?"—":Math.round(sp)+"%";
+  $("spsub").innerHTML=ts==null?"No sleep recorded":`<b>${hmw(ts)}</b>${sp?` of ${hmw(ts/(sp/100))} needed`:""}`;
+  const isToday=day===iso(new Date());
+  $("date").textContent=isToday?"Today":day===shift(iso(new Date()),-1)?"Yesterday":long(day);$("date2").textContent=short(day);
+  $("today").hidden=isToday;$("next").disabled=isToday;
+  const cal=$("cal");cal.value=day;cal.max=iso(new Date());
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
+  document.querySelectorAll(".score").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));}
 
 const TABS={
-  recovery:{title:"Recovery",stats:[["HRV","rmssd",0,1],["Resting HR","rhr",0,-1],["Sleep","sleep_perf",0,1,"%"],["Respiratory Rate","resp_rate",1,0]],
-    bars:[["Heart Rate Variability","rmssd"],["Resting Heart Rate","rhr"],["Sleep Performance","sleep_perf"]],trend:["readiness","Recovery %",[0,100]]},
-  sleep:{title:"Sleep",stats:[["Time in Bed","inbed_min",0,0,"h"],["Hours of Sleep","tst_min",0,1,"h"],["Disturbances","awakenings",0,-1],["Latency","sol_min",0,-1,"m"],
-      ["Sleep Efficiency","efficiency",0,1,"%"],["Consistency","sri",0,1,"%"],["Respiratory Rate","resp_rate",1,0],["Sleep Performance","sleep_perf",0,1,"%"]],
-    trend:["tst_min","Hours of sleep",null],donut:true},
-  strain:{title:"Strain",stats:[["Day Strain","strain",1,0],["Steps","steps",0,1],["Calories","calories",0,0],["Active Minutes","active_min",0,1]],
-    bars:[["Day Strain","strain"],["Active Minutes","active_min"]],trend:["strain","Day strain",[0,21]]},
-  overview:{title:"Overview",stats:[["Recovery","readiness",0,1,"%"],["Day Strain","strain",1,0],["Sleep","sleep_perf",0,1,"%"],["HRV","rmssd",0,1]],
-    trend:["readiness","Recovery %",[0,100]]}};
+  recovery:{title:"Recovery",stats:[["Recovery","readiness",0,1,"%"],["HRV","rmssd",0,1," ms"],["Resting heart rate","rhr",0,-1," bpm"],["Respiratory rate","resp_rate",1,0," rpm"],["Sleep performance","sleep_perf",0,1,"%"]],
+    rows:[["HRV","rmssd",1," ms",0],["Resting HR","rhr",-1," bpm",0],["Respiratory rate","resp_rate",0," rpm",1],["Sleep","sleep_perf",1,"%",0]],trend:["readiness","Recovery",[0,100],"%"]},
+  sleep:{title:"Sleep",stats:[["Sleep performance","sleep_perf",0,1,"%"],["Hours of sleep","tst_min",0,1,"h"],["Time in bed","inbed_min",0,0,"h"],["Sleep efficiency","efficiency",0,1,"%"],
+      ["Disturbances","awakenings",0,-1,""],["Latency","sol_min",0,-1,"m"],["Consistency","sri",0,1,"%"],["Respiratory rate","resp_rate",1,0," rpm"]],
+    trend:["tst_min","Hours of sleep",null,"h"],donut:true},
+  strain:{title:"Strain",stats:[["Day strain","strain",1,0,""],["Steps","steps",0,1,""],["Calories","calories",0,0," kcal"],["Active minutes","active_min",0,1," min"]],
+    rows:[["Steps","steps",1,"",0],["Active minutes","active_min",1," min",0],["Calories","calories",0," kcal",0]],trend:["strain","Day strain",[0,21],""]},
+  overview:{title:"Overview",stats:[["Recovery","readiness",0,1,"%"],["Day strain","strain",1,0,""],["Sleep performance","sleep_perf",0,1,"%"],["HRV","rmssd",0,1," ms"],["Resting heart rate","rhr",0,-1," bpm"]],
+    trend:["readiness","Recovery",[0,100],"%"]}};
 
 // SRI is one latest value, not a daily series: only the newest day may show it.
 const val=(k,d)=>k==="sri"?(d===sriDay&&sri!=null?sri:null):get(k,d);
-function fmt(k,v,dp,u){if(v==null)return "—";if(u==="h")return hm(v);if(u==="m")return Math.round(v)+" min";return (+v).toFixed(dp)+(u==="%"?"%":"");}
-const recColor=x=>x>=67?css("--up"):x>=34?css("--recovery"):css("--down");
-const lineOpts=y=>({responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:"index",intersect:false},
-  plugins:{legend:{display:false},tooltip:{displayColors:false,filter:i=>i.raw!=null,callbacks:{title:i=>i[0]?.label??"",label:i=>`${i.dataset.label?i.dataset.label+": ":""}${i.raw} bpm`}}},scales:{y:{grid:{color:css("--line")},title:{display:true,text:"bpm"},...y},x:{ticks:{maxTicksLimit:12,autoSkip:true},grid:{display:false}}}});
+function fmt(v,dp,u){if(v==null)return "—";if(u==="h")return hmw(v);if(u==="m")return Math.round(v)+" min";
+  const n=(+v).toFixed(dp);return u==="%"?n+"%":u?`${Number(n).toLocaleString()}<small style="font-size:13px;color:var(--ink3);font-family:var(--ui);margin-left:3px">${u.trim()}</small>`:Number(n).toLocaleString();}
 
-function statsGrid(rows,cur,was){document.getElementById("st").innerHTML=rows.map(([l,now,before,dp,better,u])=>{
-  let arr="";if(now!=null&&before!=null&&Math.abs(now-before)>1e-9){const up=now>before,good=better===0?null:(up===(better>0));
-    arr=`<span class="arrow" style="color:${good==null?css("--ink3"):good?css("--up"):css("--down")}">${up?"▲":"▼"}</span>`;}
-  return `<div class="stat"><div class="l">${l}</div><div class="v">${fmt(null,now,dp,u)}${arr}</div><div class="p">${fmt(null,before,dp,u)}</div></div>`;}).join("");}
+function statsList(rows){$("st").innerHTML=rows.map(([l,now,before,dp,better,u])=>{
+  let d="";if(now!=null&&before!=null&&Math.abs(now-before)>1e-9){const up=now>before,good=better===0?null:(up===(better>0));
+    const diff=Math.abs(now-before),txt=u==="h"||u==="m"?hm(diff).replace(/^0:/,"")+(u==="m"?"":" h"):(+diff).toFixed(dp)+(u==="%"?" pts":"");
+    d=`<span class="delta ${good==null?"":good?"good":"bad"}">${up?"▲":"▼"} ${txt}</span>`;}
+  else d=`<span class="delta">${now==null?"no data":"same"}</span>`;
+  return `<div class="stat"><div class="l">${l}</div><div class="v">${fmt(now,dp,u)}</div><div class="p">was ${fmt(before,dp,u).replace(/<small[^>]*>.*?<\/small>/,"")}</div>${d}</div>`;}).join("");}
 
-// Bubbles sit above the chart at the x of the moment they describe.
-function bubbles(items,pts){const box=document.getElementById("bubbles");box.innerHTML="";if(!chart||pts.length<2)return;
-  const a=chart.chartArea,t0=pts[0].t,t1=pts.at(-1).t;box.style.marginLeft="0";
+// ---------- chart helpers ----------
+Chart.register({id:"crosshair",afterDatasetsDraw(c){const a=c.tooltip?.getActiveElements?.();if(c.config.type!=="line"||!a?.length)return;
+  const x=a[0].element.x,{top,bottom}=c.chartArea,g=c.ctx;g.save();g.strokeStyle="rgba(255,255,255,.25)";g.setLineDash([3,3]);g.lineWidth=1;g.beginPath();g.moveTo(x,top);g.lineTo(x,bottom);g.stroke();g.restore();}});
+function base(){Chart.defaults.font.family=css("--ui");Chart.defaults.font.size=11;Chart.defaults.color=css("--ink3");Chart.defaults.borderColor=css("--line");
+  const tt=Chart.defaults.plugins.tooltip;Object.assign(tt,{backgroundColor:css("--raise"),borderColor:css("--line2"),borderWidth:1,titleColor:css("--ink"),bodyColor:css("--ink2"),padding:10,cornerRadius:10,displayColors:false,titleFont:{weight:"700"}});}
+const anim=()=>firstDraw?{duration:500,easing:"easeOutCubic"}:{duration:300};
+const grad=(color,a=.28)=>c=>{const {ctx,chartArea}=c.chart;if(!chartArea)return color+"00";const g=ctx.createLinearGradient(0,chartArea.top,0,chartArea.bottom);
+  g.addColorStop(0,hexA(color,a));g.addColorStop(1,hexA(color,0));return g;};
+function hexA(h,a){h=h.replace("#","");if(h.length===3)h=h.split("").map(x=>x+x).join("");const n=parseInt(h,16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
+const lineOpts=(y,unit=" bpm")=>({responsive:true,maintainAspectRatio:false,animation:anim(),interaction:{mode:"index",intersect:false},
+  plugins:{legend:{display:false},tooltip:{filter:i=>i.raw!=null,callbacks:{title:i=>i[0]?.label??"",label:i=>`${i.dataset.label?i.dataset.label+"  ":""}${i.raw}${unit}`}}},
+  scales:{y:{grid:{color:css("--line")},border:{display:false},ticks:{padding:8},...y},x:{ticks:{maxTicksLimit:9,autoSkip:true,maxRotation:0},grid:{display:false},border:{color:css("--line")}}}});
+function empty(t){const e=$("chempty");e.hidden=!t;e.textContent=t||"";}
+
+function bubbles(items,pts){const box=$("bubbles");box.innerHTML="";if(!chart||pts.length<2)return;
+  const a=chart.chartArea,t0=pts[0].t,t1=pts.at(-1).t;
   items.forEach(it=>{if(it.t<t0||it.t>t1)return;const x=a.left+(it.t-t0)/(t1-t0)*a.width;
-    const el=document.createElement("div");el.className="bubble";el.style.left=x+"px";
-    el.innerHTML=`<b style="background:${it.c}">${it.text}</b><div style="color:${css("--ink3")};font-weight:500">${it.sub}</div>`;
+    const el=document.createElement("button");el.className="bubble";el.style.left=x+"px";el.style.border="0";el.style.background="none";
+    el.innerHTML=`<b style="background:${it.c}">${it.text}</b><div>${it.sub}</div>`;el.title=it.title||"";
     if(it.go){el.style.cursor="pointer";el.addEventListener("click",it.go);}box.appendChild(el);});}
 
-Chart.register({id:"crosshair",afterDatasetsDraw(c){const a=c.tooltip?.getActiveElements?.();if(c.config.type!=="line"||!a?.length)return;
-  const x=a[0].element.x,{top,bottom}=c.chartArea,g=c.ctx;g.save();g.strokeStyle=css("--ink3");g.lineWidth=1;g.beginPath();g.moveTo(x,top);g.lineTo(x,bottom);g.stroke();g.restore();}});
-function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));document.getElementById("ch-title").textContent=title;
-  document.getElementById("ch-vs").textContent=pts.length?vs:`${nice(day)} · no heart-rate curve stored for this day`;
+function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));$("ch-title").textContent=title;
+  $("ch-vs").textContent=vs;empty(pts.length?"":"No heart-rate curve was stored for this day.");
   const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off;
-  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:pts.map(p=>clock(p.t)),datasets:[
-    {label:"Asleep",data:pts.map(p=>inSleep(p)?p.v:null),borderColor:css("--sleep"),backgroundColor:"rgba(123,161,187,.18)",fill:"origin",pointRadius:0,borderWidth:1.2,spanGaps:false},
-    {label:"Awake",data:pts.map(p=>inSleep(p)||inW(p)?null:p.v),borderColor:"#b4bcc4",pointRadius:0,borderWidth:1.2,spanGaps:false},
-    {label:"Workout",data:pts.map(p=>inW(p)&&!inSleep(p)?p.v:null),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.15)",fill:"origin",pointRadius:0,borderWidth:1.6,spanGaps:false}]},options:lineOpts({min:0})});}
+  const vals=pts.map(p=>p.v),lo=vals.length?Math.max(0,Math.floor((Math.min(...vals)-10)/10)*10):0;
+  chart=new Chart($("chart"),{type:"line",data:{labels:pts.map(p=>clock(p.t)),datasets:[
+    {label:"Asleep",data:pts.map(p=>inSleep(p)?p.v:null),borderColor:css("--sleep"),backgroundColor:grad(css("--sleep"),.32),fill:"origin",pointRadius:0,borderWidth:1.6,tension:.2,spanGaps:false},
+    {label:"Awake",data:pts.map(p=>inSleep(p)||inW(p)?null:p.v),borderColor:"#7d8a98",backgroundColor:grad("#7d8a98",.12),fill:"origin",pointRadius:0,borderWidth:1.4,tension:.2,spanGaps:false},
+    {label:"Workout",data:pts.map(p=>inW(p)&&!inSleep(p)?p.v:null),borderColor:css("--strain"),backgroundColor:grad(css("--strain"),.35),fill:"origin",pointRadius:0,borderWidth:2,tension:.2,spanGaps:false}]},
+    options:lineOpts({min:lo})});}
 
+// ---------- the day views ----------
 function overviewDay(){const {pts,on,off}=dayCurve(day);sess=sessionsOn(day);
-  drawCurve(pts,on,off,"Day heart rate",`${nice(day)} · light blue is sleep, bright blue is a workout · click a workout bubble to open it`,sess);
+  drawCurve(pts,on,off,"Heart rate",`${nice(day)} · every minute the band was worn · hover for bpm`,sess);
   const sp=get("sleep_perf",day),items=[];
-  if(on!=null&&off!=null)items.push({t:(on+off)/2,c:css("--sleep"),text:sp==null?"Sleep":Math.round(sp)+"%",sub:`${clock(on)}–${clock(off)}`,go:()=>{tab="sleep";render();}});
+  if(on!=null&&off!=null)items.push({t:(on+off)/2,c:css("--sleep"),text:sp==null?"Sleep":Math.round(sp)+"%",sub:`Sleep ${clock(on)}–${clock(off)}`,go:()=>{tab="sleep";render();}});
   sess.forEach((s,i)=>items.push({t:(s.start+(s.end||s.start))/2,c:css("--strain"),text:s.strain==null?"—":(+s.strain).toFixed(1),sub:s.type,go:()=>{tab="strain";workout=i;render();}}));
   bubbles(items,pts);}
 
 function sleepDay(){const {pts,on,off}=dayCurve(day);const pad=30*60;
   const night=on!=null&&off!=null?pts.filter(p=>p.t>=on-pad&&p.t<=off+pad):[];
-  drawCurve(night,on,off,"Night heart rate",on==null?`${nice(day)} · no sleep window stored for this night`:`${clock(on)} to ${clock(off)} · blue is asleep`);
-  if(on==null)document.getElementById("ch-vs").textContent=`${nice(day)} · no sleep window stored for this night`;
+  drawCurve(night,on,off,"Night heart rate",on==null?nice(day):`${nice(day)} · asleep ${clock(on)} to ${clock(off)}`);
+  if(on==null)empty("No sleep window was stored for this night.");
   const tib=get("inbed_min",day),tst=get("tst_min",day),awake=tib!=null&&tst!=null&&tib>=tst?tib-tst:null;
-  const st=[["Awake",awake,"#e6e9ec"],["Light",get("light_min",day),"#c9d7e2"],["REM",get("rem_min",day),css("--sleep")],["SWS Deep",get("deep_min",day),"#2f3d4a"]];
-  donut?.destroy();donut=new Chart(document.getElementById("donut"),{type:"doughnut",data:{labels:st.map(s=>s[0]),datasets:[{data:st.map(s=>s[1]),backgroundColor:st.map(s=>s[2])}]},options:{cutout:"70%",animation:false,plugins:{legend:{display:false}}}});
-  document.getElementById("legend").innerHTML=st.map(s=>`<div><span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${s[2]};margin-right:6px"></i>${s[0]}</span><b>${hm(s[1])}</b></div>`).join("");}
+  const st=[["Awake",awake,css("--awake")],["Light",get("light_min",day),css("--light")],["REM",get("rem_min",day),css("--rem")],["Deep (SWS)",get("deep_min",day),css("--deep")]];
+  const tot=st.reduce((a,s)=>a+(s[1]||0),0);$("dtot").textContent=tst==null?"—":hm(tst);
+  donut?.destroy();donut=new Chart($("donut"),{type:"doughnut",data:{labels:st.map(s=>s[0]),datasets:[{data:st.map(s=>s[1]),backgroundColor:st.map(s=>s[2]),borderWidth:0,spacing:2,borderRadius:4}]},
+    options:{cutout:"74%",animation:anim(),plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`${i.label}  ${hmw(i.raw)}`}}}}});
+  $("legend").innerHTML=st.map(s=>`<div><span><i style="background:${s[2]}"></i>${s[0]}</span><span><b>${hm(s[1])}</b> <small style="color:var(--ink3)">${s[1]!=null&&tot?Math.round(s[1]/tot*100)+"%":""}</small></span></div>`).join("");}
 
-let workout=-1;
-function subtabs(){const box=document.getElementById("subtabs");box.hidden=!(tab==="strain"&&range===1);if(box.hidden)return;
+// Today's figure against its own 30-day average (needs 4 days, the app's baseline minimum; else "—").
+function contributors(t){const box=$("rows");$("rowscard").hidden=false;$("rows-title").textContent=tab==="strain"?"Today vs your usual":"Contributors";
+  $("rows-vs").textContent="Against your own 30-day average";
+  box.innerHTML=t.rows.map(([l,k,better,u,dp])=>{const v=get(k,day),hist=[];for(let i=1;i<=30;i++){const x=get(k,shift(day,-i));if(x!=null)hist.push(x);}
+    const avg=hist.length>=4?mean(hist):null;let bar="",pct=null;
+    if(v!=null&&avg){pct=(v-avg)/avg*100;const w=Math.min(50,Math.abs(pct)*2),good=better===0?null:(pct>=0)===(better>0);
+      const col=good==null?css("--ink3"):good?css("--good"):css("--low");
+      bar=`<i style="background:${col};${pct>=0?`left:50%;width:${w}%`:`left:${50-w}%;width:${w}%`}"></i>`;}
+    const f=x=>x==null?"—":(+x).toFixed(dp)+(u==="%"?"%":"");
+    return `<div class="row"><span style="color:var(--ink2)">${l}</span><div class="bar"><span class="mid"></span>${bar}</div><b>${f(v)}${u&&u!=="%"?`<span style="font-size:11px;color:var(--ink3)">${u}</span>`:""}<small>${avg==null?"too few days":`avg ${f(avg)}${pct==null?"":` · ${pct>=0?"+":""}${Math.round(pct)}%`}`}</small></b></div>`;}).join("");}
+
+function recoveryDay(){const ds=[];for(let i=29;i>=0;i--)ds.push(shift(day,-i));const v=ds.map(d=>get("readiness",d));
+  $("ch-title").textContent="Recovery, last 30 days";$("ch-vs").textContent=`Ending ${nice(day)} · the bright bar is this day · click a bar to open it`;
+  empty(v.some(x=>x!=null)?"":"No recovery scores in these 30 days yet.");
+  chart=new Chart($("chart"),{type:"bar",data:{labels:ds.map(short),datasets:[{label:"Recovery",data:v,borderRadius:5,borderSkipped:false,maxBarThickness:22,
+      backgroundColor:v.map((x,i)=>x==null?null:hexA(tierColor(x),i===29?1:.4))}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:anim(),onClick:(e,el)=>{if(el[0])goDay(ds[el[0].index]);},onHover:(e,el)=>{e.native.target.style.cursor=el.length?"pointer":"default";},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`Recovery  ${i.raw}%`}}},scales:{y:{min:0,max:100,ticks:{stepSize:25,callback:x=>x+"%"},grid:{color:css("--line")},border:{display:false}},x:{grid:{display:false},ticks:{maxTicksLimit:8,maxRotation:0}}}}});
+  contributors(TABS.recovery);}
+
+function strainDay(){overviewDay();$("ch-title").textContent="Heart rate and workouts";contributors(TABS.strain);}
+
+function subtabs(){const box=$("subtabs");box.hidden=!(tab==="strain"&&range===1);if(box.hidden)return;
   sess=sessionsOn(day);if(workout>=sess.length)workout=-1;
-  box.innerHTML=`<button data-w="-1" class="${workout<0?"on":""}">Day</button>`+sess.map((s,i)=>`<button data-w="${i}" class="${workout===i?"on":""}">${s.type} ${s.strain==null?"":(+s.strain).toFixed(1)}</button>`).join("");}
+  box.innerHTML=`<button data-w="-1" class="${workout<0?"on":""}">Whole day</button>`+sess.map((s,i)=>`<button data-w="${i}" class="${workout===i?"on":""}">${s.type}<b>${s.strain==null?"—":(+s.strain).toFixed(1)}</b></button>`).join("")+
+    (sess.length?"":`<span style="font-size:12px;color:var(--ink3);align-self:center">No workouts recorded this day</span>`);}
 
 // Workout vs the same kind of workout over the previous 7 days (average), or "—" when there is none.
 function workoutView(s){const prior=[];for(let i=1;i<=7;i++)sessionsOn(shift(day,-i)).forEach(x=>{if(x.type===s.type)prior.push(x);});
-  const avg=k=>{const a=prior.map(x=>x[k]).filter(v=>typeof v==="number");return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;};
-  document.getElementById("st-title").textContent=`${s.type} Statistics`;
-  document.getElementById("st-vs").innerHTML=`<b>${clock(s.start)}${s.end?"–"+clock(s.end):""}</b> vs ${prior.length?`your ${prior.length} ${s.type} workout${prior.length>1?"s":""} in the week before (average)`:"no other "+s.type+" workout in the week before"}`;
-  statsGrid([["Strain",s.strain,avg("strain"),1,0],["Duration",s.duration_min,avg("duration_min"),0,0,"h"],["Max HR",s.max_hr,avg("max_hr"),0,0],["Avg HR",s.avg_hr,avg("avg_hr"),0,0],["Calories",s.calories,avg("calories"),0,0]]);
-  document.getElementById("ch-title").textContent=`${s.type} heart rate`;
-  document.getElementById("ch-vs").textContent=s.hr.length?`${nice(day)}, ${clock(s.start)}`:"No heart-rate trace was stored for this workout";
-  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:s.hr.map(p=>clock(p.t)),datasets:[{label:"Heart rate",data:s.hr.map(p=>p.v),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.12)",fill:"origin",pointRadius:0,borderWidth:1.4}]},options:lineOpts({})});
-  const z=document.getElementById("zones"),tot=s.zones.reduce((a,b)=>a+(+b||0),0);z.hidden=!tot;
-  if(tot){const first=s.zones.length===6?0:1,mx=Math.max(...s.zones);
-    z.innerHTML=`<h3 style="font-size:14px;margin:0 0 6px">Heart-rate zones</h3>`+s.zones.map((m,i)=>`<div><span>Zone ${i+first}</span><i style="width:${mx?(m/mx*100):0}%;opacity:${.35+.13*i}"></i><b>${Math.round(m)} min · ${Math.round(m/tot*100)}%</b></div>`).join("");}}
+  const avg=k=>mean(prior.map(x=>x[k]).filter(v=>typeof v==="number"));
+  $("st-title").textContent=s.type;
+  $("st-vs").innerHTML=`<b>${clock(s.start)}${s.end?"–"+clock(s.end):""}</b> vs ${prior.length?`your ${prior.length} ${s.type.toLowerCase()} workout${prior.length>1?"s":""} the week before`:"no other "+s.type.toLowerCase()+" workout the week before"}`;
+  statsList([["Strain",s.strain,avg("strain"),1,0,""],["Duration",s.duration_min,avg("duration_min"),0,0,"h"],["Max heart rate",s.max_hr,avg("max_hr"),0,0," bpm"],["Average heart rate",s.avg_hr,avg("avg_hr"),0,0," bpm"],["Calories",s.calories,avg("calories"),0,0," kcal"]]);
+  $("ch-title").textContent=`${s.type} heart rate`;$("ch-vs").textContent=`${nice(day)} · ${clock(s.start)}${s.end?"–"+clock(s.end):""}`;
+  empty(s.hr.length?"":"No heart-rate trace was stored for this workout.");
+  chart=new Chart($("chart"),{type:"line",data:{labels:s.hr.map(p=>clock(p.t)),datasets:[{label:"",data:s.hr.map(p=>p.v),borderColor:css("--strain"),backgroundColor:grad(css("--strain"),.4),fill:"origin",pointRadius:0,borderWidth:2,tension:.25}]},
+    options:lineOpts({})});
+  const tot=s.zones.reduce((a,b)=>a+(+b||0),0);
+  if(tot){const first=s.zones.length===6?0:1,mx=Math.max(...s.zones);$("rowscard").hidden=false;$("rows-title").textContent="Heart-rate zones";$("rows-vs").textContent=`${Math.round(tot)} minutes in zones`;
+    $("rows").innerHTML=s.zones.map((m,i)=>`<div class="row"><span style="color:var(--ink2)">Zone ${i+first}</span><div class="bar"><i style="left:0;width:${mx?(m/mx*100):0}%;background:${css("--strain")};opacity:${.3+.14*i}"></i></div><b>${Math.round(m)}<span style="font-size:11px;color:var(--ink3)"> min</span><small>${Math.round(m/tot*100)}%</small></b></div>`).join("");}}
 
 function strip(){const k=tab==="strain"?"strain":tab==="sleep"?"sleep_perf":"readiness",mx=k==="strain"?21:100;
-  document.querySelector(".scrubhead").textContent=`${k==="strain"?"Strain":k==="sleep_perf"?"Sleep performance":"Recovery"} by day, last 60 days · click a day to open it`;
+  $("strip-title").textContent=`${k==="strain"?"Strain":k==="sleep_perf"?"Sleep performance":"Recovery"}, last 60 days`;
   const today=iso(new Date()),days=[];for(let i=59;i>=0;i--)days.push(shift(today,-i));
-  const box=document.getElementById("strip");
-  box.innerHTML=days.map(d=>{const v=get(k,d),h=v==null?4:Math.max(6,v/mx*100);
-    const c=v==null?css("--bar2"):k==="readiness"?recColor(v):k==="strain"?css("--strain"):css("--sleep");
-    return `<button data-d="${d}" class="${d===day?"sel":""}" style="height:${h}%;background:${c}" title="${nice(d)}: ${v==null?"—":k==="strain"?(+v).toFixed(1):Math.round(v)+"%"}" aria-label="${nice(d)}"></button>`;}).join("");
-  box.querySelector(".sel")?.scrollIntoView({block:"nearest",inline:"nearest"});}
+  $("strip").innerHTML=days.map(d=>{const v=get(k,d),h=v==null?3:Math.max(6,v/mx*100);
+    const c=v==null?css("--raise"):k==="readiness"?tierColor(v):k==="strain"?css("--strain"):css("--sleep");
+    return `<button data-d="${d}" class="${d===day?"sel":""}" style="height:${h}%;background:${c}" title="${nice(d)}: ${v==null?"no data":k==="strain"?(+v).toFixed(1):Math.round(v)+"%"}" aria-label="${nice(d)}"></button>`;}).join("");
+  $("ticks").innerHTML=[0,15,30,45,59].map(i=>`<span>${i===59?"Today":short(days[i])}</span>`).join("");}
 
-function render(){const t=TABS[tab],prev=shift(day,-1);header();subtabs();strip();
-  chart?.destroy();chart=null;document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
-  Chart.defaults.font.family=css("--num");Chart.defaults.color=css("--ink2");
-  const dw=document.getElementById("donutwrap");dw.hidden=!(t.donut&&range===1);
-  if(tab==="strain"&&range===1&&workout>=0&&sess[workout])return workoutView(sess[workout]);
-  const prevLbl=range===1?nice(prev):`previous ${range} days`;
-  document.getElementById("st-title").textContent=`${range===1?"Day":"Period"} Statistics`;
-  document.getElementById("st-vs").innerHTML=`<b>${range===1?nice(day):`last ${range} days`}</b> vs ${prevLbl}`;
-  const win=(k,end,n)=>{const a=[];for(let i=0;i<n;i++){const v=val(k,shift(end,-i));if(v!=null)a.push(v);}return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;};
-  statsGrid(t.stats.map(([l,k,dp,better,u])=>[l,win(k,day,range),win(k,shift(day,-range),range),dp,better,u]));
-  const ctx=document.getElementById("chart");
-  if(range===1&&tab==="overview")overviewDay();
-  else if(range===1&&tab==="sleep")sleepDay();
-  else if(range===1){document.getElementById("ch-title").textContent=`Day ${t.title}`;document.getElementById("ch-vs").innerHTML=`<b>${nice(day)}</b> vs ${nice(prev)}`;
-    chart=new Chart(ctx,{type:"bar",data:{labels:t.bars.map(b=>b[0]),datasets:[
-      {label:nice(day),data:t.bars.map(([,k])=>get(k,day)),backgroundColor:css("--bar"),maxBarThickness:24},
-      {label:nice(prev),data:t.bars.map(([,k])=>get(k,prev)),backgroundColor:css("--bar2"),maxBarThickness:24}]},
-      options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{position:"bottom"}},scales:{y:{beginAtZero:true,grid:{color:css("--line")}},x:{grid:{display:false}}}}});
-  }else{const [k,label,mm]=t.trend,ds=[];for(let i=range-1;i>=0;i--)ds.push(shift(day,-i));
-    document.getElementById("ch-title").textContent=`${t.title} trend`;document.getElementById("ch-vs").textContent=`${label}, last ${range} days ending ${nice(day)} (gaps are days with no value) · click a bar to open that day`;
-    const v=ds.map(d=>{const x=get(k,d);return x==null?null:k==="tst_min"?+(x/60).toFixed(2):x;});
-    const col=k==="readiness"?v.map(x=>x==null?null:recColor(x)):css(k==="strain"?"--strain":"--bar");
-    chart=new Chart(ctx,{type:range>30?"line":"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[{label,data:v,backgroundColor:col,borderColor:css("--bar"),pointRadius:range>30?0:3,spanGaps:false}]},
-      options:{responsive:true,maintainAspectRatio:false,animation:false,onClick:(e,el)=>{if(el[0]){day=ds[el[0].index];setRange(1);}},
-        plugins:{legend:{display:false}},scales:{y:mm?{min:mm[0],max:mm[1]}:{beginAtZero:true},x:{grid:{display:false}}}}});}
-}
+function trendView(t){const [k,label,mm,u]=t.trend,ds=[];for(let i=range-1;i>=0;i--)ds.push(shift(day,-i));
+  const v=ds.map(d=>{const x=get(k,d);return x==null?null:k==="tst_min"?+(x/60).toFixed(2):x;}),have=v.filter(x=>x!=null),avg=mean(have);
+  $("ch-title").textContent=`${label} trend`;
+  $("ch-vs").textContent=`${short(ds[0])} – ${short(day)} · ${have.length} of ${range} days measured${avg==null?"":` · average ${u==="h"?hmw(avg*60):(+avg).toFixed(k==="strain"?1:0)+(u==="%"?"%":"")}`} · click a day to open it`;
+  empty(have.length?"":"No values in this range.");
+  const col=k==="readiness"?v.map(x=>x==null?null:tierColor(x)):css(k==="strain"?"--strain":"--sleep");
+  const line=range>30,avgDs=avg==null?[]:[{type:"line",label:"Average",data:ds.map(()=>+avg.toFixed(2)),borderColor:"rgba(255,255,255,.35)",borderDash:[4,4],borderWidth:1,pointRadius:0,fill:false}];
+  chart=new Chart($("chart"),{type:line?"line":"bar",data:{labels:ds.map(short),datasets:[
+    line?{label,data:v,borderColor:k==="readiness"?css("--good"):col,backgroundColor:grad(k==="readiness"?css("--good"):col,.25),fill:"origin",pointRadius:0,borderWidth:2,tension:.3,spanGaps:false}
+        :{label,data:v,backgroundColor:col,borderRadius:5,borderSkipped:false,maxBarThickness:28},...avgDs]},
+    options:{responsive:true,maintainAspectRatio:false,animation:anim(),interaction:{mode:"index",intersect:false},
+      onClick:(e,el)=>{if(el[0]){day=ds[el[0].index];setRange(1);}},onHover:(e,el)=>{e.native.target.style.cursor=el.length?"pointer":"default";},
+      plugins:{legend:{display:false},tooltip:{filter:i=>i.raw!=null,callbacks:{label:i=>`${i.dataset.label}  ${u==="h"?hmw(i.raw*60):i.raw+(u==="%"?"%":"")}`}}},
+      scales:{y:{...(mm?{min:mm[0],max:mm[1]}:{beginAtZero:true}),grid:{color:css("--line")},border:{display:false},ticks:{callback:x=>u==="h"?x+"h":u==="%"?x+"%":x}},
+        x:{grid:{display:false},ticks:{maxTicksLimit:8,maxRotation:0}}}}});}
+
+function render(){const t=TABS[tab],prev=shift(day,-1);base();header();subtabs();strip();
+  chart?.destroy();chart=null;$("bubbles").innerHTML="";$("rowscard").hidden=true;empty("");
+  $("donutcard").hidden=!(t.donut&&range===1);
+  if(tab==="strain"&&range===1&&workout>=0&&sess[workout]){workoutView(sess[workout]);firstDraw=false;return;}
+  $("st-title").textContent=range===1?"Day statistics":`${range}-day statistics`;
+  $("st-vs").innerHTML=range===1?`<b>${nice(day)}</b> vs ${nice(prev)}`:`<b>Average of last ${range} days</b> vs the ${range} before`;
+  const win=(k,end,n)=>{const a=[];for(let i=0;i<n;i++){const v=val(k,shift(end,-i));if(v!=null)a.push(v);}return mean(a);};
+  statsList(t.stats.map(([l,k,dp,better,u])=>[l,win(k,day,range),win(k,shift(day,-range),range),dp,better,u]));
+  if(range>1)trendView(t);
+  else if(tab==="overview")overviewDay();
+  else if(tab==="sleep")sleepDay();
+  else if(tab==="recovery")recoveryDay();
+  else strainDay();
+  firstDraw=false;}
+
 function setRange(r){range=r;document.querySelectorAll("#ranges button").forEach(b=>b.classList.toggle("on",+b.dataset.r===r));render();}
 function goDay(d){if(!d||d>iso(new Date()))return;day=d;workout=-1;render();}
-document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;workout=-1;render();}));
-document.getElementById("ranges").addEventListener("click",e=>{const r=e.target.dataset.r;if(r)setRange(+r);});
-document.getElementById("subtabs").addEventListener("click",e=>{const w=e.target.closest("button")?.dataset.w;if(w!=null){workout=+w;render();}});
-document.getElementById("strip").addEventListener("click",e=>goDay(e.target.closest("button")?.dataset.d));
-document.getElementById("cal").addEventListener("change",e=>goDay(e.target.value));
-document.getElementById("prev").addEventListener("click",()=>goDay(shift(day,-1)));
-document.getElementById("next").addEventListener("click",()=>goDay(shift(day,1)));
-document.addEventListener("keydown",e=>{if(e.target.matches("input"))return;if(e.key==="ArrowLeft")goDay(shift(day,-1));if(e.key==="ArrowRight")goDay(shift(day,1));});
-window.addEventListener("resize",()=>{if(range===1&&tab==="overview")render();});
+function goTab(t){tab=t;workout=-1;render();}
+document.querySelectorAll("#tabs button,.score").forEach(b=>b.addEventListener("click",()=>goTab(b.dataset.tab)));
+$("ranges").addEventListener("click",e=>{const r=e.target.closest("button")?.dataset.r;if(r)setRange(+r);});
+$("subtabs").addEventListener("click",e=>{const w=e.target.closest("button")?.dataset.w;if(w!=null){workout=+w;render();}});
+$("strip").addEventListener("click",e=>goDay(e.target.closest("button")?.dataset.d));
+$("cal").addEventListener("change",e=>goDay(e.target.value));
+$("prev").addEventListener("click",()=>goDay(shift(day,-1)));
+$("next").addEventListener("click",()=>goDay(shift(day,1)));
+$("today").addEventListener("click",()=>goDay(iso(new Date())));
+document.addEventListener("keydown",e=>{if(e.target.matches("input")||$("dlg").open)return;if(e.key==="ArrowLeft")goDay(shift(day,-1));if(e.key==="ArrowRight")goDay(shift(day,1));});
+let rz;window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>{if(range===1&&(tab==="overview"||tab==="strain"))render();},150);});
+
+// ---------- opening data ----------
 async function load(blob,label){
-  status("Reading…");const r=await readBackup(blob,document.getElementById("pass").value);data=r.d;
-  if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
+  const pass=passphrase(),r=await readBackup(blob,pass);data=r.d;rememberPass(pass);showSaved();
+  if(r.name){$("initial").textContent=r.name[0].toUpperCase();$("initial").title=r.name;$("initial").hidden=false;}
   const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=dates.at(-1)||iso(new Date());
-  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;workout=-1;
-  document.getElementById("source").hidden=true;status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);render();}
-document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const f=document.getElementById("file").files[0];
-  if(!f){status("Choose your Koop backup file first.");return;}
-  try{await load(f,f.name);}catch(err){status(err.message||String(err));}});
+  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;workout=-1;firstDraw=true;
+  $("source").classList.add("live");$("sourcet").textContent=label;$("connect").textContent="Reload";
+  status("");$("dlg").close();render();toast("Your data is open. It stays in this browser.");}
+// With a remembered passphrase this is one click: straight to Google sign-in, no dialog.
+function openDialog(){showSaved();$("dlg").showModal();if(!savedPass())setTimeout(()=>$("pass").focus(),50);}
+$("connect").addEventListener("click",()=>{status("");if(savedPass()&&location.protocol!=="file:")cloudOpen();else openDialog();});
+$("forget").addEventListener("click",()=>{forgetPass();$("pass").focus();});
+$("pick").addEventListener("click",()=>$("file").click());
+$("file").addEventListener("change",async()=>{const f=$("file").files[0];if(!f)return;
+  try{status("Opening "+f.name+"…",true);await load(f,"Backup file");}catch(err){status(err.message||String(err),false,true);}finally{$("file").value="";}});
+$("dlgform").addEventListener("submit",e=>{if(e.submitter?.value!=="close")e.preventDefault();});
+$("pass").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("gsign").click();}});
 
 // ---------- Koop Cloud: Google sign-in, then the same file the phones upload ----------
 // Same Google project as the app (KOOP), same drive.file permission: it can see only the
@@ -352,22 +572,30 @@ function askToken(){return new Promise((ok,fail)=>{
 async function drive(url,asBlob){let r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
   if(r.status===401){token=await askToken();r=await fetch(url,{headers:{Authorization:"Bearer "+token}});}
   if(!r.ok)throw new Error(`Google Drive answered ${r.status}.`);return asBlob?r.blob():r.json();}
-document.getElementById("gsign").addEventListener("click",async()=>{
-  if(location.protocol==="file:"){status("Google sign-in works on the hosted dashboard page, not on a file opened from disk. Use 'a backup file' here instead.");return;}
-  const pass=document.getElementById("pass");
-  if(!pass.value){status("Type your Koop Cloud passphrase first (the one set in the app under Koop Cloud), then sign in.");pass.focus();return;}
-  try{if(!token){status("Signing in with Google…");token=await askToken();}
-    status("Looking for your Koop Cloud copy…");
+$("gsign").addEventListener("click",()=>cloudOpen());
+async function cloudOpen(){
+  if(location.protocol==="file:"){status("Google sign-in works on the hosted page, not on a file opened from disk. Open a backup file instead.",false,true);return;}
+  if(!passphrase()){openDialog();status("Enter your Koop Cloud passphrase first.",false,true);return;}
+  const b=$("gsign");b.disabled=true;
+  try{if(!token){status("Signing in with Google…",true);token=await askToken();}
+    status("Finding your Koop Cloud copy…",true);
     const q=encodeURIComponent("name = 'koop-cloud.kbak' and trashed = false");
     const list=await drive(`${DRIVE}?q=${q}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=1&fields=files(id,modifiedTime,size)`);
     const f=list.files?.[0];
-    if(!f){status("No Koop Cloud copy found in this Google account. On the phone with the band, open Koop Cloud and tap Sync now, then try again.");return;}
-    status("Downloading your Koop Cloud copy…");
+    if(!f){status("No Koop Cloud copy in this Google account yet. On the phone with the band, open Koop Cloud and tap Sync now.",false,true);return;}
+    status(`Downloading (${(f.size/1048576).toFixed(1)} MB)…`,true);
     const blob=await drive(`${DRIVE}/${f.id}?alt=media`,true);
-    await load(blob,`Koop Cloud copy saved ${new Date(f.modifiedTime).toLocaleString()}`);
-    document.getElementById("gsign").textContent="Reload from Drive";}
-  catch(err){status(err.message||String(err));}});
+    const when=new Date(f.modifiedTime);
+    await load(blob,`Koop Cloud · ${when.toLocaleDateString(undefined,{month:"short",day:"numeric"})} ${when.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})}`);
+    $("gsignt").textContent="Reload from Google Drive";}
+  catch(err){const msg=err.message||String(err);
+    // A remembered passphrase that no longer opens the file (changed in the app): forget it and ask.
+    if(/Wrong passphrase/.test(msg)&&savedPass()){forgetPass();if(!$("dlg").open)openDialog();status("The remembered passphrase no longer opens your Koop Cloud copy. Enter the current one.",false,true);}
+    else status(msg,false,true);}
+  finally{b.disabled=false;}}
+
 data=example();day=iso(new Date());render();
+if(savedPass())$("connect").title="One click: your passphrase is remembered on this browser";
 </script>
 </body>
 </html>
