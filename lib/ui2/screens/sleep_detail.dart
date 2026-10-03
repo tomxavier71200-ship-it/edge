@@ -30,6 +30,7 @@ import '../ui2.dart';
 import 'home_screen.dart';
 import 'investigate.dart';
 import 'detail_trends.dart';
+import 'home_sections.dart' show kBaselineMin;
 import 'sleep_whoop.dart';
 import 'stress_detail.dart' show Span, StressReading, stressReadings, timelineSpans;
 import 'metric_detail.dart';
@@ -541,6 +542,12 @@ class _SleepDetailState extends State<SleepDetail> {
       // ── 0 · WHOOP'S HEADLINE: performance, and what made it ──
       ..._performance(c, p, d, n),
 
+      // ── 0b · LAST NIGHT: hours of sleep and the night's heart rate ──
+      if (_overnightHr(d, n) case final card?) ...[
+        Section("Last night's sleep", card),
+        const SizedBox(height: S.x2),
+      ],
+
       // ── 1 · THE ANSWER ──
       _answer(c, p, d, n),
 
@@ -666,6 +673,27 @@ class _SleepDetailState extends State<SleepDetail> {
         const SizedBox(height: S.x4),
       ],
     ];
+  }
+
+  /// Hours of sleep against the usual, over the night's heart-rate line.
+  /// Null without a duration or a window to frame the line.
+  Widget? _overnightHr(SleepData d, Map<String, dynamic> n) {
+    final tst = (n['duration_min'] as num?)?.toDouble();
+    final on = (n['onset_ts'] as num?)?.round();
+    final off = (n['wake_ts'] as num?)?.round();
+    if (tst == null || on == null || off == null || off <= on) return null;
+    final raw = d.timeline['hr'];
+    final hr = <(int, double)>[
+      if (raw is List)
+        for (final e in raw)
+          if (e is Map && e['v'] is num && e['t'] is num)
+            ((e['t'] as num).round(), (e['v'] as num).toDouble()),
+    ];
+    final usual = d.tstHistory.length < kBaselineMin
+        ? null
+        : d.tstHistory.reduce((a, b) => a + b) / d.tstHistory.length;
+    return OvernightHrCard(
+        hr: hr, onset: on, wake: off, sleptMin: tst, usualMin: usual);
   }
 
   /// The four detail cards, each only when its inputs exist.

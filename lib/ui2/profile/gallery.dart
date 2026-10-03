@@ -335,6 +335,19 @@ Map<String, Widget> goldenCases() => {
       // a date. Both halves of that are the honesty — there is no day after
       // this one, and saying so beats a live arrow that does nothing.
       // WHOOP's sleep cards, with full inputs.
+      'overnight_hr': OvernightHrCard(
+        onset: DateTime(2026, 10, 3, 6, 44).millisecondsSinceEpoch ~/ 1000,
+        wake: DateTime(2026, 10, 3, 12, 14).millisecondsSinceEpoch ~/ 1000,
+        sleptMin: 289,
+        usualMin: 331,
+        hr: [
+          for (var i = 0; i < 400; i++)
+            (
+              DateTime(2026, 10, 3, 6, 20).millisecondsSinceEpoch ~/ 1000 + i * 60,
+              58 + 6 * ((i * 37 % 11) / 11) + (i % 53 == 0 ? 14 : 0) + (i > 370 ? 40 : 0),
+            ),
+        ],
+      ),
       'hours_needed': const HoursNeededCard(
           sleptMin: 289, needMin: 621, strainMin: 30, debtMin: 127, napMin: 0),
       'consistency_chart': ConsistencyChart(sri: 56, nights: [

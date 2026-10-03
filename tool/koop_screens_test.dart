@@ -226,6 +226,20 @@ void main() {
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
     'sleep_cards': ListView(padding: const EdgeInsets.all(16), children: [
+      OvernightHrCard(
+        onset: DateTime(2026, 10, 3, 6, 44).millisecondsSinceEpoch ~/ 1000,
+        wake: DateTime(2026, 10, 3, 12, 14).millisecondsSinceEpoch ~/ 1000,
+        sleptMin: 289,
+        usualMin: 331,
+        hr: [
+          for (var i = 0; i < 400; i++)
+            (
+              DateTime(2026, 10, 3, 6, 20).millisecondsSinceEpoch ~/ 1000 + i * 60,
+              58 + 6 * ((i * 37 % 11) / 11) + (i % 53 == 0 ? 14 : 0) + (i > 330 && i < 336 ? 60 : 0),
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
       const Column(children: [
         BandRow(LucideIcons.clock, 'Hours vs. needed', '47%', Band3.poor),
         BandRow(LucideIcons.repeat, 'Sleep consistency', '56%', Band3.poor),
@@ -347,7 +361,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 2700 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

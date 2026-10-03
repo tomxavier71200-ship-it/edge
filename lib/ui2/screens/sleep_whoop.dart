@@ -15,6 +15,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../ui2.dart';
 import 'health_screen.dart' show kStressLevelColors;
@@ -368,4 +369,153 @@ class SleepStressCard extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// WHOOP's "Last night's sleep" header card: hours of sleep (with the usual
+/// under it, and an arrow), then the night's heart rate as one line between
+/// dashed bedtime and wake markers. Readings outside the window give context
+/// on either side; nothing is interpolated across a gap longer than 10 min.
+class OvernightHrCard extends StatelessWidget {
+  /// `(epoch seconds, bpm)`, any order.
+  final List<(int, double)> hr;
+  final int onset, wake;
+  final double sleptMin;
+
+  /// The usual over earlier nights; null when there are too few.
+  final double? usualMin;
+
+  const OvernightHrCard({
+    super.key,
+    required this.hr,
+    required this.onset,
+    required this.wake,
+    required this.sleptMin,
+    this.usualMin,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final u = usualMin;
+    final dir = u == null || (sleptMin - u).abs() < 1 ? 0 : (sleptMin > u ? 1 : -1);
+    return Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_title('Hours of sleep'), style: _titleStyle(p)),
+        const SizedBox(height: S.x2),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(_hm(sleptMin), style: F.n34.copyWith(color: p.ink)),
+            if (dir != 0)
+              Icon(dir > 0 ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                  size: 20, color: p.on(dir > 0 ? C.green : C.orange)),
+          ]),
+        ),
+        if (u != null)
+          Text(_hm(u), style: F.cap.copyWith(color: p.ink3)),
+        if (hr.length >= 10) ...[
+          const SizedBox(height: S.x4),
+          SizedBox(
+            height: 180,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: motion(c, Motion.sweep),
+              curve: Curves.easeOut,
+              builder: (c, t, _) => CustomPaint(
+                size: Size.infinite,
+                painter: _HrPainter(
+                  [...hr]..sort((a, b) => a.$1.compareTo(b.$1)),
+                  onset,
+                  wake,
+                  p,
+                  F.over.copyWith(color: p.ink3),
+                  F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w700),
+                  t,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _HrPainter extends CustomPainter {
+  final List<(int, double)> hr;
+  final int onset, wake;
+  final P p;
+  final TextStyle axis, tag;
+  final double t;
+  _HrPainter(this.hr, this.onset, this.wake, this.p, this.axis, this.tag, this.t);
+
+  @override
+  void paint(Canvas cv, Size s) {
+    cv.clipRect(Offset.zero & s);
+    const left = 34.0, bottom = 26.0;
+    final w = s.width - left, h = s.height - bottom;
+    final pad = ((wake - onset) * .06).round();
+    final t0 = onset - pad, t1 = wake + pad;
+    final inWin = [for (final e in hr) if (e.$1 >= t0 && e.$1 <= t1) e];
+    if (inWin.length < 2) return;
+    final vs = inWin.map((e) => e.$2);
+    final lo = ((vs.reduce(math.min) - 10) / 10).floor() * 10.0;
+    final hi = ((vs.reduce(math.max) + 10) / 10).ceil() * 10.0;
+    double x(int ts) => left + (ts - t0) / (t1 - t0) * w;
+    double y(double v) => h - (v - lo) / (hi - lo) * h;
+
+    void text(String s0, TextStyle st, Offset at, {bool center = false}) {
+      final tp = TextPainter(
+          text: TextSpan(text: s0, style: st), textDirection: TextDirection.ltr)
+        ..layout();
+      tp.paint(cv, at - Offset(center ? tp.width / 2 : 0, tp.height / 2));
+    }
+
+    final step = ((hi - lo) / 4 / 10).ceil() * 10.0;
+    for (var v = lo; v <= hi; v += step) {
+      text('${v.round()}', axis, Offset(0, y(v)));
+    }
+    // Bedtime and wake: dashed verticals with a dot on the axis and the time.
+    for (final ts in [onset, wake]) {
+      final xx = x(ts);
+      for (var yy = 0.0; yy < h; yy += 6) {
+        cv.drawLine(Offset(xx, yy), Offset(xx, math.min(yy + 3, h)),
+            Paint()
+              ..color = p.ink3
+              ..strokeWidth = 1);
+      }
+      cv.drawCircle(Offset(xx, h), 3, Paint()..color = p.ink);
+      final d = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+      text('${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}',
+          tag, Offset(xx, h + bottom / 2 + 2),
+          center: true);
+    }
+    // The line, revealed left to right; broken over gaps.
+    final cut = t0 + ((t1 - t0) * t).round();
+    final path = Path();
+    var open = false;
+    int? prev;
+    for (final e in inWin) {
+      if (e.$1 > cut) break;
+      final pt = Offset(x(e.$1), y(e.$2));
+      if (!open || (prev != null && e.$1 - prev > 600)) {
+        path.moveTo(pt.dx, pt.dy);
+        open = true;
+      } else {
+        path.lineTo(pt.dx, pt.dy);
+      }
+      prev = e.$1;
+    }
+    cv.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.6
+          ..strokeJoin = StrokeJoin.round
+          ..color = p.on(C.sleep));
+  }
+
+  @override
+  bool shouldRepaint(_HrPainter o) => o.t != t || o.hr != hr;
 }
