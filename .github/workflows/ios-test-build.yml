@@ -81,9 +81,14 @@ jobs:
       # and SideStore shows "Update" whenever this job runs.
       - name: Generate SideStore source
         run: |
-          cp openstrap-edge-test-unsigned.ipa koop.ipa
+          # One file name per build, so the source and the file it points at
+          # can never disagree. A single rolling koop.ipa was replaced by the
+          # next build while phones still held the previous source, and
+          # SideStore refused it ("does not match the build number specified
+          # by the source").
+          cp openstrap-edge-test-unsigned.ipa "koop-${{ github.run_number }}.ipa"
           python3 .github/scripts/gen_koop_source.py \
-            koop.ipa apps.json "${{ github.repository }}" koop-ios
+            "koop-${{ github.run_number }}.ipa" apps.json "${{ github.repository }}" koop-ios
 
       - name: Publish to the koop-ios release
         uses: softprops/action-gh-release@v2
@@ -97,8 +102,21 @@ jobs:
             Rolling iPhone build of the whoop-ui branch.
             Add this source in SideStore: https://raw.githubusercontent.com/${{ github.repository }}/sidestore/apps.json
           files: |
-            koop.ipa
+            koop-${{ github.run_number }}.ipa
             apps.json
+
+      # Keep the five newest builds, so a phone holding a slightly stale
+      # source still finds the exact file it expects. Older ones (and the
+      # old rolling koop.ipa) are deleted.
+      - name: Prune old builds from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view koop-ios --repo "${{ github.repository }}" --json assets -q '.assets[].name' \
+            | grep -E '^koop(-[0-9]+)?\.ipa$' \
+            | sed -E 's/^koop\.ipa$/koop-0.ipa/' | sort -t- -k2 -n -r | tail -n +6 \
+            | sed -E 's/^koop-0\.ipa$/koop.ipa/' \
+            | while read -r a; do gh release delete-asset koop-ios "$a" --repo "${{ github.repository }}" -y; done
 
       # The source SideStore subscribes to lives on its own `sidestore` branch
       # and is read as a raw file: a release asset answers with a redirect to a
