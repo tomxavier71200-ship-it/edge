@@ -27,6 +27,7 @@ import 'circadian_detail.dart';
 import 'ecg.dart' show EcgEntryCard, pairedIsMaverickOf;
 import 'findings_log.dart';
 import 'home_screen.dart';
+import 'healthspan_screen.dart' show HealthspanScreen, kHabitMinDays;
 import 'stress_detail.dart';
 import 'investigate.dart';
 import 'metric_detail.dart';
@@ -1097,6 +1098,57 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         const EcgEntryCard(),
         const SizedBox(height: S.x3),
       ],
+      // Healthspan leads the tab, WHOOP-style: the habits scorecard, or how
+      // many more days of data it needs (four in the last week, the floor
+      // each habit is judged on).
+      Builder(builder: (c) {
+        final now = DateTime.now();
+        final from = DateTime(now.year, now.month, now.day - 6)
+                .millisecondsSinceEpoch ~/
+            1000;
+        final have = {
+          for (final pt in d.points('sleep'))
+            if (pt.t >= from) dayLabelOf(DateTime.fromMillisecondsSinceEpoch(pt.t * 1000)),
+        }.length;
+        final left = (kHabitMinDays - have).clamp(0, kHabitMinDays);
+        return Surface(
+          onTap: () => go(c, const HealthspanScreen()),
+          semanticLabel: left == 0
+              ? 'Healthspan, open your habits scorecard'
+              : 'Healthspan, $left more days of data to unlock',
+          child: Row(children: [
+            const KoopMark(size: 52),
+            const SizedBox(width: S.x3),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(left == 0 ? 'HEALTHSPAN' : 'UNLOCK HEALTHSPAN',
+                    style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+                const SizedBox(height: S.x1),
+                Text(
+                    left == 0
+                        ? 'Your long-term habits against published targets.'
+                        : '$left more ${left == 1 ? 'day' : 'days'} of data to '
+                            'see your habits scorecard.',
+                    style: F.cap.copyWith(color: p.ink2)),
+                if (left > 0) ...[
+                  const SizedBox(height: S.x2),
+                  ClipRRect(
+                    borderRadius: R.rPill,
+                    child: LinearProgressIndicator(
+                      value: have / kHabitMinDays,
+                      minHeight: 5,
+                      color: p.on(C.purple),
+                      backgroundColor: p.track,
+                    ),
+                  ),
+                ],
+              ]),
+            ),
+            Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+          ]),
+        );
+      }),
+      const SizedBox(height: S.x3),
       // The one-line answer first: is last night normal for me? Only rows
       // that have a usual range count, so a new user sees no verdict at all.
       if (ranged > 0) ...[
