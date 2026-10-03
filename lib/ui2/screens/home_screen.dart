@@ -2380,11 +2380,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   ],
                   'dash' => [
                     Section(
-                      'Dashboard',
+                      'My Dashboard',
                       dashboardCard(c, d, _openCustomize),
-                      action: 'Edit',
+                      action: 'Customize',
                       onAction: _openCustomize,
                     ),
+                    if (strainRecoveryCard(c, d) case final w?) ...[
+                      const SizedBox(height: S.x2),
+                      w,
+                    ],
                   ],
                   'insight' => [
                     if (insightCard(c, d) case final w?)

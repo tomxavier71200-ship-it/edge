@@ -48,9 +48,17 @@ const kDashMetrics = [
   'strain',
   'calories',
   'stress',
+  'efficiency',
+  'deep',
+  'rem',
+  'active_min',
 ];
 
-const _dashDefaultOn = {'hrv', 'resting_hr', 'resp_rate', 'steps'};
+/// On by default: WHOOP's dashboard set, as far as this app stores it.
+const _dashDefaultOn = {
+  'hrv', 'resting_hr', 'steps', 'calories', 'resp_rate', 'sleep', //
+  'efficiency', 'readiness',
+};
 
 /// Metrics with no better direction: the arrow states the direction, never a
 /// verdict.
@@ -89,14 +97,14 @@ void setDashMetrics(List<({String id, bool on})> v) {
 String dashName(String k) => specOf(k).title;
 
 String _fmt(String k, double v) => switch (k) {
-      'sleep' => hm(v),
+      'sleep' || 'deep' || 'rem' => hm(v),
       'strain' || 'resp_rate' => v.toStringAsFixed(1),
       'steps' || 'calories' => thousands(v),
       _ => '${v.round()}',
     };
 
 String _unit(String k) => switch (k) {
-      'sleep' => '',
+      'sleep' || 'deep' || 'rem' => '',
       'readiness' => '%',
       'stress' => '/100',
       _ => specOf(k).unit,
@@ -141,25 +149,21 @@ List<ChartPoint> _upTo(HomeData d, List<ChartPoint> pts) {
 Widget dashboardCard(BuildContext c, HomeData d, VoidCallback onEdit) {
   final p = P.of(c);
   final shown = dashMetrics().where((m) => m.on).toList();
-  return Surface(
-    pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),
-    child: Column(children: [
-      if (shown.isEmpty)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: S.x3),
-          child: Pressable(
-            onTap: onEdit,
-            child: Text('No metrics picked. Tap Edit to add some.',
-                style: F.body.copyWith(color: p.ink3)),
-          ),
-        ),
-      for (var i = 0; i < shown.length; i++) ...[
-        if (i > 0) Divider(color: p.line, height: 1),
-        _dashRow(c, p, shown[i].id, _upTo(d, d.series[shown[i].id] ?? const []),
-            d.dayId ?? todayLabel()),
-      ],
-    ]),
-  );
+  // One card per metric, WHOOP's dashboard: a stack, not rows in one box.
+  if (shown.isEmpty) {
+    return Surface(
+      onTap: onEdit,
+      child: Text('No metrics picked. Tap Edit to add some.',
+          style: F.body.copyWith(color: p.ink3)),
+    );
+  }
+  return Column(children: [
+    for (var i = 0; i < shown.length; i++) ...[
+      if (i > 0) const SizedBox(height: S.x2),
+      _dashRow(c, p, shown[i].id, _upTo(d, d.series[shown[i].id] ?? const []),
+          d.dayId ?? todayLabel()),
+    ],
+  ]);
 }
 
 Widget _dashRow(
@@ -168,87 +172,202 @@ Widget _dashRow(
   final s = _summary(pts);
   final today = viewing;
 
-  // `sub` is what the row shows, kept to one short line; `said` is the same
-  // fact in full words for a screen reader.
-  String sub, said;
+  // Under the number: the 30-day average as a bare number, WHOOP-style, or
+  // how far the baseline has to go. `said` is the full sentence for a screen
+  // reader. A reading from another day says which day under the name.
+  String under, said, dated = '';
   IconData? arrow;
   Color arrowColor = p.ink3;
   if (s == null) {
-    sub = said = 'No data yet';
+    under = '';
+    said = 'No data yet';
   } else {
     final day = dayLabelOf(DateTime.fromMillisecondsSinceEpoch(s.last.t * 1000));
-    final dated = day == today ? '' : ' · ${_short(day)}';
+    if (day != today) dated = _short(day);
     final avg = s.avg;
     if (avg == null) {
-      sub = 'Baseline ${s.n}/$kBaselineMin$dated';
-      said = 'Baseline ${s.n} of $kBaselineMin days$dated';
+      under = '${s.n}/$kBaselineMin days';
+      said = 'Baseline ${s.n} of $kBaselineMin days';
     } else {
-      sub = 'Avg ${_fmt(k, avg)} · ${s.n}d$dated';
-      said = 'Average ${_fmt(k, avg)} over ${s.n} days$dated';
+      under = _fmt(k, avg);
+      said = 'Average ${_fmt(k, avg)} over ${s.n} days';
       final rel = avg == 0 ? 0.0 : (s.last.v - avg) / avg.abs();
       if (rel.abs() < .02) {
-        arrow = LucideIcons.arrowRight;
+        arrow = LucideIcons.dot;
       } else {
         final up = rel > 0;
-        arrow = up ? LucideIcons.arrowUpRight : LucideIcons.arrowDownRight;
+        arrow = up ? LucideIcons.chevronUp : LucideIcons.chevronDown;
         if (!_neutral.contains(k)) {
-          arrowColor =
-              p.on(up == spec.higherBetter ? C.green : C.yellow);
+          arrowColor = p.on(up == spec.higherBetter ? C.green : C.orange);
         }
       }
     }
   }
 
-  return Pressable(
-    semanticLabel: '${spec.title}. ${s == null ? 'No data' : _fmt(k, s.last.v)}. $said',
+  return Surface(
     onTap: () => go(c, MetricDetail(k)),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: S.x3),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(spec.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: F.body.copyWith(color: p.ink)),
-            Text(sub,
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                softWrap: false,
-                style: F.cap.copyWith(color: p.ink3)),
-          ]),
-        ),
-        if (s != null && s.week.length > 2) ...[
-          const SizedBox(width: S.x2),
-          SizedBox(
-            width: 52,
-            height: 24,
-            child: CustomPaint(
-                painter: LineChart(s.week, p.on(spec.color), fill: false)),
-          ),
-        ],
-        const SizedBox(width: S.x3),
+    semanticLabel:
+        '${spec.title}. ${s == null ? 'No data' : _fmt(k, s.last.v)}. $said${dated.isEmpty ? '' : ', from $dated'}',
+    child: Row(children: [
+      Icon(spec.icon, size: 20, color: p.ink3),
+      const SizedBox(width: S.x3),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // 'Recovery', the dial's word, rather than the spec's 'Readiness'.
+          Text((k == 'readiness' ? 'Recovery' : spec.title).toUpperCase(),
+              maxLines: 2,
+              style: F.over.copyWith(
+                  color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+          if (dated.isNotEmpty)
+            Text(dated, style: F.cap.copyWith(color: p.ink3)),
+        ]),
+      ),
+      const SizedBox(width: S.x2),
+      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Row(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
             Text(s == null ? '—' : _fmt(k, s.last.v),
-                style: F.n24.copyWith(color: p.ink)),
+                style: F.n34.copyWith(color: s == null ? p.ink3 : p.ink)),
             if (s != null && _unit(k).isNotEmpty) ...[
               const SizedBox(width: 2),
               Text(_unit(k), style: F.over.copyWith(color: p.ink3)),
             ],
           ],
         ),
-        SizedBox(
-          width: 24,
-          child: arrow == null
-              ? null
-              : Icon(arrow, size: 17, color: arrowColor),
-        ),
+        if (under.isNotEmpty)
+          Text(under, style: F.n17.copyWith(color: p.ink3)),
       ]),
-    ),
+      SizedBox(
+        width: 22,
+        child: arrow == null
+            ? null
+            : Icon(arrow, size: 16, color: arrowColor),
+      ),
+    ]),
   );
+}
+
+// ─────────────── strain & recovery week ───────────────
+
+/// The last seven days of day strain (left scale, 0–21) and recovery (right
+/// scale, 0–100%) on one chart, WHOOP's weekly view. A day with no value is a
+/// gap in its line, never a zero. Null when neither series has two days.
+Widget? strainRecoveryCard(BuildContext c, HomeData d) {
+  final s = lastDays(denseDays(_upTo(d, d.series['strain'] ?? const []), 7), 7);
+  final r =
+      lastDays(denseDays(_upTo(d, d.series['readiness'] ?? const []), 7), 7);
+  int count(List<double?> v) => v.where((x) => x != null).length;
+  if (count(s.values) < 2 && count(r.values) < 2) return null;
+  final p = P.of(c);
+  return Surface(
+    semanticLabel: 'Strain and recovery, last 7 days. '
+        '${[for (var i = 0; i < 7; i++) '${s.labels[i]}: strain ${s.values[i]?.toStringAsFixed(1) ?? 'none'}, recovery ${r.values[i] == null ? 'none' : '${r.values[i]!.round()}%'}'].join('; ')}',
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('STRAIN & RECOVERY',
+          style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+      const SizedBox(height: S.x3),
+      SizedBox(
+        height: 190,
+        child: CustomPaint(
+          size: Size.infinite,
+          painter: _StrainRecovery(s.values, r.values, s.labels, p),
+        ),
+      ),
+    ]),
+  );
+}
+
+class _StrainRecovery extends CustomPainter {
+  final List<double?> strain, rec;
+  final List<String> labels;
+  final P p;
+  _StrainRecovery(this.strain, this.rec, this.labels, this.p);
+
+  void _text(Canvas cv, String s, Offset at, TextStyle st,
+      {TextAlign align = TextAlign.center}) {
+    final tp = TextPainter(
+        text: TextSpan(text: s, style: st), textDirection: TextDirection.ltr)
+      ..layout();
+    final dx = switch (align) {
+      TextAlign.right => at.dx - tp.width,
+      TextAlign.left => at.dx,
+      _ => at.dx - tp.width / 2,
+    };
+    tp.paint(cv, Offset(dx, at.dy - tp.height / 2));
+  }
+
+  @override
+  void paint(Canvas cv, Size sz) {
+    const left = 26.0, right = 40.0, top = 14.0, bottom = 26.0;
+    final w = sz.width - left - right, h = sz.height - top - bottom;
+    double x(int i) => left + w * (i + .5) / 7;
+    double ys(double v) => top + h * (1 - v / 21);
+    double yr(double v) => top + h * (1 - v / 100);
+    final grid = Paint()
+      ..color = p.line
+      ..strokeWidth = 1;
+    final axis = F.cap.copyWith(fontWeight: FontWeight.w600);
+    for (final v in [0, 7, 14, 21]) {
+      cv.drawLine(Offset(left, ys(v.toDouble())), Offset(left + w, ys(v.toDouble())), grid);
+      _text(cv, '$v', Offset(left - 6, ys(v.toDouble())),
+          axis.copyWith(color: p.on(C.strain)), align: TextAlign.right);
+    }
+    for (final v in [0, 33, 66, 100]) {
+      _text(cv, '$v%', Offset(left + w + 6, yr(v.toDouble())),
+          axis.copyWith(color: p.on(readinessBand(v).color)),
+          align: TextAlign.left);
+    }
+    // Today's column, shaded.
+    cv.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(x(6) - 14, top - 6, 28, h + 12), const Radius.circular(4)),
+        Paint()..color = p.card2);
+
+    void series(List<double?> v, double Function(double) y, Color line,
+        Color Function(double) dot, String Function(double) fmt, bool above) {
+      final stroke = Paint()
+        ..color = line
+        ..strokeWidth = 1.6
+        ..style = PaintingStyle.stroke;
+      for (var i = 1; i < 7; i++) {
+        final a = v[i - 1], b = v[i];
+        if (a != null && b != null) {
+          cv.drawLine(Offset(x(i - 1), y(a)), Offset(x(i), y(b)), stroke);
+        }
+      }
+      for (var i = 0; i < 7; i++) {
+        final val = v[i];
+        if (val == null) continue;
+        final o = Offset(x(i), y(val));
+        cv.drawCircle(o, 4.5, Paint()..color = p.card);
+        cv.drawCircle(
+            o,
+            4.5,
+            Paint()
+              ..color = dot(val)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2);
+        _text(cv, fmt(val), o + Offset(0, above ? -14 : 14),
+            F.cap.copyWith(color: dot(val), fontWeight: FontWeight.w700));
+      }
+    }
+
+    series(rec, yr, p.ink3, (v) => p.on(readinessBand(v).color),
+        (v) => '${v.round()}%', false);
+    series(strain, ys, p.on(C.strain), (_) => p.on(C.strain),
+        (v) => v.toStringAsFixed(1), true);
+    for (var i = 0; i < 7; i++) {
+      _text(cv, labels[i], Offset(x(i), sz.height - 8),
+          axis.copyWith(color: i == 6 ? p.ink : p.ink3));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StrainRecovery o) =>
+      o.strain != strain || o.rec != rec || o.p != p;
 }
 
 // ─────────────── your day ───────────────

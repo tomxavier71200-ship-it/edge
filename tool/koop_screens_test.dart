@@ -14,6 +14,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/models/metric.dart';
+import 'package:openstrap_edge/ui2/screens/home_sections.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
@@ -64,6 +65,11 @@ final _home = HomeData(
     'resting_hr': _pts(30, 57, 4),
     'resp_rate': _pts(30, 12.7, .6),
     'steps': _pts(30, 4704, 2000),
+    'strain': _pts(30, 12, 9),
+    'readiness': _pts(30, 52, 40),
+    'sleep': _pts(30, 400, 120),
+    'efficiency': _pts(30, 88, 10),
+    'calories': _pts(30, 2308, 600),
   },
 );
 
@@ -128,6 +134,13 @@ void main() {
   final cases = <String, Widget>{
     'home': HomeScreen(data: _home, hour: 9),
     'home_long': HomeScreen(data: _home, hour: 9),
+    'dashboard': Builder(
+      builder: (c) => ListView(padding: const EdgeInsets.all(16), children: [
+        dashboardCard(c, _home, () {}),
+        const SizedBox(height: 8),
+        ?strainRecoveryCard(c, _home),
+      ]),
+    ),
     'health_overview': HealthScreen(data: _health, tab: 0),
     'live_hr': Padding(
       padding: const EdgeInsets.all(16),
@@ -138,7 +151,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 2600 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));
