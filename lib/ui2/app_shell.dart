@@ -122,8 +122,8 @@ class _AppShellState extends State<AppShell> {
       current: _current,
       child: Scaffold(
         backgroundColor: p.bg,
-        // Content scrolls on under the bar, and every tab's list already
-        // ends with enough bottom padding to clear it.
+        // The bar floats: content scrolls on under it, and every tab's list
+        // already ends with enough bottom padding to clear it.
         extendBody: true,
         body: DecoratedBox(
           decoration: BoxDecoration(
@@ -164,7 +164,7 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/// The tab bar: flat, full width, the "+" as its last slot.
+/// A floating rounded pill of tabs, with the action disc standing beside it.
 class _TabBar extends StatelessWidget {
   final ShellDomain current;
   final ValueChanged<ShellDomain> onTap;
@@ -178,34 +178,40 @@ class _TabBar extends StatelessWidget {
     // An off-bar domain (Nutrition, Wellness) is reached through More, so
     // More is what reads as "here".
     final lit = current.inBar ? current : ShellDomain.more;
-    // Flat and full width, WHOOP-style: the page's own black with a hairline
-    // on top, not a floating pill. The "+" sits inside the bar at its end.
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: p.bg,
-        border: Border(top: BorderSide(color: p.line)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 60,
-          child: Row(children: [
-            for (final d in ShellDomain.values)
-              if (d.inBar)
-                Expanded(
-                  child: _Tab(
-                    domain: d,
-                    on: d == lit,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      onTap(d);
-                    },
-                  ),
-                ),
-            if (onAction != null)
-              Expanded(child: Center(child: _ActionButton(onTap: onAction!))),
-          ]),
-        ),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(S.x4, S.x2, S.x4, S.x3),
+        child: Row(children: [
+          Expanded(
+            child: Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: p.card,
+                borderRadius: R.rXxl,
+                boxShadow: p.el(3),
+              ),
+              child: Row(children: [
+                for (final d in ShellDomain.values)
+                  if (d.inBar)
+                    Expanded(
+                      child: _Tab(
+                        domain: d,
+                        on: d == lit,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          onTap(d);
+                        },
+                      ),
+                    ),
+              ]),
+            ),
+          ),
+          if (onAction != null) ...[
+            const SizedBox(width: S.x3),
+            _ActionButton(onTap: onAction!),
+          ],
+        ]),
       ),
     );
   }
@@ -228,29 +234,34 @@ class _Tab extends StatelessWidget {
         onTap: onTap,
         semanticLabel: domain.label,
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // A thin line on the bar's top edge over the lit tab: the WHOOP
-            // mark for "here", in the page ink rather than a colour.
-            AnimatedContainer(
+            AnimatedScale(
+              scale: on ? 1.08 : 1,
               duration: motion(c, Motion.base),
-              width: on ? 28 : 0,
-              height: 2,
-              decoration: BoxDecoration(color: p.ink, borderRadius: R.rPill),
+              child: Icon(domain.icon, size: 22, color: ink),
             ),
-            const Spacer(),
-            Icon(domain.icon, size: 21, color: ink),
             const SizedBox(height: 4),
             Text(
               domain.label,
               maxLines: 1,
-              overflow: TextOverflow.fade,
-              softWrap: false,
+              overflow: TextOverflow.ellipsis,
               style: F.over.copyWith(
                 color: ink,
+                letterSpacing: 0,
                 fontWeight: on ? FontWeight.w600 : FontWeight.w500,
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 3),
+            // The accent mark under the lit tab — the one place the accent
+            // picked in Customize shows on every screen.
+            AnimatedContainer(
+              duration: motion(c, Motion.base),
+              width: on ? 4 : 0,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: on ? p.accent : p.card, shape: BoxShape.circle),
+            ),
           ],
         ),
       ),
@@ -258,8 +269,8 @@ class _Tab extends StatelessWidget {
   }
 }
 
-/// The "+" in the bar's last slot: a small solid disc in the page ink, so
-/// it is the brightest thing on the bar without being a colour.
+/// The "+" beside the bar: a solid disc in the page ink, the same height as
+/// the pill, so it is the brightest thing on the screen without being a colour.
 class _ActionButton extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -275,10 +286,14 @@ class _ActionButton extends StatelessWidget {
         onTap();
       },
       child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: p.ink),
-        child: Icon(LucideIcons.plus, size: 22, color: p.bg),
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: p.ink,
+          boxShadow: p.el(3),
+        ),
+        child: Icon(LucideIcons.plus, size: 28, color: p.bg),
       ),
     );
   }

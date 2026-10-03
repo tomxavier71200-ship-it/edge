@@ -970,8 +970,8 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
               C.green, d.readiness, l?.homeReadinessNotScored ?? 'Not scored', l)
           : _RingState(k, l?.homeRingRecovery ?? 'Recovery',
               LucideIcons.batteryCharging, band.color,
-              value: '${v.round()}', sub: band.label, frac: v / 100,
-              n: v.toDouble(), fmt: (x) => '${x.round()}');
+              value: '${v.round()}%', sub: band.label, frac: v / 100,
+              n: v.toDouble(), fmt: (x) => '${x.round()}%');
     case HomeRingKind.strain:
       final v = d.strain.value;
       // 0–21 is the scale's own ceiling, not a target invented here.
@@ -989,17 +989,25 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
               d.sleepMin, l?.homeRingNoSleep ?? 'No sleep', l,
               fallbackWhy: l?.homeSleepGapFallback ??
                   'No night long enough to score was recorded.')
-          : _RingState(k, l?.homeRingSleep ?? 'Sleep', LucideIcons.moon, C.sleep,
-              value: hm(v),
-              // No computed need means no denominator. The hardcoded 480 in
-              // the sleep bundle is not this user's need and must never be
-              // shown as one, so the ring stays open and says so.
-              sub: need == null
-                  ? (l?.homeSleepNoTarget ?? 'No target yet')
-                  : (l?.homeOfSpan(hm(need)) ?? 'of ${hm(need)}'),
-              frac: need == null || need <= 0 ? null : v / need,
-              n: v.toDouble(),
-              fmt: hm);
+          // With a need, the ring is SLEEP PERFORMANCE — the share of the need
+          // that was slept, WHOOP's own sleep number — and the hours go
+          // underneath. No computed need means no denominator: the hardcoded
+          // 480 in the sleep bundle is not this user's need and must never be
+          // shown as one, so the ring then shows the hours and stays open.
+          : need == null || need <= 0
+              ? _RingState(k, l?.homeRingSleep ?? 'Sleep', LucideIcons.moon,
+                  C.sleep,
+                  value: hm(v),
+                  sub: l?.homeSleepNoTarget ?? 'No target yet',
+                  n: v.toDouble(),
+                  fmt: hm)
+              : _RingState(k, l?.homeRingSleep ?? 'Sleep', LucideIcons.moon,
+                  C.sleep,
+                  value: '${(v / need * 100).round()}%',
+                  sub: '${hm(v)} of ${hm(need)}',
+                  frac: v / need,
+                  n: v / need * 100,
+                  fmt: (x) => '${x.round()}%');
   }
 }
 

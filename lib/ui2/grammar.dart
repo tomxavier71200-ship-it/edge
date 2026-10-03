@@ -227,8 +227,10 @@ class Surface extends StatelessWidget {
         padding: pad ?? EdgeInsets.all(Look.compact ? S.x3 : S.x4),
         decoration: BoxDecoration(
           color: color ?? p.card,
-          borderRadius: R.rMd,
-          border: p.dark ? Border.all(color: p.line) : null,
+          // WHOOP's rounder raised card. The hairline only on the black Onyx
+          // page, where a card has nothing else to separate it.
+          borderRadius: R.rLg,
+          border: p.dark && P.skin == Skin.onyx ? Border.all(color: p.line) : null,
           boxShadow: p.el(elevation),
         ),
         child: child,

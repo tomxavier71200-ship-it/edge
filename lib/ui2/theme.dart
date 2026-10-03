@@ -147,6 +147,10 @@ class C {
 enum Skin {
   // The default: true black with near-black hairline cards, the WHOOP look.
   // bgTop carries a faint blue lift so the top of the page is not a void.
+  // The default: WHOOP's slate — a dark grey-blue page that fades darker
+  // toward the bottom, with raised slate cards. Not black: on black the
+  // cards read as holes; on slate they read as surfaces.
+  carbon('Carbon', [0xFF1E2227, 0xFF2A2F35, 0xFF31373E, 0xFF3A4048, 0xFF3B424A, 0xFF2D3339, 0xFF14171A]),
   onyx('Onyx', [0xFF000000, 0xFF0F1113, 0xFF181B1E, 0xFF212529, 0xFF22262A, 0xFF0B1820, 0xFF000000]),
   slate('Slate', [0xFF1B2229, 0xFF28313A, 0xFF303A43, 0xFF38424C, 0xFF3B454F, 0xFF2A343D, 0xFF12171C]),
   midnight('Midnight', [0xFF0E1319, 0xFF19202A, 0xFF212935, 0xFF2A3340, 0xFF2C3542, 0xFF18202A, 0xFF06080B]),
@@ -185,7 +189,7 @@ class Look {
   static int rev = 0;
 
   static double ringStroke(double classic) =>
-      ring == RingStyle.thin ? classic * .6 : classic;
+      ring == RingStyle.thin ? classic * .8 : classic;
   static bool get glow => ring == RingStyle.glow;
 }
 
@@ -224,7 +228,7 @@ class P {
   /// `AppColors.active`: MaterialApp rebuilds on the notify and the ThemeData
   /// carries both (see ThemeController.darkTheme), so every `P.of` dependent
   /// repaints.
-  static Skin skin = Skin.onyx;
+  static Skin skin = Skin.carbon;
   static Color accentColor = kAccents.first.$2;
 
   static P of(BuildContext c) => P(Theme.of(c).brightness == Brightness.dark);

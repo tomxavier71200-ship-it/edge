@@ -87,7 +87,7 @@ void main() {
 
     // Today's own readiness ring is showing (its number is real Text, not
     // canvas-painted), and so is the stepper.
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
     expect(find.bySemanticsLabel('Previous day'), findsOneWidget);
     // The newest day: forward is a dead arrow.
     expect(find.bySemanticsLabel('Next day'), findsOneWidget);
@@ -98,13 +98,13 @@ void main() {
     // Yesterday's readiness (42, off getDayOverview) replaced today's (70) —
     // proof the screen actually reloaded through `HomeData.loadForDay`
     // rather than just relabelling the same data.
-    expect(find.text('70'), findsNothing);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('70%'), findsNothing);
+    expect(find.text('42%'), findsOneWidget);
 
     // Stepping forward again returns to today's own number.
     await t.tap(find.bySemanticsLabel('Next day'));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
   });
 
   testWidgets('a past day with nothing recorded says so, not "sync the band"',
