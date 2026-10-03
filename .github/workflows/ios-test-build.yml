@@ -85,7 +85,14 @@ jobs:
           else
             echo "::warning::widget extension not found in the build"
           fi
-          ldid -Sent.plist "$app/Runner"
+          # The app also carries HealthKit (Runner.entitlements has it; a
+          # --no-codesign build drops it): without it iOS refuses every Apple
+          # Health read and write ("Apple Health did not grant ..."). The
+          # widget gets only the App Group.
+          cp ent.plist app-ent.plist
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.healthkit bool true" \
+            -c "Add :com.apple.developer.healthkit.access array" app-ent.plist
+          ldid -Sapp-ent.plist "$app/Runner"
           ldid -e "$app/Runner"
 
       - name: Package unsigned IPA
