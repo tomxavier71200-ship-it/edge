@@ -57,6 +57,7 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/home_sections.dart' show MonitorTiles;
+import '../screens/stress_detail.dart';
 import '../screens/screens.dart';
 import '../ui2.dart';
 import 'devices.dart';
@@ -899,6 +900,27 @@ Map<String, Widget> extraCases() => {
       'koop_mark': const Surface(child: Center(child: KoopMark(size: 96))),
       // No repository above the gallery: no stress reading, no ranges — the
       // tiles' honest empty states.
+      'stress_line': Surface(
+        child: StressLine(
+          readings: [
+            for (var i = 0; i < 40; i++)
+              (
+                at: DateTime(2026, 10, 2, 8).add(Duration(minutes: 15 * i)),
+                v: 1.5 + (i % 7 - 3) * .35,
+              ),
+          ],
+          sleep: const [],
+          work: const [],
+          day: DateTime(2026, 10, 2),
+        ),
+      ),
+      'stress_split': const StressSplitCard(
+        title: 'Total day',
+        blurb: 'Stress through the whole day, including sleep and activities.',
+        versus: 'Today vs. a typical Friday',
+        today: [389, 764, 249],
+        usual: [370, 900, 140],
+      ),
       'mini_dials': const MiniDials(
           d: HomeData(
               readiness: Metric(value: 44, confidence: .8),

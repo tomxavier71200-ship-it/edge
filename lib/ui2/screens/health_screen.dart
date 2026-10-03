@@ -27,6 +27,7 @@ import 'circadian_detail.dart';
 import 'ecg.dart' show EcgEntryCard, pairedIsMaverickOf;
 import 'findings_log.dart';
 import 'home_screen.dart';
+import 'stress_detail.dart';
 import 'investigate.dart';
 import 'metric_detail.dart';
 import 'naps.dart';
@@ -628,16 +629,82 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   Map<String, dynamic>? _s;
   bool _sFailed = false;
 
+  /// Today's sleep and workout spans, for marking the line and splitting
+  /// the time; empty when the timeline could not be read.
+  ({List<Span> sleep, List<Span> work}) _sSpans = (sleep: const [], work: const []);
+
+  /// The same weekday's splits from up to four earlier weeks — only weeks
+  /// with at least two hours of readings, so a barely-worn day is no usual.
+  List<StressSplit> _sUsual = const [];
+
   Future<void> _loadStress() async {
     final repo = repoOf(context);
     if (repo == null) return;
     final t = beginRead(#stress);
     try {
-      final s = await _soft(() => repo.getDayStress(todayLabel()));
-      if (stillNewest(#stress, t)) setState(() => (_s = s, _sFailed = false));
+      final today = todayLabel();
+      final s = await _soft(() => repo.getDayStress(today));
+      var spans = (sleep: const <Span>[], work: const <Span>[]);
+      try {
+        spans = timelineSpans(await repo.getDayTimeline(today));
+      } catch (_) {}
+      final usual = <StressSplit>[];
+      final now = DateTime.now();
+      for (var k = 1; k <= 4; k++) {
+        final day = dayLabelOf(DateTime(now.year, now.month, now.day - 7 * k));
+        try {
+          final r = stressReadings(await repo.getDayStress(day), day);
+          if (r.length < 8) continue;
+          var sp = (sleep: const <Span>[], work: const <Span>[]);
+          try {
+            sp = timelineSpans(await repo.getDayTimeline(day));
+          } catch (_) {}
+          usual.add(stressSplit(r, sleep: sp.sleep, work: sp.work));
+        } catch (_) {}
+      }
+      if (stillNewest(#stress, t)) {
+        setState(() {
+          _s = s;
+          _sFailed = false;
+          _sSpans = spans;
+          _sUsual = usual;
+        });
+      }
     } catch (_) {
       if (stillNewest(#stress, t)) setState(() => _sFailed = true);
     }
+  }
+
+  /// Whole day, outside activities, and sleep, each against the same
+  /// weekday's usual when there are at least two earlier ones.
+  List<Widget> _splitCards(List<_StressBin> scored) {
+    final now = DateTime.now();
+    final split = stressSplit(
+        [for (final b in scored) (at: b.at, v: b.score! / 100 * 3)],
+        sleep: _sSpans.sleep,
+        work: _sSpans.work);
+    final usual = typicalSplit(_sUsual);
+    final wd = weekdayName(now);
+    final versus = usual == null
+        ? 'Today · the usual $wd needs two earlier ${wd}s with readings'
+        : 'Today vs. a typical $wd';
+    const parts = [
+      ('Total day', 'Stress through the whole day, including sleep and activities.'),
+      ('Outside activities', 'Stress outside workouts and sleep.'),
+      ('Sleep', 'Stress while asleep.'),
+    ];
+    return [
+      for (var i = 0; i < 3; i++) ...[
+        const SizedBox(height: S.x3),
+        StressSplitCard(
+          title: parts[i].$1,
+          blurb: parts[i].$2,
+          versus: versus,
+          today: split.of(i),
+          usual: usual?.of(i),
+        ),
+      ],
+    ];
   }
 
   // ─────────────── STRESS ───────────────
@@ -732,39 +799,17 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         Section(
           'Today',
           Surface(
-            child: Column(children: [
-              SizedBox(
-                height: 80,
-                child: CustomPaint(
-                    painter: _StressBars(bins, p), size: Size.infinite),
-              ),
-              const SizedBox(height: S.x2),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                for (final t in const ['00:00', '12:00', '24:00'])
-                  Text(t, style: F.over.copyWith(color: p.ink3)),
-              ]),
-            ]),
+            child: StressLine(
+              readings: [
+                for (final b in scored) (at: b.at, v: b.score! / 100 * 3),
+              ],
+              sleep: _sSpans.sleep,
+              work: _sSpans.work,
+              day: DateTime.now(),
+            ),
           ),
         ),
-        Section(
-          'Time at each level',
-          Surface(
-            child: Column(children: [
-              for (var i = 0; i < 3; i++)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: S.x2),
-                  child: Row(children: [
-                    Expanded(
-                      child: Text(kStressLevelWords[i],
-                          style: F.body.copyWith(color: p.on(kStressLevelColors[i]))),
-                    ),
-                    Text(hm(mins[i].toDouble()),
-                        style: F.body.copyWith(color: p.ink)),
-                  ]),
-                ),
-            ]),
-          ),
-        ),
+        ..._splitCards(scored),
       ]);
     }
     out.addAll([
@@ -2080,7 +2125,10 @@ class _StressBin {
 }
 
 const kStressLevelWords = ['Low', 'Medium', 'High'];
-const kStressLevelColors = [C.green, C.yellow, C.red];
+
+/// WHOOP's stress colours: calm blue, medium green, high orange. Stress is
+/// not a verdict, so none of them is the red the app spends on warnings.
+const kStressLevelColors = [C.blue, C.green, C.orange];
 
 /// 0–3 value → level index. The cut points are the display scale's thirds.
 int stressLevelOf(double v) => v < 1 ? 0 : v < 2 ? 1 : 2;
@@ -2112,7 +2160,7 @@ class _StressGauge extends CustomPainter {
           ..shader = const SweepGradient(
             startAngle: math.pi,
             endAngle: 2 * math.pi,
-            colors: [C.green, C.yellow, C.red],
+            colors: kStressLevelColors,
           ).createShader(rect));
     final a = math.pi + math.pi * f;
     final m = center + Offset(math.cos(a) * r, math.sin(a) * r);
@@ -2123,33 +2171,3 @@ class _StressGauge extends CustomPainter {
   bool shouldRepaint(_StressGauge old) => old.frac != frac || old.p.dark != p.dark;
 }
 
-/// Today as 96 fifteen-minute slots. A slot with a reading is a bar coloured
-/// by its level; a slot the band covered without a reading is a faint tick; a
-/// slot with no data at all is empty.
-class _StressBars extends CustomPainter {
-  final List<_StressBin> bins;
-  final P p;
-  const _StressBars(this.bins, this.p);
-
-  @override
-  void paint(Canvas cv, Size s) {
-    final slot = s.width / 96;
-    for (final b in bins) {
-      final i = (b.at.hour * 60 + b.at.minute) ~/ 15;
-      final x = i * slot + slot * .15;
-      final score = b.score;
-      final h = score == null ? 3.0 : math.max(3.0, score / 100 * s.height);
-      cv.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(x, s.height - h, slot * .7, h),
-            const Radius.circular(2)),
-        Paint()
-          ..color = score == null
-              ? p.track
-              : kStressLevelColors[stressLevelOf(score / 100 * 3)],
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_StressBars old) => old.bins != bins || old.p.dark != p.dark;
-}

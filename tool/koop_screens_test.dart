@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/models/metric.dart';
 import 'package:openstrap_edge/ui2/screens/home_sections.dart';
+import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
@@ -134,6 +135,41 @@ void main() {
   final cases = <String, Widget>{
     'home': HomeScreen(data: _home, hour: 9),
     'home_long': HomeScreen(data: _home, hour: 9),
+    'stress': ListView(padding: const EdgeInsets.all(16), children: [
+      Surface(
+        child: StressLine(
+          readings: [
+            for (var i = 0; i < 90; i++)
+              (
+                at: DateTime(2026, 10, 2, 1).add(Duration(minutes: 15 * i)),
+                v: (1.4 + 0.9 * ((i * 13 % 17) / 17 - .4) + (i > 40 && i < 50 ? .8 : 0))
+                    .clamp(0.1, 2.9),
+              ),
+          ],
+          sleep: [
+            (
+              from: DateTime(2026, 10, 2, 1).millisecondsSinceEpoch ~/ 1000,
+              to: DateTime(2026, 10, 2, 7).millisecondsSinceEpoch ~/ 1000,
+            ),
+          ],
+          work: [
+            (
+              from: DateTime(2026, 10, 2, 12, 9).millisecondsSinceEpoch ~/ 1000,
+              to: DateTime(2026, 10, 2, 12, 36).millisecondsSinceEpoch ~/ 1000,
+            ),
+          ],
+          day: DateTime(2026, 10, 2),
+        ),
+      ),
+      const SizedBox(height: 12),
+      const StressSplitCard(
+        title: 'Total day',
+        blurb: 'Stress through the whole day, including sleep and activities.',
+        versus: 'Today vs. a typical Friday',
+        today: [389, 764, 249],
+        usual: [370, 900, 140],
+      ),
+    ]),
     'dashboard': Builder(
       builder: (c) => ListView(padding: const EdgeInsets.all(16), children: [
         dashboardCard(c, _home, () {}),
