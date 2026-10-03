@@ -333,6 +333,10 @@ Map<String, Widget> goldenCases() => {
       // The newest day: forward is dead, and the label reads Today rather than
       // a date. Both halves of that are the honesty — there is no day after
       // this one, and saying so beats a live arrow that does nothing.
+      // The calendar behind the stepper: a month of days, the ones with data
+      // dotted (coloured when a screen passes colours), the current one filled.
+      'day_calendar': DayCalendar(
+          days: _navDays, current: _navDays[2], onDay: (_) {}),
       'day_nav_today': DayNav(
           day: _navDays.first, days: _navDays, onDay: (_) {}),
       'section': const Section('Recovery', StatusCard('Nothing yet today',

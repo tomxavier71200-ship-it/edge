@@ -14,8 +14,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openstrap_edge/data/day_label.dart';
 import 'package:openstrap_edge/models/metric.dart';
 import 'package:openstrap_edge/ui2/screens/home_sections.dart';
+import 'package:openstrap_edge/ui2/screens/metric_detail.dart';
 import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
@@ -219,6 +221,32 @@ void main() {
       ]),
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
+    'day_nav': Builder(builder: (c) {
+      final now = DateTime.now();
+      final days = [
+        for (var i = 0; i < 24; i++)
+          if (i != 5 && i != 11)
+            dayLabelOf(DateTime(now.year, now.month, now.day - i)),
+      ];
+      final cols = [C.green, C.yellow, C.green, C.red, C.green, C.yellow];
+      return ListView(padding: const EdgeInsets.all(16), children: [
+        DayNav(day: days.first, days: days, onDay: (_) {}),
+        const SizedBox(height: 16),
+        DayNav(day: days[3], days: days, onDay: (_) {}),
+        const SizedBox(height: 24),
+        Surface(
+          child: DayCalendar(
+            days: days,
+            current: days[3],
+            colors: {
+              for (var i = 0; i < days.length; i++)
+                if (i % 7 != 6) days[i]: cols[i % cols.length],
+            },
+            onDay: (_) {},
+          ),
+        ),
+      ]);
+    }),
     'live_hr': ListView(
       padding: const EdgeInsets.all(16),
       children: [

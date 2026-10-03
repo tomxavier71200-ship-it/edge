@@ -1915,27 +1915,6 @@ int? _dayBehind(String? dayId) {
   return d == null ? null : calendarDaysBetween(d, DateTime.now());
 }
 
-/// The calendar, restricted to the days that exist. A picker that offers an
-/// empty day is a dead end, so [days] greys out everything it does not contain.
-Future<String?> chooseDay(
-    BuildContext c, List<String> days, String? current) async {
-  if (days.isEmpty) return null;
-  final have = days.toSet();
-  final sorted = [...days]..sort(); // oldest → newest
-  final first = DateTime.parse(sorted.first);
-  final last = DateTime.parse(sorted.last);
-  final want = DateTime.tryParse(current ?? '') ?? last;
-  final picked = await showDatePicker(
-    context: c,
-    initialDate: want.isBefore(first) ? first : (want.isAfter(last) ? last : want),
-    firstDate: first,
-    lastDate: last,
-    selectableDayPredicate: (d) => have.contains(dayLabelOf(d)),
-    helpText: AppLocalizations.of(c)?.metricDetailChooseDayHelp ?? 'Choose a day',
-  );
-  return picked == null ? null : dayLabelOf(picked);
-}
-
 /// The day stepper every single-day screen wears under its nav bar.
 ///
 /// [days] is `availableDays()` — NEWEST FIRST, and only days that derived. Both
@@ -1947,11 +1926,16 @@ class DayNav extends StatelessWidget {
   final List<String> days;
   final ValueChanged<String> onDay;
 
+  /// Optional per-day colour for the calendar's dots (Home: the recovery
+  /// band). A day without one gets a neutral dot.
+  final Map<String, Color> colors;
+
   const DayNav({
     super.key,
     required this.day,
     required this.days,
     required this.onDay,
+    this.colors = const {},
   });
 
   @override
@@ -1965,40 +1949,85 @@ class DayNav extends StatelessWidget {
     final newer = i > 0 ? days[i - 1] : null;
 
     Widget arrow(IconData icon, String label, String? to) => Opacity(
-          opacity: to == null ? .35 : 1,
+          opacity: to == null ? .3 : 1,
           child: Pressable(
             onTap: to == null ? null : () => onDay(to),
             semanticLabel: label,
-            child: Icon(icon, size: 20, color: p.ink),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: p.card, shape: BoxShape.circle),
+              child: Icon(icon, size: 18, color: p.ink),
+            ),
           ),
         );
 
-    return Container(
-      decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
-      child: Row(children: [
-        arrow(LucideIcons.chevronLeft, l?.metricDetailPreviousDay ?? 'Previous day',
-            older),
-        Expanded(
-          child: Pressable(
-            onTap: () async {
-              final picked = await chooseDay(c, days, day);
-              if (picked != null && picked != day) onDay(picked);
-            },
-            semanticLabel: l?.metricDetailChooseDayShowing(dayNavLabel(day)) ??
-                'Choose a day. Showing ${dayNavLabel(day)}',
-            child: Text(
-              dayNavLabel(day),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600),
-            ),
+    // WHOOP's header: the day as a WORD in tracked caps, the date under it.
+    final (word, date) = dayNavWords(day);
+    return Row(children: [
+      arrow(LucideIcons.chevronLeft, l?.metricDetailPreviousDay ?? 'Previous day',
+          older),
+      Expanded(
+        child: Pressable(
+          onTap: () async {
+            final picked = await showDayCalendar(c,
+                days: days, current: day, colors: colors);
+            if (picked != null && picked != day) onDay(picked);
+          },
+          semanticLabel: l?.metricDetailChooseDayShowing(dayNavLabel(day)) ??
+              'Choose a day. Showing ${dayNavLabel(day)}',
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(word,
+                    maxLines: 1,
+                    style: F.label.copyWith(color: p.ink, letterSpacing: 2)),
+                const SizedBox(width: S.x1),
+                Icon(LucideIcons.chevronDown, size: 14, color: p.ink3),
+              ]),
+              if (date.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(date,
+                    maxLines: 1,
+                    style: F.over.copyWith(color: p.ink3, letterSpacing: 1.2)),
+              ],
+            ]),
           ),
         ),
-        arrow(LucideIcons.chevronRight, l?.metricDetailNextDay ?? 'Next day', newer),
-      ]),
-    );
+      ),
+      arrow(LucideIcons.chevronRight, l?.metricDetailNextDay ?? 'Next day', newer),
+    ]);
   }
+}
+
+/// The header's two lines for [day]: TODAY / YESTERDAY / the weekday, and the
+/// date under it ("SAT, 3 OCT"). Local calendar days, via day_label.
+(String, String) dayNavWords(String? day) {
+  final d = DateTime.tryParse(day ?? '');
+  if (d == null) return ('TODAY', '');
+  const wd = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  const wdl = [
+    'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', //
+    'SUNDAY',
+  ];
+  const mo = [
+    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', //
+    'NOV', 'DEC',
+  ];
+  final behind = _dayBehind(day) ?? 0;
+  final word = behind <= 0
+      ? 'TODAY'
+      : behind == 1
+          ? 'YESTERDAY'
+          : wdl[d.weekday - 1];
+  // A weekday word already names the day, so its date line does not repeat it.
+  return (
+    word,
+    behind >= 2
+        ? '${d.day} ${mo[d.month - 1]}'
+        : '${wd[d.weekday - 1]}, ${d.day} ${mo[d.month - 1]}',
+  );
 }
 
 /// [DayNav] and the gap under it, spread into a `detailScaffold` body — or

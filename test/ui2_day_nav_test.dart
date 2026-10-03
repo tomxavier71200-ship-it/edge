@@ -113,4 +113,55 @@ void main() {
       expect(picked, ['2026-08-16']);
     });
   });
+
+  group('dayNavWords', () {
+    test('a past day reads as its weekday over the date', () {
+      expect(dayNavWords('2026-08-13'), ('THURSDAY', '13 AUG'));
+    });
+    test('today and yesterday read as words', () {
+      final now = DateTime.now();
+      final y = now.subtract(const Duration(days: 1));
+      expect(dayNavWords(dayLabelOf(now)).$1, 'TODAY');
+      expect(dayNavWords(dayLabelOf(DateTime(y.year, y.month, y.day))).$1,
+          'YESTERDAY');
+    });
+  });
+
+  group('DayCalendar', () {
+    Widget frame(Widget child) => MaterialApp(
+          theme: buildTheme(Brightness.dark),
+          home: Scaffold(body: child),
+        );
+
+    testWidgets('only days with data can be picked', (tester) async {
+      final picked = <String>[];
+      await tester.pumpWidget(frame(DayCalendar(
+        days: const ['2026-08-16', '2026-08-13'],
+        current: '2026-08-16',
+        onDay: picked.add,
+      )));
+      expect(find.text('AUGUST  2026'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel(RegExp('^13 August')));
+      expect(picked, ['2026-08-13']);
+      // 14 August has no record: it is drawn, but it is not a button.
+      expect(find.bySemanticsLabel(RegExp('^14 August')), findsNothing);
+    });
+
+    testWidgets('months without data cannot be paged to', (tester) async {
+      await tester.pumpWidget(frame(DayCalendar(
+        days: const ['2026-08-16', '2026-07-30'],
+        current: '2026-08-16',
+        onDay: (_) {},
+      )));
+      await tester.tap(find.bySemanticsLabel('Next month'));
+      await tester.pump();
+      expect(find.text('AUGUST  2026'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Previous month'));
+      await tester.pump();
+      expect(find.text('JULY  2026'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Previous month'));
+      await tester.pump();
+      expect(find.text('JULY  2026'), findsOneWidget);
+    });
+  });
 }

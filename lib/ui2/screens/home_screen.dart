@@ -39,7 +39,7 @@ import '../../ai/briefing.dart'
         BriefingStore,
         currentBriefingPeriod,
         resolveBriefingToShow;
-import '../../data/day_label.dart' show todayLabel, calendarDaysBetween;
+import '../../data/day_label.dart' show todayLabel, calendarDaysBetween, dayLabelOf;
 import '../../data/db.dart' show DbRebuild;
 import '../../data/journal_fields.dart' show formatMinuteOfDay;
 import '../../data/local_repository.dart';
@@ -2334,6 +2334,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                           day: _day ?? d.dayId,
                           days: _days,
                           onDay: _goDay,
+                          // The calendar's dots wear each day's recovery band;
+                          // a day with no score gets the neutral dot.
+                          colors: {
+                            for (final pt in d.series['readiness'] ??
+                                const <ChartPoint>[])
+                              dayLabelOf(DateTime.fromMillisecondsSinceEpoch(
+                                      pt.t * 1000)):
+                                  readinessBand(pt.v, l).color,
+                          },
                         ),
                 ),
                 const SizedBox(width: S.x3),

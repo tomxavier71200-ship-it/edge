@@ -9,6 +9,7 @@ export 'app_shell.dart';
 export 'charts.dart';
 export 'community_links.dart';
 export 'day_bars.dart';
+export 'day_calendar.dart';
 export 'koop_mark.dart';
 export 'hero_dial.dart';
 export 'range_row.dart';
