@@ -13,6 +13,7 @@
 // the next reconnect catches up from the non-destructive cursor.
 
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/widgets.dart';
 import 'package:openstrap_protocol/openstrap_protocol.dart' as proto;
@@ -48,6 +49,7 @@ import '../ble/wearfit_link.dart';
 import '../ble/withings_steel_hr_link.dart';
 import '../ble/xwatch_link.dart';
 import '../ble/zetime_link.dart';
+import '../cloud/cloud_sync.dart';
 import '../compute/derivation_engine.dart';
 import '../compute/profile.dart';
 import '../data/db.dart';
@@ -325,6 +327,15 @@ Future<bool> runHeadlessSync({BandLease? lease}) async {
     }
     debugPrint('[bgsync] done (local drain + light derive).');
     await checkSyncStaleness();
+    // Koop Cloud, Android only: iOS background slots are too short for a
+    // whole-database upload, so the iPhone keeps uploading on open.
+    if (Platform.isAndroid) {
+      try {
+        await CloudSync.instance.runSendInBackground();
+      } catch (e) {
+        debugPrint('[bgsync] cloud upload skipped: $e');
+      }
+    }
     return true;
   } catch (e) {
     debugPrint('[bgsync] error (ignored): $e');

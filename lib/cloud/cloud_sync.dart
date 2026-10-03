@@ -195,6 +195,22 @@ class CloudSync extends ChangeNotifier {
     }
   }
 
+  /// The Android background sync's hook: after the band has drained and the
+  /// day derived with the app closed, a SENDING phone uploads when due. Never
+  /// interactive (a lapsed sign-in just waits for the next foreground), and
+  /// still Wi-Fi-gated when that is on. Receiving stays foreground-only: it
+  /// merges through the app's import path, which a headless wake does not run.
+  Future<void> runSendInBackground() async {
+    await Prefs.ensureLoaded();
+    if (!on || !cloudConfigured || role != CloudRole.send || _busy) return;
+    if (!cloudDue(role, DateTime.now(), lastUp: lastUp)) return;
+    try {
+      await run((_) async => 0, interactive: false);
+    } catch (_) {
+      // `run` records the error for the screen; a background wake must not throw.
+    }
+  }
+
   /// One pass in this phone's direction. [interactive] lets Google show its
   /// sign-in again when the token has lapsed — only from a button press.
   Future<CloudOutcome> run(

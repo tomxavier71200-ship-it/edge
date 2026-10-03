@@ -10,8 +10,24 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:openstrap_edge/cloud/cloud_sync.dart';
 import 'package:openstrap_edge/cloud/drive_api.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  group('runSendInBackground', () {
+    test('off: does nothing', () async {
+      SharedPreferences.setMockInitialValues({});
+      await CloudSync.instance.runSendInBackground();
+      expect(CloudSync.instance.busy, isFalse);
+      expect(CloudSync.instance.lastError, isNull);
+    });
+    test('a receiving phone does not upload', () async {
+      SharedPreferences.setMockInitialValues(
+          {kCloudOnKey: true, kCloudRoleKey: 'receive'});
+      await CloudSync.instance.runSendInBackground();
+      expect(CloudSync.instance.lastError, isNull);
+    });
+  });
+
   final now = DateTime(2026, 10, 3, 12);
 
   group('cloudDue', () {
@@ -139,3 +155,4 @@ void main() {
     });
   });
 }
+
