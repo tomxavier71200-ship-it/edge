@@ -23,3 +23,4 @@ export 'revision.dart';
 export 'scroll_hint.dart';
 export 'streak.dart';
 export 'theme.dart';
+export 'week_trend.dart';

@@ -17,6 +17,7 @@ import '../../models/metric.dart';
 import '../ui2.dart';
 import 'home_screen.dart';
 import 'investigate.dart';
+import 'detail_trends.dart';
 import 'metric_detail.dart';
 
 class ReadinessData {
@@ -51,6 +52,9 @@ class ReadinessData {
   /// as five consecutive days.
   final List<double?> series;
 
+  /// The stored series behind the contributors and the weekly trends.
+  final Map<String, List<ChartPoint>> trends;
+
   const ReadinessData({
     this.readiness = Metric.empty,
     this.early = Metric.empty,
@@ -58,6 +62,7 @@ class ReadinessData {
     this.inputsUsed = 0,
     this.heldOverNight,
     this.series = const [],
+    this.trends = const {},
     this.absentDiag,
   });
 
@@ -105,6 +110,8 @@ class ReadinessData {
       inputsUsed: (v['inputs_used'] as num?)?.toInt() ?? 0,
       heldOverNight: heldOverNightOf(today),
       series: denseDays(pointsOf(chart), 90),
+      trends: await loadTrendSeries(
+          repo, const ['readiness', 'hrv', 'resting_hr', 'resp_rate', 'sleep']),
       // Only read when there is nothing to explain away — a scored day has no
       // diag in its bundle anyway, and this is one more day_result decode.
       //
@@ -169,7 +176,7 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
     // No date in the nav bar. It named the held-over night, and the headline
     // can no longer BE that night — a date up here now would be labelling
     // today's number with somebody else's day.
-    return detailScaffold(c, l?.readinessDetailTitle ?? 'Readiness',
+    return detailScaffold(c, 'Recovery',
         info: kInfoRecovery, [
       if (_loading && _d == null) ...[
         const SizedBox(height: S.x8),
@@ -239,6 +246,16 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             ]),
           ),
 
+        // WHOOP's contributor list: each input today, your 30-day average
+        // under it, the arrow coloured by whether the move is good for you.
+        if ([
+          for (final (k, label, icon, better) in kRecoveryInputs)
+            ?contributorFor(c, k, label, icon, better, d.trends[k] ?? const []),
+        ] case final rows when rows.isNotEmpty) ...[
+          ContributorsCard(rows: rows, footer: 'Today vs. last 30 days'),
+          const SizedBox(height: S.x5),
+        ],
+
         if (d.breakdown.isNotEmpty) ...[
           Section(l?.readinessDetailWhatWentIntoIt ?? 'What went into it',
               _breakdown(c, p, d)),
@@ -271,20 +288,15 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             ),
           ),
 
-        if (d.series.any((v) => v != null))
+        // Weekly trends, WHOOP's order: the score, then what drives it.
+        if (d.trends.values.any((s) => s.isNotEmpty))
           Section(
-            'This week',
-            Surface(child: Builder(builder: (c) {
-              final w = lastDays(d.series, 7);
-              return DayBars(
-                values: w.values,
-                labels: w.labels,
-                max: 100,
-                color: (x) => p.on(readinessBand(x, l).color),
-                fmt: (x) => '${x.round()}',
-                title: 'Recovery',
-              );
-            })),
+            'Weekly trends',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: weeklyTrendCards(c, d.trends,
+                  const ['readiness', 'hrv', 'resting_hr', 'resp_rate', 'sleep']),
+            ),
           ),
 
         // The header used to say "Last 90 days" over a chart of five points.
@@ -331,7 +343,7 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
     return ChartFrame(
-      title: l?.readinessDetailTitle ?? 'Readiness',
+      title: 'Recovery',
       unit: l?.readinessDetailUnit ?? '/100',
       height: 120,
       yAxis: axis,

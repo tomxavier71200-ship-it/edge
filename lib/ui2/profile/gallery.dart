@@ -333,6 +333,40 @@ Map<String, Widget> goldenCases() => {
       // The newest day: forward is dead, and the label reads Today rather than
       // a date. Both halves of that are the honesty — there is no day after
       // this one, and saying so beats a live arrow that does nothing.
+      // WHOOP-style detail blocks: a week as bars and as a line (one day
+      // missing — a gap, not a zero), contributors, the three-step scale.
+      'week_trend_bars': WeekTrendCard(
+        title: 'Recovery',
+        days: [for (var i = 6; i >= 0; i--) DateTime(2026, 10, 3 - i)],
+        values: const [64, 63, 58, null, 44, 44, 41],
+        format: (v) => '${v.round()}%',
+        colorOf: (_) => C.yellow,
+        onTap: () {},
+      ),
+      'week_trend_line': WeekTrendCard(
+        title: 'Heart rate variability',
+        days: [for (var i = 6; i >= 0; i--) DateTime(2026, 10, 3 - i)],
+        values: const [70, 65, 62, 62, 64, null, 63],
+        kind: TrendKind.line,
+        format: (v) => '${v.round()}',
+        colorOf: (_) => C.blue,
+      ),
+      'contributors': const ContributorsCard(rows: [
+        Contributor(LucideIcons.activity, 'Heart rate variability', '63',
+            average: '65', direction: -1, good: false),
+        Contributor(LucideIcons.heart, 'Resting heart rate', '56',
+            average: '57', direction: -1, good: true),
+        Contributor(LucideIcons.wind, 'Respiratory rate', '12.6',
+            average: '12.7', direction: -1),
+      ], footer: 'Today vs. last 30 days'),
+      'band_rows': const Column(children: [
+        BandRow(LucideIcons.clock, 'Hours vs. needed', '47%', Band3.poor),
+        BandRow(LucideIcons.bedDouble, 'Sleep efficiency', '89%',
+            Band3.sufficient),
+        BandRow(LucideIcons.sparkles, 'Restorative sleep', '42%',
+            Band3.optimal),
+        BandLegend(),
+      ]),
       // The band under Home's header, in its three states.
       'band_status_line': const Column(children: [
         BandStatusLine(band: 'WHOOP MG', connected: true, battery: (84, false)),

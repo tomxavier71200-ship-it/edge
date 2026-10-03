@@ -18,6 +18,8 @@ import 'package:openstrap_edge/data/day_label.dart';
 import 'package:openstrap_edge/models/metric.dart';
 import 'package:openstrap_edge/ui2/screens/home_sections.dart';
 import 'package:openstrap_edge/ui2/screens/metric_detail.dart';
+import 'package:openstrap_edge/ui2/screens/readiness_detail.dart';
+import 'package:openstrap_edge/ui2/screens/streak_screen.dart';
 import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
@@ -221,25 +223,42 @@ void main() {
       ]),
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
+    'recovery_detail': Builder(builder: (c) {
+      final now = DateTime.now();
+      List<({int t, double v})> s(double base, double amp, [int skip = -1]) => [
+            for (var i = 30; i >= 0; i--)
+              if (i != skip)
+                (
+                  t: DateTime(now.year, now.month, now.day - i, 12)
+                          .millisecondsSinceEpoch ~/
+                      1000,
+                  v: base + amp * math.sin(i * 1.3),
+                ),
+          ];
+      return ReadinessDetail(
+        data: ReadinessData(
+          readiness: const Metric(value: 41, confidence: .8, tier: MetricTier.high),
+          trends: {
+            'readiness': s(52, 12),
+            'hrv': s(64, 4),
+            'resting_hr': s(56.5, 1.5),
+            'resp_rate': s(12.7, .3),
+            'sleep': s(330, 50, 3),
+          },
+        ),
+      );
+    }),
     'streak': Builder(builder: (c) {
       final now = DateTime.now();
-      return ListView(padding: const EdgeInsets.all(16), children: [
-        const Row(children: [
-          StreakChip(n: 12),
-          SizedBox(width: 40),
-          StreakChip(n: 13, ignite: true),
-        ]),
-        const SizedBox(height: 24),
-        Surface(
-          child: StreakPanel(
-            current: 12,
-            best: 18,
-            scoredDays: {
-              for (var i = 0; i < 12; i++)
-                dayLabelOf(DateTime(now.year, now.month, now.day - i)),
-            },
-          ),
-        ),
+      return StreakScreen(current: 12, points: [
+        for (var i = 0; i < 40; i++)
+          if (i < 12 || (i > 14 && i < 33))
+            (
+              t: DateTime(now.year, now.month, now.day - i, 12)
+                      .millisecondsSinceEpoch ~/
+                  1000,
+              v: 50 + 25 * math.sin(i * .9),
+            ),
       ]);
     }),
     'day_nav': Builder(builder: (c) {
@@ -284,7 +303,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));
@@ -292,7 +311,7 @@ void main() {
         await t.pump(const Duration(milliseconds: 200));
         await t.drag(find.byType(Scrollable).first, const Offset(0, -700));
       }
-      for (var i = 0; i < (name == 'streak' ? 20 : 80); i++) {
+      for (var i = 0; i < 80; i++) {
         await t.pump(const Duration(milliseconds: 20));
       }
       final box =

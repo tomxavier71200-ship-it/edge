@@ -29,6 +29,7 @@ import '../../models/metric.dart';
 import '../ui2.dart';
 import 'home_screen.dart';
 import 'investigate.dart';
+import 'detail_trends.dart';
 import 'metric_detail.dart';
 import 'naps.dart';
 import 'rough_night.dart';
@@ -166,8 +167,17 @@ class SleepData {
   /// Total sleep for the last 7 calendar days, dense, for the week bars.
   final List<double?> week;
 
+  /// The sleep-regularity index (0–100, higher is more regular), off the
+  /// cross-day rollup; null until it has nights to compare.
+  final double? sri;
+
+  /// Stored series for the weekly trends.
+  final Map<String, List<ChartPoint>> trends;
+
   const SleepData({
     this.week = const [],
+    this.sri,
+    this.trends = const {},
     this.day,
     this.days = const [],
     this.night = const {},
@@ -297,6 +307,9 @@ class SleepData {
       bedtime:
           envMetric(bedEnv, envValue(bedEnv)?['bedtime_min_of_day'] as num?),
       week: denseDays(pointsOf(sleepChart), 7),
+      sri: (envValue((await repo.getInsights())['regularity'])?['sri'] as num?)
+          ?.toDouble(),
+      trends: await loadTrendSeries(repo, const ['sleep', 'efficiency']),
       tstHistory: tst,
       deepHistory: deep,
       effHistory: eff,
@@ -487,6 +500,9 @@ class _SleepDetailState extends State<SleepDetail> {
         sub: d.days.length < 2 ? (d.day ?? '').toUpperCase() : '', [
       ...dayNavRow(_day ?? d.day, d.days, _goDay),
 
+      // ── 0 · WHOOP'S HEADLINE: performance, and what made it ──
+      ..._performance(c, p, d, n),
+
       // ── 1 · THE ANSWER ──
       _answer(c, p, d, n),
 
@@ -523,22 +539,13 @@ class _SleepDetailState extends State<SleepDetail> {
           _overnight(c, p, d)),
 
       // ── 6b · THE WEEK ──
-      if (d.week.any((v) => v != null))
+      if (d.trends.values.any((s) => s.isNotEmpty))
         Section(
-          'Last 7 days',
-          Surface(child: Builder(builder: (c) {
-            final w = lastDays(d.week, 7);
-            return DayBars(
-              values: w.values,
-              labels: w.labels,
-              // The need is the natural ceiling; 10 h when there is none, so a
-              // bar never tops out at a scale nobody set.
-              max: math.max(d.need.value?.toDouble() ?? 600, 600),
-              color: (_) => p.on(C.sleep),
-              fmt: hm,
-              title: 'Total sleep',
-            );
-          })),
+          'Weekly trends',
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: weeklyTrendCards(c, d.trends, const ['sleep', 'efficiency']),
+          ),
         ),
 
       // ── 7 · ONE TAKEAWAY ──
@@ -552,6 +559,72 @@ class _SleepDetailState extends State<SleepDetail> {
       investigateRow(
           c, () => go(c, Investigate('sleep', day: _day ?? d.day))),
     ]);
+  }
+
+  /// Sleep performance as WHOOP shows it — slept over needed, in a ring — and
+  /// the contributors on a Poor / Sufficient / Optimal scale. Each row only
+  /// when its input exists: no need, no performance ring and no "hours vs
+  /// needed"; no regularity yet, no consistency row.
+  ///
+  /// The bands are display bands, stated in the legend, not a clinical scale.
+  List<Widget> _performance(
+      BuildContext c, P p, SleepData d, Map<String, dynamic> n) {
+    final tst = (n['duration_min'] as num?)?.toDouble();
+    final need = d.need.value?.toDouble();
+    final eff = (n['efficiency'] as num?)?.toDouble();
+    final deep = (n['deep_min'] as num?)?.toDouble();
+    final rem = (n['rem_min'] as num?)?.toDouble();
+    final perf =
+        tst != null && need != null && need > 0 ? tst / need * 100 : null;
+    final sri = d.sri;
+    final restorative = tst != null && tst > 0 && deep != null && rem != null
+        ? (deep + rem) / tst * 100
+        : null;
+    Band3 band(double v, double poor, double optimal) => v < poor
+        ? Band3.poor
+        : (v < optimal ? Band3.sufficient : Band3.optimal);
+
+    final rows = <Widget>[
+      if (perf != null)
+        BandRow(LucideIcons.clock, 'Hours vs. needed', '${perf.round()}%',
+            band(perf, 70, 85)),
+      if (sri != null && sri >= 0 && sri <= 100)
+        BandRow(LucideIcons.repeat, 'Sleep consistency', '${sri.round()}%',
+            band(sri, 70, 80)),
+      if (eff != null)
+        BandRow(LucideIcons.bedDouble, 'Sleep efficiency', '${eff.round()}%',
+            band(eff, 80, 90)),
+      if (restorative != null)
+        BandRow(LucideIcons.sparkles, 'Restorative sleep',
+            '${restorative.round()}%', band(restorative, 30, 40)),
+    ];
+    if (perf == null && rows.isEmpty) return const [];
+    return [
+      if (perf != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: S.x4),
+          child: HeroDial(
+            value: (perf / 100).clamp(0.0, 1.0),
+            color: C.sleep,
+            number: (t) => '${(perf * t).round()}%',
+            label: 'Sleep performance',
+          ),
+        ),
+      if (rows.isNotEmpty) ...[
+        Surface(
+          pad: const EdgeInsets.fromLTRB(S.x4, S.x1, S.x4, S.x4),
+          child: Column(children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) Divider(color: p.line, height: 1),
+              rows[i],
+            ],
+            const SizedBox(height: S.x3),
+            const BandLegend(),
+          ]),
+        ),
+        const SizedBox(height: S.x4),
+      ],
+    ];
   }
 
   /// Total sleep, when it ran, and the two ratios that qualify it. Everything
