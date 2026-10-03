@@ -7,173 +7,208 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Montserrat:wght@400;600;700&display=swap">
 <style>
-/* Layout: a header with the loader, today's three dials, then a grid of trend cards. */
+/* Layout (WHOOP web style): dark header with the three scores as tabs, a light page below with
+   a date switcher, statistics on the left and a chart in the middle, range buttons top right. */
 :root{
-  --bg:#14171a; --card:#1e2227; --card2:#262b31; --line:#2f353c;
-  --ink:#f2f4f6; --ink2:#c7ced6; --ink3:#8a939c;
-  --recovery:#f5c542; --strain:#3aa0ff; --sleep:#7ba1bb;
-  --good:#2ee6a6; --warn:#f5c542; --bad:#ff5a6e;
+  --head:#1b2026; --head2:#262c33; --page:#f6f7f8; --card:#ffffff; --line:#e3e6e9;
+  --ink:#1b2026; --ink2:#55606b; --ink3:#9aa3ad; --onhead:#f2f4f6;
+  --recovery:#f5d000; --strain:#0093e7; --sleep:#7ba1bb; --up:#16b45d; --down:#e5262e; --today:#e5262e;
+  --bar:#5a7383; --bar2:#c9cdd1;
   --display:"Montserrat",system-ui,sans-serif; --num:"Barlow Semi Condensed",system-ui,sans-serif;
-  color-scheme:dark;
+  color-scheme:light;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--display)}
-.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
-header{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
-h1{font-size:20px;letter-spacing:.35em;margin:0}
-.badge{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
-.loader{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-input,button,select{font:inherit;color:var(--ink);background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
-button{background:var(--strain);border:0;color:#04121f;font-weight:700;cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--strain);outline-offset:2px}
-#status{color:var(--ink3);font-size:12px;min-height:18px;margin-top:8px}
-.dials{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
-.dial{background:var(--card);border-radius:16px;padding:16px;text-align:center}
-.dial svg{width:120px;height:120px;max-width:100%}
-.dial .v{font:600 30px var(--num)}
-.dial .l{font-size:11px;letter-spacing:.14em;color:var(--ink2);font-weight:700}
-.bar{display:flex;gap:8px;align-items:center;margin:8px 0 12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
-.card{background:var(--card);border-radius:16px;padding:16px;min-width:0}
-.card h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 4px}
-.card .sub{color:var(--ink3);font-size:12px;margin-bottom:8px}
-.card canvas{width:100%!important;height:220px!important}
-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}
-th:first-child,td:first-child{text-align:left}
-th{color:var(--ink3);font-weight:600;font-size:12px}
-.tablewrap{overflow-x:auto}
-@media (max-width:640px){.dials{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--display)}
+.head{background:var(--head);color:var(--onhead)}
+.head .in{max-width:1100px;margin:0 auto;padding:24px 16px 0;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:center}
+.tab{background:none;border:0;color:var(--onhead);cursor:pointer;text-align:center;padding:0 8px 14px;position:relative;font:inherit}
+.tab .cap{font-size:16px;color:#c7ced6;margin-top:6px}
+.tab.on .cap{color:var(--accent,#fff);font-weight:700}
+.tab.on::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);border:9px solid transparent;border-bottom-color:var(--page)}
+.tab:focus-visible{outline:2px solid var(--strain);outline-offset:2px}
+.ring svg{width:130px;height:130px}
+.ring .n{font:600 40px var(--num);fill:var(--onhead)}
+.who{display:flex;gap:14px;align-items:center;padding-bottom:40px}
+.avatar{width:84px;height:84px;border-radius:50%;background:var(--head2);border:5px solid #000;display:grid;place-items:center;font:700 32px var(--display)}
+.who b{display:block;font-size:20px}
+.who span{color:#7fb4d9;font-size:13px}
+.sleepperf{text-align:center;padding-bottom:14px}
+.sleepperf small{color:#7ba1bb;display:block}
+.sleepperf .big{font:600 44px var(--num)}
+.sleepperf .pair{display:flex;gap:28px;justify-content:center}
+.sleepperf .pair div{font:600 26px var(--num)} .sleepperf .pair span{display:block;font:12px var(--display);color:#c7ced6}
+.bar{max-width:1100px;margin:0 auto;padding:18px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.datenav{display:flex;align-items:center;gap:10px}
+.datenav button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer}
+.date{color:var(--today);font-weight:600;font-size:16px}
+.loader{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
+input,select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.open{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer}
+.ranges{display:inline-flex;background:#eceef0;border-radius:999px;padding:2px}
+.ranges button{border:0;background:none;padding:5px 12px;border-radius:999px;font:600 12px var(--display);cursor:pointer;color:var(--ink)}
+.ranges button.on{background:var(--today);color:#fff}
+main{max-width:1100px;margin:0 auto;padding:8px 16px 48px;display:grid;grid-template-columns:260px 1fr;gap:28px;border-top:1px solid var(--line)}
+@media (max-width:760px){main{grid-template-columns:1fr}.ring svg{width:100px;height:100px}}
+.stats h3,.chart h3{font-size:14px;margin:16px 0 0}.stats .vs,.chart .vs{color:var(--ink3);font-size:12px;margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px 12px;text-align:center}
+.stat .l{font-size:12px}.stat .v{font:600 26px var(--num);color:var(--bar)}.stat .p{font-size:12px;color:var(--ink3)}
+.arrow{font-size:11px;margin-left:3px}
+.chart{min-width:0}.chartbox{position:relative;height:330px}
+.donutwrap{display:flex;gap:18px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.legend div{display:flex;justify-content:space-between;gap:18px;font-size:13px;padding:3px 0}
+#status{max-width:1100px;margin:0 auto;padding:0 16px;color:var(--ink2);font-size:12px}
+.tag{font-size:11px;letter-spacing:.1em;text-transform:uppercase;background:#fff3c4;color:#6b5600;border-radius:999px;padding:2px 8px;margin-left:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div><h1>KOOP</h1><span class="badge" id="source">Example data</span></div>
-    <form class="loader" id="loader">
-      <label for="file" class="badge">Backup file</label>
-      <input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
-      <input id="pass" type="password" placeholder="Passphrase (encrypted files)" autocomplete="current-password">
-      <button type="submit">Open</button>
-    </form>
-  </header>
-  <div id="status">Showing example data. Open your Koop backup to see your own. It is read in this browser only.</div>
+<section class="head"><div class="in">
+  <button class="tab" data-tab="overview" style="--accent:#fff"><div class="who"><div class="avatar" id="initial">K</div><div><b id="name">Koop</b><span>your band, your data</span></div></div><div class="cap" style="margin-top:-30px">Overview</div></button>
+  <button class="tab ring" data-tab="strain" style="--accent:var(--strain)"><svg viewBox="0 0 130 130" id="r-strain"></svg><div class="cap">Strain</div></button>
+  <button class="tab ring" data-tab="recovery" style="--accent:var(--recovery)"><svg viewBox="0 0 130 130" id="r-recovery"></svg><div class="cap">Recovery</div></button>
+  <button class="tab" data-tab="sleep" style="--accent:#7ba1bb"><div class="sleepperf"><small>Sleep Performance</small><div class="big" id="sp">—</div>
+    <div class="pair"><div id="hs">—<span>Hours of Sleep</span></div><div id="hn">—<span>Sleep Needed</span></div></div></div><div class="cap">Sleep</div></button>
+</div></section>
 
-  <section class="dials" aria-label="Latest day">
-    <div class="dial"><svg viewBox="0 0 120 120" id="d-sleep"></svg><div class="v" id="v-sleep">—</div><div class="l">SLEEP</div></div>
-    <div class="dial"><svg viewBox="0 0 120 120" id="d-recovery"></svg><div class="v" id="v-recovery">—</div><div class="l">RECOVERY</div></div>
-    <div class="dial"><svg viewBox="0 0 120 120" id="d-strain"></svg><div class="v" id="v-strain">—</div><div class="l">STRAIN</div></div>
-  </section>
-
-  <div class="bar"><label for="range" class="badge">Range</label>
-    <select id="range"><option value="30">30 days</option><option value="90">90 days</option><option value="180">6 months</option><option value="365">1 year</option></select></div>
-
-  <div class="grid">
-    <div class="card"><h2>Recovery</h2><div class="sub">0–100%, coloured by band</div><canvas id="c-recovery"></canvas></div>
-    <div class="card"><h2>Day strain</h2><div class="sub">0–21</div><canvas id="c-strain"></canvas></div>
-    <div class="card"><h2>HRV and resting heart rate</h2><div class="sub">RMSSD (ms) · lowest 30-min sleeping HR (bpm)</div><canvas id="c-hrv"></canvas></div>
-    <div class="card"><h2>Sleep</h2><div class="sub">Deep · REM · light, hours</div><canvas id="c-sleep"></canvas></div>
-    <div class="card"><h2>Strain vs next-day recovery</h2><div class="sub">Each dot is one day</div><canvas id="c-corr"></canvas></div>
-    <div class="card"><h2>Monthly averages</h2><div class="sub">Days with a value only; gaps are not zeros</div><div class="tablewrap"><table id="t-month"></table></div></div>
-  </div>
+<div class="bar">
+  <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><span class="date" id="date">—</span><button id="next" aria-label="Next day">›</button><span class="tag" id="source">Example data</span></div>
+  <form class="loader" id="loader"><label for="file">Koop backup</label><input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
+    <input id="pass" type="password" placeholder="Passphrase" autocomplete="current-password"><button class="open" type="submit">Open</button></form>
+  <div class="ranges" id="ranges"><button data-r="180">6m</button><button data-r="90">3m</button><button data-r="30">1m</button><button data-r="14">2w</button><button data-r="7">1w</button><button data-r="1" class="on">1d</button></div>
 </div>
+<div id="status">Showing example data. Open your Koop backup (koop-cloud.kbak from Google Drive, or an exported backup); it is read in this browser only.</div>
+
+<main>
+  <section class="stats"><h3 id="st-title">Day Statistics</h3><div class="vs" id="st-vs"></div><div class="grid2" id="st"></div></section>
+  <section class="chart"><h3 id="ch-title">Day Recovery</h3><div class="vs" id="ch-vs"></div><div class="chartbox"><canvas id="chart"></canvas></div>
+    <div class="donutwrap" id="donutwrap" hidden><div class="legend" id="legend"></div><div style="width:180px;height:180px"><canvas id="donut"></canvas></div></div></section>
+</main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js"></script>
 <script>
 "use strict";
-const KEYS=["readiness","strain","rmssd","rhr","tst_min","deep_min","rem_min","light_min","sleep_perf","steps","calories"];
+const KEYS=["readiness","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min"];
 const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
-const band=v=>v==null?css("--line"):v>=67?css("--good"):v>=34?css("--warn"):css("--bad");
-let data={}; // key -> Map(date -> value)
-const charts={};
+let liveDb=null,data={},tab="recovery",range=1,day=null,chart,donut;
+const iso=t=>t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
+const shift=(d,n)=>{const t=new Date(d+"T12:00:00");t.setDate(t.getDate()+n);return iso(t);};
+const get=(k,d)=>data[k]?.get(d)??null;
+const hm=m=>m==null?"—":Math.floor(m/60)+":"+String(Math.round(m%60)).padStart(2,"0");
+const nice=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
 
-function example(){ // clearly labelled sample so the page opens working
-  const d={}; KEYS.forEach(k=>d[k]=new Map()); const now=new Date();
-  for(let i=120;i>=0;i--){const t=new Date(now);t.setDate(now.getDate()-i);const s=t.toISOString().slice(0,10);
-    if(i%9===4)continue; const w=Math.sin(i/5);
-    d.readiness.set(s,Math.round(55+25*w));d.strain.set(s,+(9+5*Math.cos(i/3)).toFixed(1));
-    d.rmssd.set(s,Math.round(62+9*w));d.rhr.set(s,Math.round(56-3*w));
-    d.tst_min.set(s,400+40*w);d.deep_min.set(s,80+10*w);d.rem_min.set(s,90+15*w);d.light_min.set(s,230+15*w);
-    d.sleep_perf.set(s,Math.round(80+12*w));}
+function example(){const d={};KEYS.forEach(k=>d[k]=new Map());const now=new Date();
+  for(let i=200;i>=0;i--){const t=new Date(now);t.setDate(now.getDate()-i);const s=iso(t);if(i%11===5)continue;const w=Math.sin(i/5);
+    d.readiness.set(s,Math.round(52+22*w));d.strain.set(s,+(9+4*Math.cos(i/3)).toFixed(1));d.rmssd.set(s,Math.round(62+6*w));d.rhr.set(s,Math.round(57-2*w));
+    d.resp_rate.set(s,+(12.7+.3*w).toFixed(1));d.tst_min.set(s,330+45*w);d.deep_min.set(s,85+8*w);d.rem_min.set(s,95+12*w);d.light_min.set(s,150+20*w);
+    d.efficiency.set(s,Math.round(90+3*w));d.sleep_perf.set(s,Math.round(60+15*w));d.steps.set(s,Math.round(7000+2500*w));d.calories.set(s,Math.round(2300+300*w));}
   return d;}
 
-async function readBackup(file,pass){
-  let buf=new Uint8Array(await file.arrayBuffer());
-  const magic=String.fromCharCode(...buf.slice(0,4));
-  if(magic==="OSBK"){ // header: magic4 ver1 kdf1 iter4(BE) salt16 nonce12, then AES-256-GCM, header as AAD
+async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuffer());
+  if(String.fromCharCode(...buf.slice(0,4))==="OSBK"){ // magic4 ver1 kdf1 iter4(BE) salt16 nonce12 | AES-256-GCM, header as AAD
     if(!pass)throw new Error("This file is encrypted. Enter your Koop Cloud passphrase.");
-    const hdr=buf.slice(0,38),dv=new DataView(hdr.buffer);
-    const iter=dv.getUint32(6),salt=hdr.slice(10,26),nonce=hdr.slice(26,38);
-    status("Unlocking (this takes a few seconds)…");
+    const hdr=buf.slice(0,38),dv=new DataView(hdr.buffer),iter=dv.getUint32(6),salt=hdr.slice(10,26),iv=hdr.slice(26,38);
+    status("Unlocking (a few seconds)…");
     const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
     const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
-    try{buf=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:nonce,additionalData:hdr,tagLength:128},key,buf.slice(38)));}
-    catch{throw new Error("Wrong passphrase, or the file is damaged.");}
-  }
-  if(buf[0]===0x1f&&buf[1]===0x8b){ // gzip (cloud copies and auto backups)
-    const s=new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
-    buf=new Uint8Array(await new Response(s).arrayBuffer());
-  }
-  const SQL=await initSqlJs();
-  const db=new SQL.Database(buf);
-  const res=db.exec(`SELECT date,key,value FROM metric_series WHERE value IS NOT NULL AND key IN (${KEYS.map(k=>`'${k}'`).join(",")}) ORDER BY date`);
-  db.close();
-  const d={};KEYS.forEach(k=>d[k]=new Map());
-  (res[0]?.values||[]).forEach(([dt,k,v])=>d[k].set(dt,v));
-  return d;}
+    try{buf=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv,additionalData:hdr,tagLength:128},key,buf.slice(38)));}
+    catch{throw new Error("Wrong passphrase, or the file is damaged.");}}
+  if(buf[0]===0x1f&&buf[1]===0x8b){buf=new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());}
+  const SQL=await initSqlJs(),db=new SQL.Database(buf);
+  const res=db.exec(`SELECT date,key,value FROM metric_series WHERE value IS NOT NULL AND key IN (${KEYS.map(k=>`'${k}'`).join(",")})`);
+  let name=null;try{const p=db.exec("SELECT value FROM kv WHERE key='profile_name'");name=p[0]?.values[0][0]??null;}catch{}
+  liveDb?.close();liveDb=db; // kept open: one day's heart-rate curve is read on demand
+  const d={};KEYS.forEach(k=>d[k]=new Map());(res[0]?.values||[]).forEach(([dt,k,v])=>d[k].set(dt,v));return {d,name};}
 
 function status(t){document.getElementById("status").textContent=t;}
+function ring(id,frac,color,text){const r=56,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
+  document.getElementById(id).innerHTML=`<circle cx="65" cy="65" r="${r}" fill="none" stroke="#2b323a" stroke-width="7"/><circle cx="65" cy="65" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 65 65)"/><text x="65" y="78" text-anchor="middle" class="n">${text}</text>`;}
 
-function dial(id,frac,color){
-  const r=48,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
-  document.getElementById(id).innerHTML=`<circle cx="60" cy="60" r="${r}" fill="none" stroke="${css("--line")}" stroke-width="10"/>`+
-   `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 60 60)"/>`;}
+function header(){const rc=get("readiness",day),st=get("strain",day),sp=get("sleep_perf",day),ts=get("tst_min",day);
+  ring("r-recovery",rc==null?null:rc/100,css("--recovery"),rc==null?"—":Math.round(rc)+"%");
+  ring("r-strain",st==null?null:st/21,css("--strain"),st==null?"—":(+st).toFixed(1));
+  document.getElementById("sp").textContent=sp==null?"—":Math.round(sp)+"%";
+  document.getElementById("hs").firstChild.textContent=hm(ts);
+  document.getElementById("hn").firstChild.textContent=ts!=null&&sp?hm(ts/(sp/100)):"—";
+  document.getElementById("date").textContent=(day===iso(new Date())?"Today, ":"")+nice(day);
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));}
 
-function last(k){const m=data[k];let best=null;for(const [d,v] of m)if(!best||d>best[0])best=[d,v];return best;}
+const TABS={
+  recovery:{title:"Recovery",stats:[["HRV","rmssd",0,1],["Resting HR","rhr",0,-1],["Sleep","sleep_perf",0,1,"%"],["Respiratory Rate","resp_rate",1,0]],
+    bars:[["Heart Rate Variability","rmssd"],["Resting Heart Rate","rhr"],["Sleep Performance","sleep_perf"]],trend:["readiness","Recovery %",[0,100]]},
+  sleep:{title:"Sleep",stats:[["Hours of Sleep","tst_min",0,1,"h"],["Sleep Efficiency","efficiency",0,1,"%"],["Sleep Performance","sleep_perf",0,1,"%"],["Respiratory Rate","resp_rate",1,0]],
+    bars:[["Hours of Sleep","tst_min"],["Sleep Efficiency","efficiency"],["Sleep Performance","sleep_perf"]],trend:["tst_min","Hours of sleep",null],donut:true},
+  strain:{title:"Strain",stats:[["Day Strain","strain",1,0],["Steps","steps",0,1],["Calories","calories",0,0],["Active Minutes","active_min",0,1]],
+    bars:[["Day Strain","strain"],["Active Minutes","active_min"]],trend:["strain","Day strain",[0,21]]},
+  overview:{title:"Overview",stats:[["Recovery","readiness",0,1,"%"],["Day Strain","strain",1,0],["Sleep","sleep_perf",0,1,"%"],["HRV","rmssd",0,1]],
+    bars:[["Recovery","readiness"],["Sleep Performance","sleep_perf"]],trend:["readiness","Recovery %",[0,100]]}};
 
-function days(n){const out=[];const now=new Date();for(let i=n-1;i>=0;i--){const t=new Date(now);t.setDate(now.getDate()-i);out.push(t.toISOString().slice(0,10));}return out;}
+// One day's heart-rate curve and sleep window, from that day's stored analysis
+// (day_result: newest algorithm version). Example mode draws a made-up day.
+function dayCurve(d){
+  if(!liveDb){const base=new Date(d+"T00:00:00").getTime()/1000,pts=[];
+    for(let m=0;m<1440;m+=5){const asleep=m<420;pts.push({t:base+m*60,v:Math.round((asleep?55:78)+6*Math.sin(m/37)+(m%97===0?25:0))});}
+    return {pts,on:base,off:base+420*60};}
+  const r=liveDb.exec("SELECT payload_json,window_json FROM day_result WHERE day_id=? ORDER BY algo_version DESC LIMIT 1",[d]);
+  if(!r[0])return {pts:[],on:null,off:null};
+  const [pj,wj]=r[0].values[0];let pts=[],on=null,off=null;
+  try{pts=(JSON.parse(pj)?.series?.hr_curve||[]).filter(e=>typeof e?.t==="number"&&typeof e?.v==="number");}catch{}
+  try{const w=JSON.parse(wj||"{}");on=w.onset_ts??w.start_ts??w.start??null;off=w.wake_ts??w.end_ts??w.end??null;}catch{}
+  return {pts,on,off};}
 
-function chart(id,cfg){charts[id]?.destroy();charts[id]=new Chart(document.getElementById(id),cfg);}
+function hrChart(){const {pts,on,off}=dayCurve(day);
+  document.getElementById("ch-title").textContent="Day heart rate";
+  document.getElementById("ch-vs").textContent=pts.length?`${nice(day)} · blue is sleep, grey is awake`:`${nice(day)} · no heart-rate curve stored for this day`;
+  const lab=pts.map(p=>{const t=new Date(p.t*1000);return t.getHours()+":"+String(t.getMinutes()).padStart(2,"0");});
+  const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off;
+  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:lab,datasets:[
+    {label:"Asleep",data:pts.map(p=>inSleep(p)?p.v:null),borderColor:css("--sleep"),backgroundColor:"rgba(123,161,187,.18)",fill:"origin",pointRadius:0,borderWidth:1.2,spanGaps:false},
+    {label:"Awake",data:pts.map(p=>inSleep(p)?null:p.v),borderColor:"#b4bcc4",pointRadius:0,borderWidth:1.2,spanGaps:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,grid:{color:css("--line")},title:{display:true,text:"bpm"}},x:{ticks:{maxTicksLimit:12},grid:{display:false}}}}});}
 
-function render(){
-  const n=+document.getElementById("range").value,ds=days(n),g=k=>ds.map(d=>data[k].get(d)??null);
-  const rec=last("readiness"),str=last("strain"),sp=last("sleep_perf");
-  dial("d-recovery",rec&&rec[1]/100,band(rec&&rec[1]));document.getElementById("v-recovery").textContent=rec?Math.round(rec[1])+"%":"—";
-  dial("d-strain",str&&str[1]/21,css("--strain"));document.getElementById("v-strain").textContent=str?(+str[1]).toFixed(1):"—";
-  dial("d-sleep",sp&&sp[1]/100,css("--sleep"));document.getElementById("v-sleep").textContent=sp?Math.round(sp[1])+"%":"—";
-  Chart.defaults.color=css("--ink3");Chart.defaults.borderColor=css("--line");Chart.defaults.font.family=css("--num");
-  const lab=ds.map(d=>d.slice(5)),base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},spanGaps:false};
-  const r=g("readiness");
-  chart("c-recovery",{type:"bar",data:{labels:lab,datasets:[{data:r,backgroundColor:r.map(band),borderRadius:3}]},options:{...base,scales:{y:{min:0,max:100}}}});
-  chart("c-strain",{type:"bar",data:{labels:lab,datasets:[{data:g("strain"),backgroundColor:css("--strain"),borderRadius:3}]},options:{...base,scales:{y:{min:0,max:21}}}});
-  chart("c-hrv",{type:"line",data:{labels:lab,datasets:[
-    {label:"HRV (ms)",data:g("rmssd"),borderColor:css("--good"),pointRadius:2,yAxisID:"y"},
-    {label:"Resting HR (bpm)",data:g("rhr"),borderColor:css("--bad"),pointRadius:2,yAxisID:"y1"}]},
-    options:{...base,plugins:{legend:{display:true}},scales:{y:{position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}}});
-  const h=k=>g(k).map(v=>v==null?null:+(v/60).toFixed(2));
-  chart("c-sleep",{type:"bar",data:{labels:lab,datasets:[
-    {label:"Deep",data:h("deep_min"),backgroundColor:"#8b7bff"},{label:"REM",data:h("rem_min"),backgroundColor:"#c77dff"},{label:"Light",data:h("light_min"),backgroundColor:css("--sleep")}]},
-    options:{...base,plugins:{legend:{display:true}},scales:{x:{stacked:true},y:{stacked:true}}}});
-  const pts=[];ds.forEach((d,i)=>{const s=data.strain.get(d),nx=ds[i+1]&&data.readiness.get(ds[i+1]);if(s!=null&&nx!=null)pts.push({x:s,y:nx});});
-  chart("c-corr",{type:"scatter",data:{datasets:[{data:pts,backgroundColor:css("--strain")}]},options:{...base,scales:{x:{title:{display:true,text:"Strain"},min:0,max:21},y:{title:{display:true,text:"Next-day recovery %"},min:0,max:100}}}});
-  const months={};for(const k of ["readiness","strain","rmssd","rhr","tst_min"])for(const [d,v] of data[k]){const m=d.slice(0,7);(months[m]??={})[k]??=[];months[m][k].push(v);}
-  const avg=a=>a&&a.length?a.reduce((x,y)=>x+y,0)/a.length:null,f=(v,dp=0)=>v==null?"—":v.toFixed(dp);
-  const rows=Object.keys(months).sort().reverse().slice(0,12).map(m=>{const o=months[m];
-    return `<tr><td>${m}</td><td>${f(avg(o.readiness))}</td><td>${f(avg(o.strain),1)}</td><td>${f(avg(o.rmssd))}</td><td>${f(avg(o.rhr))}</td><td>${f(avg(o.tst_min)&&avg(o.tst_min)/60,1)}</td></tr>`;}).join("");
-  document.getElementById("t-month").innerHTML=`<thead><tr><th>Month</th><th>Recovery %</th><th>Strain</th><th>HRV ms</th><th>RHR bpm</th><th>Sleep h</th></tr></thead><tbody>${rows}</tbody>`;
+function fmt(k,v,dp,u){if(v==null)return "—";if(u==="h")return hm(v);return (+v).toFixed(dp)+(u==="%"?"%":"");}
+function render(){const t=TABS[tab],prev=shift(day,-1);header();
+  const prevLbl=range===1?nice(prev):`previous ${range} days`;
+  document.getElementById("st-title").textContent=`${range===1?"Day":"Period"} Statistics`;
+  document.getElementById("st-vs").innerHTML=`<b>${range===1?nice(day):`last ${range} days`}</b> vs ${prevLbl}`;
+  const win=(k,end,n)=>{const a=[];for(let i=0;i<n;i++){const v=get(k,shift(end,-i));if(v!=null)a.push(v);}return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;};
+  document.getElementById("st").innerHTML=t.stats.map(([l,k,dp,better,u])=>{const now=win(k,day,range),was=win(k,shift(day,-range),range);
+    let arr="";if(now!=null&&was!=null&&Math.abs(now-was)>1e-9){const up=now>was,good=better===0?null:(up===(better>0));
+      arr=`<span class="arrow" style="color:${good==null?css("--ink3"):good?css("--up"):css("--down")}">${up?"▲":"▼"}</span>`;}
+    return `<div class="stat"><div class="l">${l}</div><div class="v">${fmt(k,now,dp,u)}${arr}</div><div class="p">${fmt(k,was,dp,u)}</div></div>`;}).join("");
+  chart?.destroy();const ctx=document.getElementById("chart");
+  Chart.defaults.font.family=css("--num");Chart.defaults.color=css("--ink2");
+  const dw=document.getElementById("donutwrap");dw.hidden=!(t.donut&&range===1);
+  if(range===1&&tab==="overview"){hrChart();}
+  else if(range===1){document.getElementById("ch-title").textContent=`Day ${t.title}`;document.getElementById("ch-vs").innerHTML=`<b>${nice(day)}</b> vs ${nice(prev)}`;
+    const lab=t.bars.map(b=>b[0]),scale=k=>k==="tst_min"?60:1;
+    chart=new Chart(ctx,{type:"bar",data:{labels:lab,datasets:[
+      {label:nice(day),data:t.bars.map(([,k])=>{const v=get(k,day);return v==null?null:+(v/scale(k)).toFixed(1);}),backgroundColor:css("--bar"),maxBarThickness:24},
+      {label:nice(prev),data:t.bars.map(([,k])=>{const v=get(k,prev);return v==null?null:+(v/scale(k)).toFixed(1);}),backgroundColor:css("--bar2"),maxBarThickness:24}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom"}},scales:{y:{beginAtZero:true,grid:{color:css("--line")}},x:{grid:{display:false}}}}});
+    if(t.donut){const st=[["Light","light_min","#c9d7e2"],["REM","rem_min",css("--sleep")],["SWS Deep","deep_min","#2f3d4a"]];
+      donut?.destroy();donut=new Chart(document.getElementById("donut"),{type:"doughnut",data:{labels:st.map(s=>s[0]),datasets:[{data:st.map(s=>get(s[1],day)),backgroundColor:st.map(s=>s[2])}]},options:{cutout:"70%",plugins:{legend:{display:false}}}});
+      document.getElementById("legend").innerHTML=st.map(s=>`<div><span>${s[0]}</span><b>${hm(get(s[1],day))}</b></div>`).join("");}
+  }else{const [k,label,mm]=t.trend,ds=[];for(let i=range-1;i>=0;i--)ds.push(shift(day,-i));
+    document.getElementById("ch-title").textContent=`${t.title} trend`;document.getElementById("ch-vs").textContent=`${label}, last ${range} days ending ${nice(day)} (gaps are days with no value)`;
+    const v=ds.map(d=>{const x=get(k,d);return x==null?null:k==="tst_min"?+(x/60).toFixed(2):x;});
+    const col=k==="readiness"?v.map(x=>x==null?null:x>=67?"#16b45d":x>=34?css("--recovery"):css("--down")):css(k==="strain"?"--strain":"--bar");
+    chart=new Chart(ctx,{type:range>30?"line":"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[{label,data:v,backgroundColor:col,borderColor:css("--bar"),pointRadius:range>30?0:3,spanGaps:false}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:mm?{min:mm[0],max:mm[1]}:{beginAtZero:true},x:{grid:{display:false}}}}});}
 }
-
-document.getElementById("range").addEventListener("change",render);
-document.getElementById("loader").addEventListener("submit",async e=>{
-  e.preventDefault();const file=document.getElementById("file").files[0];
-  if(!file){status("Choose your Koop backup file first (koop-cloud.kbak from Google Drive, or an exported backup).");return;}
-  try{status("Reading…");data=await readBackup(file,document.getElementById("pass").value);
-    document.getElementById("source").textContent="Your data";status(`Loaded ${file.name}. Nothing left this browser.`);render();}
-  catch(err){status(err.message||String(err));}
-});
-data=example();render();
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;render();}));
+document.getElementById("ranges").addEventListener("click",e=>{const r=e.target.dataset.r;if(!r)return;range=+r;
+  document.querySelectorAll("#ranges button").forEach(b=>b.classList.toggle("on",b.dataset.r===r));render();});
+document.getElementById("prev").addEventListener("click",()=>{day=shift(day,-1);render();});
+document.getElementById("next").addEventListener("click",()=>{if(day<iso(new Date()))day=shift(day,1);render();});
+document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const f=document.getElementById("file").files[0];
+  if(!f){status("Choose your Koop backup file first.");return;}
+  try{status("Reading…");const r=await readBackup(f,document.getElementById("pass").value);data=r.d;
+    if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
+    const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=dates.at(-1)||iso(new Date());
+    document.getElementById("source").hidden=true;status(`Loaded ${f.name}. Nothing left this browser.`);render();}
+  catch(err){status(err.message||String(err));}});
+data=example();day=iso(new Date());render();
 </script>
 </body>
 </html>
