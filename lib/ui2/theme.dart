@@ -80,10 +80,6 @@ class C {
   static const brandGreen1 = Color(0xFF14B8A6);
   static const brandTile0 = Color(0xFF232C35);
   static const brandTile1 = Color(0xFF0B0F13);
-  // The two-dial mark: Recovery (yellow) and Strain (blue) over a dark track.
-  static const brandDialA = Color(0xFFF5C542);
-  static const brandDialB = Color(0xFF3AA0FF);
-  static const brandTrack = Color(0xFF2A3038);
   static const brandMono = Color(0xFFFFFFFF);
 
   /// The basemap's two ends, which is the whole of the map's styling: every

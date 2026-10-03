@@ -1,6 +1,6 @@
-// The Koop mark: two dials, the O's of the name. Yellow is Recovery, blue is
-// Strain, each partly filled over a dark track, so the name reads as the
-// dashboard it opens.
+// The Koop mark: two linked rings, the O's of the name. Blue is sleep, green
+// is recovery, and each passes over the other once, so they read as a chain
+// rather than two coins lying on top of each other.
 //
 // One painter serves every place the mark appears: the boot splash draws it
 // live, and tool/koop_icons_test.dart renders the launcher icons from this
@@ -44,14 +44,11 @@ class KoopMarkPainter extends CustomPainter {
     this.t = 1,
   });
 
-  // Two separate dials on the 120 grid: radius, stroke, centres, and how full
-  // each one is drawn (Recovery ~69%, Strain ~29%, the concept's proportions).
-  static const _r = 17.0;
+  static const _r = 19.0;
   static const _w = 8.0;
-  static const _left = Offset(37, 60);
-  static const _right = Offset(83, 60);
-  static const _fillA = .69;
-  static const _fillB = .29;
+  static const _gap = 2.2;
+  static const _left = Offset(47, 60);
+  static const _right = Offset(73, 60);
 
   @override
   void paint(Canvas cv, Size s) {
@@ -93,30 +90,63 @@ class KoopMarkPainter extends CustomPainter {
           ).createShader(rect));
   }
 
-  void _rings(Canvas cv) {
-    final k = t.clamp(0.0, 1.0);
-    final track = Paint()
+  Paint _stroke(Offset c, Color a, Color b, double width) {
+    final bounds = Rect.fromCircle(center: c, radius: _r);
+    final p = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = _w
-      ..isAntiAlias = true
-      ..color = mono == null ? C.brandTrack : mono!.withValues(alpha: .35);
-    Paint arc(Color c) => Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = _w
-      ..strokeCap = StrokeCap.round
-      ..isAntiAlias = true
-      ..color = mono ?? c;
-    const top = -math.pi / 2;
-    for (final (centre, fill, colour) in [
-      (_left, _fillA, C.brandDialA),
-      (_right, _fillB, C.brandDialB),
-    ]) {
-      final rect = Rect.fromCircle(center: centre, radius: _r);
-      cv.drawCircle(centre, _r, track);
-      // The arc sweeps in from the top as the mark draws itself (t: 0 → 1).
-      final sweep = 2 * math.pi * fill * k;
-      if (sweep > 0) cv.drawArc(rect, top, sweep, false, arc(colour));
+      ..strokeWidth = width
+      ..isAntiAlias = true;
+    if (mono != null) {
+      p.color = mono!;
+    } else {
+      p.shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [a, b],
+      ).createShader(bounds);
     }
+    return p;
+  }
+
+  void _rings(Canvas cv) {
+    final sweep = 2 * math.pi * t.clamp(0.0, 1.0);
+    if (sweep <= 0) return;
+    final blue = _stroke(_left, C.brandBlue0, C.brandBlue1, _w)
+      ..strokeCap = t < 1 ? StrokeCap.round : StrokeCap.butt;
+    final green = _stroke(_right, C.brandGreen0, C.brandGreen1, _w)
+      ..strokeCap = blue.strokeCap;
+    // Everything goes into one layer so the cut that makes the over-pass can
+    // clear to transparent, whatever sits underneath (tile, page, nothing).
+    cv.saveLayer(const Rect.fromLTWH(0, 0, 120, 120), Paint());
+    const top = -math.pi / 2;
+    cv.drawArc(Rect.fromCircle(center: _left, radius: _r), top, sweep, false,
+        blue);
+    cv.drawArc(Rect.fromCircle(center: _right, radius: _r), top, sweep, false,
+        green);
+    // Only once blue has swept past the crossing, or the over-pass would
+    // draw a piece of ring ahead of the ring itself.
+    if (sweep >= 70 * math.pi / 180) {
+      // Green lies over blue at the bottom crossing simply by being drawn
+      // second. At the top crossing blue comes back over green: clear a
+      // channel a little wider than the ring, then lay the blue arc in it.
+      // The arc runs a few degrees past the channel at both ends so its end
+      // edges land on blue it is identical to, and no seam shows.
+      const a0 = -70 * math.pi / 180, a1 = -24 * math.pi / 180;
+      const pad = 2 * math.pi / 180;
+      final rect = Rect.fromCircle(center: _left, radius: _r);
+      cv.drawArc(
+          rect,
+          a0,
+          a1 - a0,
+          false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = _w + 2 * _gap
+            ..blendMode = BlendMode.clear);
+      cv.drawArc(rect, a0 - pad, a1 - a0 + 2 * pad, false,
+          _stroke(_left, C.brandBlue0, C.brandBlue1, _w));
+    }
+    cv.restore();
   }
 
   @override
