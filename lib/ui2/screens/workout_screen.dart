@@ -921,10 +921,13 @@ class _QuickTile extends StatelessWidget {
           child: Icon(a.icon, size: 19, color: p.on(a.color)),
         ),
         const SizedBox(height: S.x2),
-        Text(a.name,
-            style: F.over.copyWith(color: p.ink2),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+        // Scales down to fit rather than cutting "Weight training" to
+        // "Weight tra…".
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(a.name,
+              style: F.over.copyWith(color: p.ink2), maxLines: 1),
+        ),
       ]),
     );
   }
