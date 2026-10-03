@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Koop Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Montserrat:wght@400;600;700&display=swap">
+<style>
+/* Layout: a header with the loader, today's three dials, then a grid of trend cards. */
+:root{
+  --bg:#14171a; --card:#1e2227; --card2:#262b31; --line:#2f353c;
+  --ink:#f2f4f6; --ink2:#c7ced6; --ink3:#8a939c;
+  --recovery:#f5c542; --strain:#3aa0ff; --sleep:#7ba1bb;
+  --good:#2ee6a6; --warn:#f5c542; --bad:#ff5a6e;
+  --display:"Montserrat",system-ui,sans-serif; --num:"Barlow Semi Condensed",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--display)}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+header{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+h1{font-size:20px;letter-spacing:.35em;margin:0}
+.badge{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+.loader{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input,button,select{font:inherit;color:var(--ink);background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+button{background:var(--strain);border:0;color:#04121f;font-weight:700;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--strain);outline-offset:2px}
+#status{color:var(--ink3);font-size:12px;min-height:18px;margin-top:8px}
+.dials{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+.dial{background:var(--card);border-radius:16px;padding:16px;text-align:center}
+.dial svg{width:120px;height:120px;max-width:100%}
+.dial .v{font:600 30px var(--num)}
+.dial .l{font-size:11px;letter-spacing:.14em;color:var(--ink2);font-weight:700}
+.bar{display:flex;gap:8px;align-items:center;margin:8px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.card{background:var(--card);border-radius:16px;padding:16px;min-width:0}
+.card h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 4px}
+.card .sub{color:var(--ink3);font-size:12px;margin-bottom:8px}
+.card canvas{width:100%!important;height:220px!important}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--ink3);font-weight:600;font-size:12px}
+.tablewrap{overflow-x:auto}
+@media (max-width:640px){.dials{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>KOOP</h1><span class="badge" id="source">Example data</span></div>
+    <form class="loader" id="loader">
+      <label for="file" class="badge">Backup file</label>
+      <input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
+      <input id="pass" type="password" placeholder="Passphrase (encrypted files)" autocomplete="current-password">
+      <button type="submit">Open</button>
+    </form>
+  </header>
+  <div id="status">Showing example data. Open your Koop backup to see your own. It is read in this browser only.</div>
+
+  <section class="dials" aria-label="Latest day">
+    <div class="dial"><svg viewBox="0 0 120 120" id="d-sleep"></svg><div class="v" id="v-sleep">—</div><div class="l">SLEEP</div></div>
+    <div class="dial"><svg viewBox="0 0 120 120" id="d-recovery"></svg><div class="v" id="v-recovery">—</div><div class="l">RECOVERY</div></div>
+    <div class="dial"><svg viewBox="0 0 120 120" id="d-strain"></svg><div class="v" id="v-strain">—</div><div class="l">STRAIN</div></div>
+  </section>
+
+  <div class="bar"><label for="range" class="badge">Range</label>
+    <select id="range"><option value="30">30 days</option><option value="90">90 days</option><option value="180">6 months</option><option value="365">1 year</option></select></div>
+
+  <div class="grid">
+    <div class="card"><h2>Recovery</h2><div class="sub">0–100%, coloured by band</div><canvas id="c-recovery"></canvas></div>
+    <div class="card"><h2>Day strain</h2><div class="sub">0–21</div><canvas id="c-strain"></canvas></div>
+    <div class="card"><h2>HRV and resting heart rate</h2><div class="sub">RMSSD (ms) · lowest 30-min sleeping HR (bpm)</div><canvas id="c-hrv"></canvas></div>
+    <div class="card"><h2>Sleep</h2><div class="sub">Deep · REM · light, hours</div><canvas id="c-sleep"></canvas></div>
+    <div class="card"><h2>Strain vs next-day recovery</h2><div class="sub">Each dot is one day</div><canvas id="c-corr"></canvas></div>
+    <div class="card"><h2>Monthly averages</h2><div class="sub">Days with a value only; gaps are not zeros</div><div class="tablewrap"><table id="t-month"></table></div></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js"></script>
+<script>
+"use strict";
+const KEYS=["readiness","strain","rmssd","rhr","tst_min","deep_min","rem_min","light_min","sleep_perf","steps","calories"];
+const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const band=v=>v==null?css("--line"):v>=67?css("--good"):v>=34?css("--warn"):css("--bad");
+let data={}; // key -> Map(date -> value)
+const charts={};
+
+function example(){ // clearly labelled sample so the page opens working
+  const d={}; KEYS.forEach(k=>d[k]=new Map()); const now=new Date();
+  for(let i=120;i>=0;i--){const t=new Date(now);t.setDate(now.getDate()-i);const s=t.toISOString().slice(0,10);
+    if(i%9===4)continue; const w=Math.sin(i/5);
+    d.readiness.set(s,Math.round(55+25*w));d.strain.set(s,+(9+5*Math.cos(i/3)).toFixed(1));
+    d.rmssd.set(s,Math.round(62+9*w));d.rhr.set(s,Math.round(56-3*w));
+    d.tst_min.set(s,400+40*w);d.deep_min.set(s,80+10*w);d.rem_min.set(s,90+15*w);d.light_min.set(s,230+15*w);
+    d.sleep_perf.set(s,Math.round(80+12*w));}
+  return d;}
+
+async function readBackup(file,pass){
+  let buf=new Uint8Array(await file.arrayBuffer());
+  const magic=String.fromCharCode(...buf.slice(0,4));
+  if(magic==="OSBK"){ // header: magic4 ver1 kdf1 iter4(BE) salt16 nonce12, then AES-256-GCM, header as AAD
+    if(!pass)throw new Error("This file is encrypted. Enter your Koop Cloud passphrase.");
+    const hdr=buf.slice(0,38),dv=new DataView(hdr.buffer);
+    const iter=dv.getUint32(6),salt=hdr.slice(10,26),nonce=hdr.slice(26,38);
+    status("Unlocking (this takes a few seconds)…");
+    const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+    const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
+    try{buf=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:nonce,additionalData:hdr,tagLength:128},key,buf.slice(38)));}
+    catch{throw new Error("Wrong passphrase, or the file is damaged.");}
+  }
+  if(buf[0]===0x1f&&buf[1]===0x8b){ // gzip (cloud copies and auto backups)
+    const s=new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+    buf=new Uint8Array(await new Response(s).arrayBuffer());
+  }
+  const SQL=await initSqlJs();
+  const db=new SQL.Database(buf);
+  const res=db.exec(`SELECT date,key,value FROM metric_series WHERE value IS NOT NULL AND key IN (${KEYS.map(k=>`'${k}'`).join(",")}) ORDER BY date`);
+  db.close();
+  const d={};KEYS.forEach(k=>d[k]=new Map());
+  (res[0]?.values||[]).forEach(([dt,k,v])=>d[k].set(dt,v));
+  return d;}
+
+function status(t){document.getElementById("status").textContent=t;}
+
+function dial(id,frac,color){
+  const r=48,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
+  document.getElementById(id).innerHTML=`<circle cx="60" cy="60" r="${r}" fill="none" stroke="${css("--line")}" stroke-width="10"/>`+
+   `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 60 60)"/>`;}
+
+function last(k){const m=data[k];let best=null;for(const [d,v] of m)if(!best||d>best[0])best=[d,v];return best;}
+
+function days(n){const out=[];const now=new Date();for(let i=n-1;i>=0;i--){const t=new Date(now);t.setDate(now.getDate()-i);out.push(t.toISOString().slice(0,10));}return out;}
+
+function chart(id,cfg){charts[id]?.destroy();charts[id]=new Chart(document.getElementById(id),cfg);}
+
+function render(){
+  const n=+document.getElementById("range").value,ds=days(n),g=k=>ds.map(d=>data[k].get(d)??null);
+  const rec=last("readiness"),str=last("strain"),sp=last("sleep_perf");
+  dial("d-recovery",rec&&rec[1]/100,band(rec&&rec[1]));document.getElementById("v-recovery").textContent=rec?Math.round(rec[1])+"%":"—";
+  dial("d-strain",str&&str[1]/21,css("--strain"));document.getElementById("v-strain").textContent=str?(+str[1]).toFixed(1):"—";
+  dial("d-sleep",sp&&sp[1]/100,css("--sleep"));document.getElementById("v-sleep").textContent=sp?Math.round(sp[1])+"%":"—";
+  Chart.defaults.color=css("--ink3");Chart.defaults.borderColor=css("--line");Chart.defaults.font.family=css("--num");
+  const lab=ds.map(d=>d.slice(5)),base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},spanGaps:false};
+  const r=g("readiness");
+  chart("c-recovery",{type:"bar",data:{labels:lab,datasets:[{data:r,backgroundColor:r.map(band),borderRadius:3}]},options:{...base,scales:{y:{min:0,max:100}}}});
+  chart("c-strain",{type:"bar",data:{labels:lab,datasets:[{data:g("strain"),backgroundColor:css("--strain"),borderRadius:3}]},options:{...base,scales:{y:{min:0,max:21}}}});
+  chart("c-hrv",{type:"line",data:{labels:lab,datasets:[
+    {label:"HRV (ms)",data:g("rmssd"),borderColor:css("--good"),pointRadius:2,yAxisID:"y"},
+    {label:"Resting HR (bpm)",data:g("rhr"),borderColor:css("--bad"),pointRadius:2,yAxisID:"y1"}]},
+    options:{...base,plugins:{legend:{display:true}},scales:{y:{position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}}});
+  const h=k=>g(k).map(v=>v==null?null:+(v/60).toFixed(2));
+  chart("c-sleep",{type:"bar",data:{labels:lab,datasets:[
+    {label:"Deep",data:h("deep_min"),backgroundColor:"#8b7bff"},{label:"REM",data:h("rem_min"),backgroundColor:"#c77dff"},{label:"Light",data:h("light_min"),backgroundColor:css("--sleep")}]},
+    options:{...base,plugins:{legend:{display:true}},scales:{x:{stacked:true},y:{stacked:true}}}});
+  const pts=[];ds.forEach((d,i)=>{const s=data.strain.get(d),nx=ds[i+1]&&data.readiness.get(ds[i+1]);if(s!=null&&nx!=null)pts.push({x:s,y:nx});});
+  chart("c-corr",{type:"scatter",data:{datasets:[{data:pts,backgroundColor:css("--strain")}]},options:{...base,scales:{x:{title:{display:true,text:"Strain"},min:0,max:21},y:{title:{display:true,text:"Next-day recovery %"},min:0,max:100}}}});
+  const months={};for(const k of ["readiness","strain","rmssd","rhr","tst_min"])for(const [d,v] of data[k]){const m=d.slice(0,7);(months[m]??={})[k]??=[];months[m][k].push(v);}
+  const avg=a=>a&&a.length?a.reduce((x,y)=>x+y,0)/a.length:null,f=(v,dp=0)=>v==null?"—":v.toFixed(dp);
+  const rows=Object.keys(months).sort().reverse().slice(0,12).map(m=>{const o=months[m];
+    return `<tr><td>${m}</td><td>${f(avg(o.readiness))}</td><td>${f(avg(o.strain),1)}</td><td>${f(avg(o.rmssd))}</td><td>${f(avg(o.rhr))}</td><td>${f(avg(o.tst_min)&&avg(o.tst_min)/60,1)}</td></tr>`;}).join("");
+  document.getElementById("t-month").innerHTML=`<thead><tr><th>Month</th><th>Recovery %</th><th>Strain</th><th>HRV ms</th><th>RHR bpm</th><th>Sleep h</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+document.getElementById("range").addEventListener("change",render);
+document.getElementById("loader").addEventListener("submit",async e=>{
+  e.preventDefault();const file=document.getElementById("file").files[0];
+  if(!file){status("Choose your Koop backup file first (koop-cloud.kbak from Google Drive, or an exported backup).");return;}
+  try{status("Reading…");data=await readBackup(file,document.getElementById("pass").value);
+    document.getElementById("source").textContent="Your data";status(`Loaded ${file.name}. Nothing left this browser.`);render();}
+  catch(err){status(err.message||String(err));}
+});
+data=example();render();
+</script>
+</body>
+</html>
