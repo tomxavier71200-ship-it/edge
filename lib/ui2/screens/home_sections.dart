@@ -238,7 +238,9 @@ Widget _dashRow(
           ],
         ),
         if (under.isNotEmpty)
-          Text(under, style: F.n17.copyWith(color: p.ink3)),
+          // Baseline progress is a note, not a number — it stays small.
+          Text(under,
+              style: (s!.avg == null ? F.cap : F.n17).copyWith(color: p.ink3)),
       ]),
       SizedBox(
         width: 22,

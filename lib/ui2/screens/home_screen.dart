@@ -2311,9 +2311,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 homeSections().any((s) => s.id == 'dash' && s.on) &&
                 d.series.values.any((s) => s.isNotEmpty))
               Section(
-                'Dashboard',
+                'My Dashboard',
                 dashboardCard(c, d, _openCustomize),
-                action: 'Edit',
+                action: 'Customize',
                 onAction: _openCustomize,
               ),
             // Today's timeline is there before today's data is: it says what
