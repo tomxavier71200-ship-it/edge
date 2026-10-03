@@ -341,10 +341,8 @@ Map<String, Widget> goldenCases() => {
         SizedBox(height: S.x3),
         BandStatusLine(band: null, connected: false),
       ]),
-      // The streak chip at rest, and the sheet behind it.
+      // The streak chip at rest.
       'streak_chip': const StreakChip(n: 12),
-      'streak_panel': StreakPanel(
-          current: 12, best: 18, scoredDays: {for (final d in _navDays) d}),
       // The calendar behind the stepper: a month of days, the ones with data
       // dotted (coloured when a screen passes colours), the current one filled.
       'day_calendar': DayCalendar(

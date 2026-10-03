@@ -201,6 +201,7 @@ const _notComponents = {
   'CustomizeScreen',
   'PeriodReport',
   'Vo2maxScreen',
+  'StreakScreen',
   'StrengthScreen',
   'HealthspanScreen',
   // Reads and writes the notification prefs and re-arms reminders through

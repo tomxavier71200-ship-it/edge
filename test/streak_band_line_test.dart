@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/ui2/screens/home_screen.dart';
+import 'package:openstrap_edge/ui2/screens/streak_screen.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
 int _day(int m, int d) => DateTime(2026, m, d, 8).millisecondsSinceEpoch ~/ 1000;
@@ -70,17 +71,30 @@ void main() {
     });
   });
 
-  testWidgets('streak panel: count, best and next milestone', (t) async {
+  testWidgets('streak screen: count, best, next milestone; a gap is no score',
+      (t) async {
+    t.view.physicalSize = const Size(390 * 3, 2400 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    final now = DateTime.now();
+    int at(int back) =>
+        DateTime(now.year, now.month, now.day - back, 8).millisecondsSinceEpoch ~/
+        1000;
+    // Today and the four days before it, plus an older 9-day run.
+    final pts = [
+      for (var i = 0; i < 5; i++) (t: at(i), v: 60.0),
+      for (var i = 20; i < 29; i++) (t: at(i), v: 40.0),
+    ];
     await t.pumpWidget(MaterialApp(
       theme: buildTheme(Brightness.dark),
-      home: const Scaffold(
-          body: SingleChildScrollView(
-              child: StreakPanel(current: 5, best: 9, scoredDays: {}))),
+      home: StreakScreen(current: 5, points: pts),
     ));
     await t.pumpAndSettle();
-    expect(find.text('5'), findsOneWidget);
-    expect(find.text('Best: 9 days'), findsOneWidget);
-    expect(find.text('NEXT: 7 DAYS'), findsOneWidget);
-    expect(find.text('2 to go'), findsOneWidget);
+    expect(find.text('5'), findsWidgets);
+    expect(find.text('Best 9 days'), findsOneWidget);
+    expect(find.text('7-day streak'), findsWidgets);
+    expect(find.text('2'), findsOneWidget); // to go, inside the ring
+    // The newest day is selected by default and it has a score.
+    expect(find.text('60%'), findsOneWidget);
   });
 }

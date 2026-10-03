@@ -65,6 +65,7 @@ import 'metric_detail.dart';
 import 'monthly_report.dart' show reportCard;
 import 'readiness_detail.dart';
 import 'sleep_detail.dart';
+import 'streak_screen.dart';
 
 // ═══════════════════ shared plumbing ═══════════════════
 
@@ -2389,23 +2390,17 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                     case final n when n >= 2) ...[
                   const SizedBox(width: S.x2),
                   // Ignites once when the streak has grown since last seen;
-                  // opens the streak sheet.
+                  // opens the streak screen.
                   StreakChip(
                     n: n,
                     ignite: _igniteFor(n),
-                    onTap: () {
-                      final pts = d.series['readiness'] ?? const <ChartPoint>[];
-                      showStreakSheet(
-                        c,
+                    onTap: () => go(
+                      c,
+                      StreakScreen(
                         current: n,
-                        best: bestStreak(pts) > n ? bestStreak(pts) : n,
-                        scoredDays: {
-                          for (final pt in pts)
-                            dayLabelOf(DateTime.fromMillisecondsSinceEpoch(
-                                pt.t * 1000)),
-                        },
-                      );
-                    },
+                        points: d.series['readiness'] ?? const <ChartPoint>[],
+                      ),
+                    ),
                   ),
                 ],
                 const SizedBox(width: S.x3),
