@@ -1,0 +1,40 @@
+name: Dashboard to GitHub Pages
+
+# The Koop web dashboard is one static page (web/dashboard/index.html). Every
+# change to it is copied onto the `gh-pages` branch, which GitHub Pages serves
+# at https://<owner>.github.io/<repo>/. Same pattern as the `sidestore` branch:
+# a plain branch, no Pages environment, so it works from whoop-ui.
+on:
+  push:
+    branches: [whoop-ui]
+    paths: ['web/dashboard/**', '.github/workflows/dashboard-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dashboard-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy the page onto gh-pages
+        run: |
+          repo="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          if git clone --depth 1 --branch gh-pages "$repo" /tmp/pages 2>/dev/null; then :; else
+            mkdir /tmp/pages && cd /tmp/pages && git init -q -b gh-pages && git remote add origin "$repo" && cd -
+          fi
+          cp -r web/dashboard/. /tmp/pages/
+          touch /tmp/pages/.nojekyll
+          cd /tmp/pages
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Dashboard from ${GITHUB_SHA::7}"
+            git push origin gh-pages
+          fi

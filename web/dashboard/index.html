@@ -44,6 +44,7 @@ body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--displ
 .loader{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
 input,select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
 .open{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer}
+.open.google{background:var(--card);color:var(--ink);border:1px solid var(--line)}
 .ranges{display:inline-flex;background:#eceef0;border-radius:999px;padding:2px}
 .ranges button{border:0;background:none;padding:5px 12px;border-radius:999px;font:600 12px var(--display);cursor:pointer;color:var(--ink)}
 .ranges button.on{background:var(--today);color:#fff}
@@ -89,12 +90,12 @@ main{max-width:1100px;margin:0 auto;padding:8px 16px 48px;display:grid;grid-temp
 
 <div class="bar">
   <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><span class="tag" id="source">Example data</span></div>
-  <form class="loader" id="loader"><label for="file">Koop backup</label><input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
-    <input id="pass" type="password" placeholder="Passphrase" autocomplete="current-password"><button class="open" type="submit">Open</button></form>
+  <form class="loader" id="loader"><button class="open google" type="button" id="gsign">Sign in with Google</button><span>or</span><label for="file">a backup file</label><input id="file" type="file" accept=".kbak,.osbk,.db,.gz">
+    <input id="pass" type="password" placeholder="Passphrase" autocomplete="current-password"><button class="open" type="submit">Open file</button></form>
   <div class="ranges" id="ranges"><button data-r="180">6m</button><button data-r="90">3m</button><button data-r="30">1m</button><button data-r="14">2w</button><button data-r="7">1w</button><button data-r="1" class="on">1d</button></div>
 </div>
 <div class="subtabs" id="subtabs" hidden></div>
-<div id="status">Showing example data. Open your Koop backup (koop-cloud.kbak from Google Drive, or an exported backup); it is read in this browser only.</div>
+<div id="status">Showing example data. Enter your Koop Cloud passphrase and sign in with Google to open your own data, or open a backup file. It is decrypted and read in this browser only.</div>
 
 <main>
   <section class="stats"><h3 id="st-title">Day Statistics</h3><div class="vs" id="st-vs"></div><div class="grid2" id="st"></div></section>
@@ -103,6 +104,7 @@ main{max-width:1100px;margin:0 auto;padding:8px 16px 48px;display:grid;grid-temp
 </main>
 <section class="scrub"><div class="scrubin"><div class="scrubhead">Recovery by day · click a day to open it</div><div class="strip" id="strip"></div></div></section>
 
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js"></script>
 <script>
@@ -324,13 +326,46 @@ document.getElementById("prev").addEventListener("click",()=>goDay(shift(day,-1)
 document.getElementById("next").addEventListener("click",()=>goDay(shift(day,1)));
 document.addEventListener("keydown",e=>{if(e.target.matches("input"))return;if(e.key==="ArrowLeft")goDay(shift(day,-1));if(e.key==="ArrowRight")goDay(shift(day,1));});
 window.addEventListener("resize",()=>{if(range===1&&tab==="overview")render();});
+async function load(blob,label){
+  status("Reading…");const r=await readBackup(blob,document.getElementById("pass").value);data=r.d;
+  if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
+  const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=dates.at(-1)||iso(new Date());
+  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;workout=-1;
+  document.getElementById("source").hidden=true;status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);render();}
 document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const f=document.getElementById("file").files[0];
   if(!f){status("Choose your Koop backup file first.");return;}
-  try{status("Reading…");const r=await readBackup(f,document.getElementById("pass").value);data=r.d;
-    if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
-    const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=dates.at(-1)||iso(new Date());
-    if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;workout=-1;
-    document.getElementById("source").hidden=true;status(`Loaded ${f.name}. Nothing left this browser.`);render();}
+  try{await load(f,f.name);}catch(err){status(err.message||String(err));}});
+
+// ---------- Koop Cloud: Google sign-in, then the same file the phones upload ----------
+// Same Google project as the app (KOOP), same drive.file permission: it can see only the
+// files Koop itself created, i.e. Drive > Koop > koop-cloud.kbak. The token lives in memory
+// for this tab only and is never stored.
+const GOOGLE_WEB_CLIENT="423346785849-ivk1sk3f16akkejcpb3is6h8qj67mtq7.apps.googleusercontent.com";
+const DRIVE="https://www.googleapis.com/drive/v3/files";
+let token=null,tokenClient=null;
+function askToken(){return new Promise((ok,fail)=>{
+  if(!window.google?.accounts?.oauth2){fail(new Error("Google sign-in did not load. Check your connection and reload the page."));return;}
+  tokenClient??=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_WEB_CLIENT,scope:"https://www.googleapis.com/auth/drive.file",callback:()=>{}});
+  tokenClient.callback=r=>r.error?fail(new Error(r.error==="access_denied"?"Google sign-in was cancelled.":"Google sign-in failed: "+r.error)):ok(r.access_token);
+  tokenClient.error_callback=e=>fail(new Error(e.type==="popup_closed"?"Google sign-in was closed.":e.type==="popup_failed_to_open"?"Allow pop-ups for this page, then try again.":"Google sign-in failed."));
+  tokenClient.requestAccessToken({prompt:token?"":"select_account"});});}
+async function drive(url,asBlob){let r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+  if(r.status===401){token=await askToken();r=await fetch(url,{headers:{Authorization:"Bearer "+token}});}
+  if(!r.ok)throw new Error(`Google Drive answered ${r.status}.`);return asBlob?r.blob():r.json();}
+document.getElementById("gsign").addEventListener("click",async()=>{
+  if(location.protocol==="file:"){status("Google sign-in works on the hosted dashboard page, not on a file opened from disk. Use 'a backup file' here instead.");return;}
+  const pass=document.getElementById("pass");
+  if(!pass.value){status("Type your Koop Cloud passphrase first (the one set in the app under Koop Cloud), then sign in.");pass.focus();return;}
+  try{if(!token){status("Signing in with Google…");token=await askToken();}
+    status("Looking for your Koop Cloud copy…");
+    const q=encodeURIComponent("name = 'koop-cloud.kbak' and trashed = false");
+    const list=await drive(`${DRIVE}?q=${q}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=1&fields=files(id,modifiedTime,size)`);
+    const f=list.files?.[0];
+    if(!f){status("No Koop Cloud copy found in this Google account. On the phone with the band, open Koop Cloud and tap Sync now, then try again.");return;}
+    status("Downloading your Koop Cloud copy…");
+    const blob=await drive(`${DRIVE}/${f.id}?alt=media`,true);
+    await load(blob,`Koop Cloud copy saved ${new Date(f.modifiedTime).toLocaleString()}`);
+    document.getElementById("gsign").textContent="Reload from Drive";}
   catch(err){status(err.message||String(err));}});
 data=example();day=iso(new Date());render();
 </script>
