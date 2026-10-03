@@ -1905,12 +1905,28 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   Timer? _syncTapTimer;
   static const _tapGrace = Duration(seconds: 20);
 
+  /// Whether this tap ever saw the band syncing (or the derive after it).
+  bool _syncSawProgress = false;
+
+  /// The grace ran out with no sign of the band: say so, instead of the card
+  /// silently going back to "No score yet today" as if nothing was tried.
+  bool _syncFailed = false;
+
   void _tapSync(VoidCallback sync) {
     sync();
-    setState(() => _syncTapped = true);
+    setState(() {
+      _syncTapped = true;
+      _syncFailed = false;
+      _syncSawProgress = false;
+    });
     _syncTapTimer?.cancel();
     _syncTapTimer = Timer(_tapGrace, () {
-      if (mounted) setState(() => _syncTapped = false);
+      if (mounted) {
+        setState(() {
+          _syncTapped = false;
+          _syncFailed = !_syncSawProgress;
+        });
+      }
     });
   }
 
@@ -2014,6 +2030,10 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     // real progress lands before that timer fires, clear it here too so the
     // UI does not bounce back to "Connecting" once syncing/deriving goes
     // quiet again.
+    if (syncing || deriving) {
+      _syncSawProgress = true;
+      _syncFailed = false;
+    }
     if ((syncing || deriving) && _syncTapped) {
       _syncTapped = false;
       _syncTapTimer?.cancel();
@@ -2047,6 +2067,17 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         l?.homeConnectingTitle ?? 'Connecting to your band',
         l?.homeConnectingBody ?? 'Hang on — this usually takes a few seconds.',
         leading: spinner,
+      );
+    }
+    if (_syncFailed) {
+      final sync = syncOf(c);
+      return StatusCard(
+        'Couldn\'t reach your band',
+        'Keep it close, and check it isn\'t connected to another phone or '
+            'the WHOOP app — a band talks to one phone at a time.',
+        fix: sync == null ? '' : 'Try again',
+        icon: LucideIcons.bluetoothOff,
+        onFix: sync == null ? null : () => _tapSync(sync),
       );
     }
     return null;
