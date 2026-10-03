@@ -325,7 +325,8 @@ class SleepData {
       week: denseDays(pointsOf(sleepChart), 7),
       sri: (envValue((await repo.getInsights())['regularity'])?['sri'] as num?)
           ?.toDouble(),
-      trends: await loadTrendSeries(repo, const ['sleep', 'efficiency']),
+      trends: await loadTrendSeries(
+          repo, const ['sleep_perf', 'sleep', 'efficiency']),
       windows: () {
         final out = <NightWindow>[];
         for (final w in wins) {
@@ -592,7 +593,8 @@ class _SleepDetailState extends State<SleepDetail> {
           'Weekly trends',
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: weeklyTrendCards(c, d.trends, const ['sleep', 'efficiency']),
+            children: weeklyTrendCards(
+                c, d.trends, const ['sleep_perf', 'sleep', 'efficiency']),
           ),
         ),
 

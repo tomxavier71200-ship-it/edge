@@ -5192,7 +5192,7 @@ class DerivationEngine {
       // one layer up on the output.
       final builtForDay = LocalDb.localDayLabelNow();
       final builtAtEpoch = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final (bundleJson, dropped) = await _runIsolateCancellable(
+      final (bundleJson, dropped, sleepPerf) = await _runIsolateCancellable(
         () {
           final bundle =
               buildCrossDayBundle(
@@ -5209,12 +5209,27 @@ class DerivationEngine {
           final paths = <String>[];
           final safe = sanitizeForJson(bundle, paths) as Map<String, dynamic>;
           if (paths.isNotEmpty) safe['encode_dropped_fields'] = paths;
-          return (jsonEncode(safe), paths);
+          // Sleep performance, pulled out here so the main isolate never
+          // decodes the bundle to find it.
+          final coach = bundle['sleep_coach'];
+          final perfEnv = coach is Map ? coach['performance'] : null;
+          final perfV = perfEnv is Map ? perfEnv['value'] : null;
+          final perf = perfV is Map ? perfV['pct'] : null;
+          return (
+            jsonEncode(safe),
+            paths,
+            perf is num && perf.isFinite ? perf.toDouble() : null,
+          );
         },
         _crossDayTimeout,
         label: 'crossday',
       );
       await LocalDb.putBaseline('crossday', bundleJson);
+      // Today's sleep performance into the series, so the Sleep screen can
+      // draw a week of it (WHOOP's weekly trend). Null when the coach had no
+      // need or no night — an absent point, never a zero. REPLACE by date: the
+      // day's last run wins, as it does for every other series key.
+      await LocalDb.putMetricSeriesValue(builtForDay, 'sleep_perf', sleepPerf);
       if (dropped.isNotEmpty) {
         // Loud, not debug-only: a dropped field is a metric the user will see
         // as absent, and the reason lives here and nowhere else.
