@@ -63,17 +63,25 @@ class SetRow extends StatelessWidget {
       onTap: onTap,
       semanticLabel: sub.isEmpty ? title : '$title. $sub',
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: S.x3),
+        padding: const EdgeInsets.symmetric(vertical: S.x4),
         child: Row(children: [
+          // The icon on a soft gradient of its own colour — the same tile the
+          // More tab's doors wear, so every list in the app reads as one set.
           Container(
-            width: 32,
-            height: 32,
+            width: 40,
+            height: 40,
             alignment: Alignment.center,
-            decoration:
-                BoxDecoration(color: p.wash(accent), borderRadius: R.rSm),
+            decoration: BoxDecoration(
+              borderRadius: R.rMd,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [p.wash(accent), p.card2],
+              ),
+            ),
             child: glyph != null
                 ? glyph!(p.on(accent))
-                : Icon(icon, size: 16, color: p.on(accent)),
+                : Icon(icon, size: 19, color: p.on(accent)),
           ),
           const SizedBox(width: S.x3),
           Expanded(
@@ -86,7 +94,10 @@ class SetRow extends StatelessWidget {
                     style: F.cap.copyWith(
                         color: p.ink3, fontWeight: FontWeight.w600)),
               if (sub.isNotEmpty)
-                Text(sub, style: F.over.copyWith(color: p.ink3)),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(sub, style: F.cap.copyWith(color: p.ink3)),
+                ),
             ]),
           ),
           // THE ROW RULE (see MetricRow): the title is the only flexible part,
