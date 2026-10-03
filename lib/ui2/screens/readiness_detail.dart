@@ -20,6 +20,8 @@ import 'home_screen.dart';
 import 'investigate.dart';
 import 'detail_trends.dart';
 import 'metric_detail.dart';
+import 'more_screen.dart' show DoorRow;
+import 'wellness_screen.dart' show JournalFindings;
 
 class ReadinessData {
   final Metric readiness;
@@ -275,8 +277,16 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             ?contributorFor(c, k, label, icon, better, d.trends[k] ?? const []),
         ] case final rows when rows.isNotEmpty) ...[
           ContributorsCard(rows: rows, footer: 'Today vs. last 30 days'),
-          const SizedBox(height: S.x5),
+          const SizedBox(height: S.x3),
         ],
+
+        // WHOOP's Behavior Insights: what you log, against your recovery. The
+        // analysis is the journal's own (JournalFindings); this is its door
+        // from the screen where the question comes up.
+        DoorRow(LucideIcons.lightbulb, C.yellow, 'Behavior insights',
+            'What you log — alcohol, late meals, caffeine — against your recovery',
+            onTap: () => go(c, const JournalFindings())),
+        const SizedBox(height: S.x5),
 
         if (d.breakdown.isNotEmpty) ...[
           Section(l?.readinessDetailWhatWentIntoIt ?? 'What went into it',
