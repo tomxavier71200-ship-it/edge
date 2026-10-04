@@ -67,10 +67,19 @@ body[data-tab=overview] main>.stats{display:none}
 .open.google{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--ink);border:1px solid #d5d9dd;border-radius:999px;padding:7px 14px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .open.google:hover{background:#f8f9fa}
 #status{max-width:1100px;margin:10px auto 0;padding:8px 16px;font-size:12px;color:var(--ink2)}
+.mcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-top:14px}
+.mcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;background:#fff;text-align:left;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
+.mcard:hover{border-color:#c9d0d6;box-shadow:0 4px 14px rgba(20,30,40,.07);transform:translateY(-1px)}
+.mcard .l{font-size:12px;color:var(--ink2);font-weight:600}
+.mcard .v{font:600 30px var(--num);margin-top:2px;font-variant-numeric:tabular-nums}
+.mcard .d{font-size:12px;font-weight:700;margin-top:2px}
+.mcard svg{display:block;width:100%;height:38px;margin-top:8px;overflow:visible}
+.mcard .s{font-size:11px;color:var(--ink3);margin-top:4px}
+button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline-offset:2px}
 .hrtip{position:absolute;pointer-events:none;transform:translate(10px,-100%);min-width:80px;text-align:center;border-radius:3px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.15);color:#fff;transition:opacity .1s;z-index:5}
 .hrtip b{display:block;font:600 20px var(--num);padding:5px 14px 3px}.hrtip b small{font-size:12px;margin-left:3px}
 .hrtip i{display:block;font:600 12px var(--display);font-style:normal;padding:3px 10px;background:rgba(0,0,0,.18);color:#1b2026}
-@media (max-width:760px){main{grid-template-columns:1fr}.ring svg{width:100px;height:100px}}
+@media (max-width:760px){.bar{flex-direction:column;align-items:stretch;gap:10px}.loader{flex-wrap:wrap;justify-content:flex-start}.rangerow{padding-top:10px}.ranges{overflow-x:auto;max-width:100%}.mcards{grid-template-columns:1fr 1fr}.head .in{gap:12px;padding-top:16px}main{grid-template-columns:1fr}.ring svg{width:100px;height:100px}}
 .stats h3,.chart h3{font-size:14px;margin:16px 0 0}.stats .vs,.chart .vs{color:var(--ink3);font-size:12px;margin-bottom:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px 12px;text-align:center}
 .stat{border-radius:10px;padding:8px 4px;cursor:pointer;transition:background .15s,box-shadow .15s}
@@ -146,7 +155,7 @@ body[data-tab=overview] main>.stats{display:none}
 
 <main>
   <section class="stats"><h3 id="st-title">Day Statistics</h3><div class="vs" id="st-vs"></div><div class="grid2" id="st"></div></section>
-  <section class="chart"><h3 id="ch-title">Day Recovery</h3><div class="vs" id="ch-vs"></div><div class="bubbles" id="bubbles"></div><div class="chartbox"><canvas id="chart"></canvas></div><div class="zones" id="zones" hidden></div>
+  <section class="chart"><h3 id="ch-title">Day Recovery</h3><div class="vs" id="ch-vs"></div><div class="bubbles" id="bubbles"></div><div class="chartbox" id="chartbox"><canvas id="chart"></canvas></div><div class="mcards" id="mcards" hidden></div><div class="zones" id="zones" hidden></div>
     <div class="donutwrap" id="donutwrap" hidden><div class="legend" id="legend"></div><div style="width:180px;height:180px"><canvas id="donut"></canvas></div></div></section>
 </main>
 <section class="scrub"><div class="scrubin"><div class="scr"><button class="sarrow" id="sprev" aria-label="Previous day">‹</button><div class="smid"><canvas id="scrub" aria-label="Seven days of heart rate; click a day to open it"></canvas><div class="slabels" id="slabels"></div></div><button class="sarrow" id="snext" aria-label="Next day">›</button></div></div></section>
@@ -257,8 +266,19 @@ const PASS_KEY="koop.passphrase";
 const savedPass=()=>{try{return localStorage.getItem(PASS_KEY)||"";}catch{return "";}};
 function showSaved(){const s=!!savedPass();document.getElementById("forget").hidden=!s;document.getElementById("passwrap").hidden=s;}
 const passphrase=()=>document.getElementById("pass").value||savedPass();
-function ring(id,frac,color,text){const r=56,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
-  document.getElementById(id).innerHTML=`<circle cx="65" cy="65" r="${r}" fill="none" stroke="#2b323a" stroke-width="7"/><circle cx="65" cy="65" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 65 65)"/><text x="65" y="78" text-anchor="middle" class="n">${text}</text>`;}
+// Built once, then only its arc, colour and number change: the CSS transition on
+// stroke-dasharray makes the ring sweep to the new day's value instead of blinking.
+function ring(id,frac,color,text){const svg=document.getElementById(id),r=56,c=2*Math.PI*r,f=frac==null?0:Math.max(0,Math.min(1,frac));
+  if(!svg.querySelector(".arc"))svg.innerHTML=`<circle cx="65" cy="65" r="${r}" fill="none" stroke="#2b323a" stroke-width="7"/><circle class="arc" cx="65" cy="65" r="${r}" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 ${c}" transform="rotate(-90 65 65)"/><text x="65" y="78" text-anchor="middle" class="n"></text>`;
+  const a=svg.querySelector(".arc");requestAnimationFrame(()=>{a.setAttribute("stroke",color);a.setAttribute("stroke-dasharray",`${c*f} ${c}`);});
+  svg.querySelector("text").textContent=text;}
+
+// One chart on the page, updated IN PLACE when the new view has the same shape (same
+// type, same x-axis kind, same number of series), so lines and bars move to the new
+// day instead of the canvas being thrown away and redrawn from zero.
+function mk(cfg){const el=document.getElementById("chart"),sig=c=>[c.type,c.options?.scales?.x?.type||"category",c.data.datasets.length].join("|");
+  if(chart&&chart._sig===sig(cfg)){chart.data=cfg.data;chart.options=cfg.options;chart.update();return chart;}
+  chart?.destroy();const c=new Chart(el,cfg);c._sig=sig(cfg);return c;}
 
 function header(){const rc=get("readiness",day),st=get("strain",day),sp=get("sleep_perf",day),ts=get("tst_min",day);
   ring("r-recovery",rc==null?null:rc/100,rc==null?css("--recovery"):recColor(rc),rc==null?"—":Math.round(rc)+"%");
@@ -319,7 +339,7 @@ function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.sta
   const look={Asleep:["#7e9fb8","#e9eff4","#7d9bb0"],Awake:["#c3c8cd","#f2f3f4","#9aa2aa"],Workout:["#0093e7","rgba(0,0,0,0)","#0093e7"]};
   const ds=(label,f)=>({label,data:seg(f),borderColor:look[label][0],backgroundColor:look[label][1],fill:label==="Workout"?false:"origin",
     pointRadius:0,pointHoverRadius:4.5,pointHoverBorderWidth:2,pointHoverBorderColor:"#fff",pointHoverBackgroundColor:look[label][2],borderWidth:1,tension:0,spanGaps:false});
-  chart=new Chart(document.getElementById("chart"),{type:"line",data:{datasets:[ds("Asleep",inSleep),ds("Awake",p=>!inSleep(p)&&!inW(p)),ds("Workout",p=>inW(p)&&!inSleep(p))]},
+  chart=mk({type:"line",data:{datasets:[ds("Asleep",inSleep),ds("Awake",p=>!inSleep(p)&&!inW(p)),ds("Workout",p=>inW(p)&&!inSleep(p))]},
     options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},interaction:{mode:"index",intersect:false},
       plugins:{legend:{display:false},bands:{list:ws.map(s=>({a:s.start,b:s.end||s.start,c:"rgba(0,147,231,.10)"}))},
         // WHOOP's two-part box: the bpm on top, the time in a darker strip under it.
@@ -330,8 +350,8 @@ function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.sta
           const x=d.element.x,flip=x>c.chartArea.right-110;el.style.left=x+"px";el.style.top=Math.max(c.chartArea.top+46,d.element.y-12)+"px";
           el.style.transform=flip?"translate(calc(-100% - 10px),-100%)":"translate(10px,-100%)";el.style.opacity=1;}}},
       scales:{x:{type:"linear",min:t0,max:t1,grid:{color:"#f0f1f3"},border:{color:"#cfd4d9"},
-          afterBuildTicks:ax=>{const out=[],d=new Date(t0*1000);d.setMinutes(0,0,0);while(d.getHours()%4)d.setHours(d.getHours()+1);
-            for(;d.getTime()/1000<=t1;d.setHours(d.getHours()+4))if(d.getTime()/1000>=t0)out.push({value:d.getTime()/1000});ax.ticks=out;},
+          afterBuildTicks:ax=>{const out=[],d=new Date(t0*1000),hrs=(t1-t0)/3600,st=hrs<=10?1:hrs<=16?2:4;d.setMinutes(0,0,0);while(d.getHours()%st)d.setHours(d.getHours()+1);
+            for(;d.getTime()/1000<=t1;d.setHours(d.getHours()+st))if(d.getTime()/1000>=t0)out.push({value:d.getTime()/1000});ax.ticks=out;},
           ticks:{callback:v=>ampm(v),maxRotation:0,color:css("--ink2")}},
         y:{min:0,max:top,ticks:{stepSize:25,color:"#9aa3ad",font:{size:11}},grid:{color:"#f0f1f3"},border:{display:false}}}}});}
 
@@ -378,7 +398,7 @@ function workoutView(s){const prior=[];for(let i=1;i<=7;i++)sessionsOn(shift(day
   statsGrid([["Strain",s.strain,avg("strain"),1,0],["Duration",s.duration_min,avg("duration_min"),0,0,"h"],["Max HR",s.max_hr,avg("max_hr"),0,0],["Avg HR",s.avg_hr,avg("avg_hr"),0,0],["Calories",s.calories,avg("calories"),0,0]]);
   document.getElementById("ch-title").textContent=`${s.type} heart rate`;
   document.getElementById("ch-vs").textContent=s.hr.length?`${nice(day)}, ${clock(s.start)}`:"No heart-rate trace was stored for this workout";
-  chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:s.hr.map(p=>clock(p.t)),datasets:[{label:"Heart rate",data:s.hr.map(p=>p.v),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.12)",fill:"origin",pointRadius:0,borderWidth:1.4}]},options:lineOpts({})});
+  chart=mk({type:"line",data:{labels:s.hr.map(p=>clock(p.t)),datasets:[{label:"Heart rate",data:s.hr.map(p=>p.v),borderColor:css("--strain"),backgroundColor:"rgba(0,147,231,.12)",fill:"origin",pointRadius:0,borderWidth:1.4}]},options:lineOpts({})});
   const z=document.getElementById("zones"),tot=s.zones.reduce((a,b)=>a+(+b||0),0);z.hidden=!tot;
   if(tot){const first=s.zones.length===6?0:1,mx=Math.max(...s.zones);
     z.innerHTML=`<h3 style="font-size:14px;margin:0 0 6px">Heart-rate zones</h3>`+s.zones.map((m,i)=>`<div><span>Zone ${i+first}</span><i style="width:${mx?(m/mx*100):0}%;opacity:${.35+.13*i}"></i><b>${Math.round(m)} min · ${Math.round(m/tot*100)}%</b></div>`).join("");}}
@@ -409,7 +429,8 @@ function strip(){const today=iso(new Date());let end=shift(day,1);if(end>today)e
   document.getElementById("snext").disabled=day>=today;}
 
 function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();
-  chart?.destroy();chart=null;document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
+  document.getElementById("chartbox").hidden=false;document.getElementById("mcards").hidden=true;
+  document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
   Chart.defaults.font.family=css("--num");Chart.defaults.font.size=12;Chart.defaults.color=css("--ink2");Chart.defaults.elements.bar.borderRadius=4;
   Object.assign(Chart.defaults.plugins.tooltip,{backgroundColor:"#1b2026",titleColor:"#fff",bodyColor:"#d6dde3",padding:10,cornerRadius:8,displayColors:false,titleFont:{weight:"600"}});
   const dw=document.getElementById("donutwrap");dw.hidden=!(t.donut&&range===1);
@@ -423,19 +444,34 @@ function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab
   const ctx=document.getElementById("chart");
   if(range===1&&tab==="overview")overviewDay();
   else if(range===1&&tab==="sleep")sleepDay();
-  else if(range===1){document.getElementById("ch-title").textContent=`Day ${t.title}`;document.getElementById("ch-vs").innerHTML=`<b>${nice(day)}</b> vs ${nice(prev)}`;
-    chart=new Chart(ctx,{type:"bar",data:{labels:t.bars.map(b=>b[0]),datasets:[
-      {label:nice(day),data:t.bars.map(([,k])=>get(k,day)),backgroundColor:css("--bar"),maxBarThickness:24},
-      {label:nice(prev),data:t.bars.map(([,k])=>get(k,prev)),backgroundColor:css("--bar2"),maxBarThickness:24}]},
-      options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},onClick:(e,el)=>{if(!el[0])return;const [l,k]=t.bars[el[0].index],s=t.stats.find(x=>x[1]===k);focus={k,label:l,dp:s?.[2]??0,u:s?.[4]??""};render();},onHover:(e,el)=>{e.native.target.style.cursor=el.length?"pointer":"default";},plugins:{legend:{position:"bottom"}},scales:{y:{beginAtZero:true,grid:{color:css("--line")}},x:{grid:{display:false}}}}});
-  }else{const [k,label,mm]=t.trend,ds=[];for(let i=range-1;i>=0;i--)ds.push(shift(day,-i));
+  else if(range===1)metricCards(t,prev);
+  else{const [k,label,mm]=t.trend,ds=[];for(let i=range-1;i>=0;i--)ds.push(shift(day,-i));
     document.getElementById("ch-title").textContent=`${t.title} trend`;document.getElementById("ch-vs").textContent=`${label}, last ${range} days ending ${nice(day)} (gaps are days with no value) · click a bar to open that day`;
     const v=ds.map(d=>{const x=get(k,d);return x==null?null:k==="tst_min"?+(x/60).toFixed(2):x;});
     const col=k==="readiness"?v.map(x=>x==null?null:recColor(x)):css(k==="strain"?"--strain":"--bar");
-    chart=new Chart(ctx,{type:range>30?"line":"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[{label,data:v,backgroundColor:col,borderColor:css("--bar"),pointRadius:range>30?0:3,spanGaps:false}]},
+    chart=mk({type:range>30?"line":"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[{label,data:v,backgroundColor:col,borderColor:css("--bar"),pointRadius:range>30?0:3,spanGaps:false}]},
       options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},onClick:(e,el)=>{if(el[0]){day=ds[el[0].index];setRange(1);}},
         plugins:{legend:{display:false}},scales:{y:mm?{min:mm[0],max:mm[1]}:{beginAtZero:true},x:{grid:{display:false}}}}});}
 }
+// The day's metrics as cards — each on its own scale (a bar chart of HRV in ms next to
+// resting HR in bpm next to sleep in % compared numbers that cannot be compared). Value,
+// change from the day before, and the last 7 days as a sparkline. Click opens its chart.
+function metricCards(t,prev){chart?.destroy();chart=null;
+  document.getElementById("chartbox").hidden=true;const box=document.getElementById("mcards");box.hidden=false;
+  document.getElementById("ch-title").textContent=`Day ${t.title}`;document.getElementById("ch-vs").innerHTML=`<b>${nice(day)}</b> vs ${nice(prev)} · last 7 days under each · click one to chart it`;
+  const list=(tab==="recovery"?[["Recovery","readiness",0,1,"%"]]:[]).concat(t.stats);
+  box.innerHTML=list.map(([l,k,dp,better,u])=>{const now=val(k,day),was=val(k,prev),w=[];for(let i=6;i>=0;i--)w.push(val(k,shift(day,-i)));
+    const have=w.filter(x=>x!=null),lo=Math.min(...have),hi=Math.max(...have),Y=v=>hi===lo?19:34-(v-lo)/(hi-lo)*30,X=i=>i/6*100;
+    let path="",pen=false;w.forEach((v,i)=>{if(v==null){pen=false;return;}path+=`${pen?"L":"M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)} `;pen=true;});
+    const col=k==="readiness"&&now!=null?recColor(now):k==="strain"?css("--strain"):css("--bar");
+    let d="&nbsp;";if(now!=null&&was!=null&&Math.abs(now-was)>1e-9){const up=now>was,good=better===0?null:(up===(better>0));
+      d=`<span style="color:${good==null?css("--ink3"):good?css("--up"):css("--down")}">${up?"▲":"▼"} ${fmt(k,Math.abs(now-was),dp,u==="%"?"":u)}${u==="%"?" pts":""}</span> <span style="color:var(--ink3);font-weight:500">vs yesterday</span>`;}
+    return `<button class="mcard" data-k="${k}" data-l="${l}" data-dp="${dp}" data-u="${u??""}"><div class="l">${l}</div><div class="v" style="color:${now==null?"var(--ink3)":"var(--ink)"}">${fmt(k,now,dp,u)}</div><div class="d">${d}</div>
+      <svg viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true">${have.length>1?`<path d="${path}" fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`:""}${now!=null&&have.length?`<circle cx="100" cy="${Y(now)}" r="2.6" fill="${col}"/>`:""}</svg>
+      <div class="s">${have.length?`${have.length} of 7 days measured`:"No values in the last 7 days"}</div></button>`;}).join("");}
+document.getElementById("mcards").addEventListener("click",e=>{const c=e.target.closest(".mcard");if(!c)return;
+  focus={k:c.dataset.k,label:c.dataset.l,dp:+c.dataset.dp,u:c.dataset.u};render();});
+
 // One statistic over time: the selected range (30 days when the range is a single day), the
 // selected day in full colour, the period average dashed. Days with no value stay gaps.
 function focusView(){const {k,label,dp,u}=focus,n=range===1?30:range,ds=[];for(let i=n-1;i>=0;i--)ds.push(shift(day,-i));
@@ -447,7 +483,7 @@ function focusView(){const {k,label,dp,u}=focus,n=range===1?30:range,ds=[];for(l
   document.getElementById("unfocus").addEventListener("click",()=>{focus=null;render();});
   const base=k==="readiness"?null:k==="strain"?css("--strain"):css("--bar");
   const col=v.map((x,i)=>{if(x==null)return null;const c=base??recColor(x);return i===n-1?c:c+(c.startsWith("#")?"66":"");});
-  chart=new Chart(document.getElementById("chart"),{type:"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[
+  chart=mk({type:"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[
       {label,data:v,backgroundColor:col,borderRadius:4,maxBarThickness:26},
       ...(avg==null?[]:[{type:"line",label:"Average",data:ds.map(()=>avg),borderColor:css("--ink3"),borderDash:[5,4],borderWidth:1.2,pointRadius:0}])]},
     options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},interaction:{mode:"index",intersect:false},
@@ -519,6 +555,10 @@ document.getElementById("gsign").addEventListener("click",async()=>{
 document.getElementById("forget").addEventListener("click",()=>{try{localStorage.removeItem(PASS_KEY);}catch{}showSaved();document.getElementById("pass").focus();});
 showSaved();if(savedPass())status("Showing example data. Your passphrase is remembered here: click Sign in with Google to open your own data.");
 data=example();day=iso(new Date());render();
+// The scrubber is a canvas sized from its box: draw it again once fonts and layout settle
+// (the first draw could land on a zero-width box and leave it blank) and on every resize.
+try{new ResizeObserver(()=>strip()).observe(document.getElementById("scrub"));}catch{}
+document.fonts?.ready.then(()=>strip());
 </script>
 </body>
 </html>
