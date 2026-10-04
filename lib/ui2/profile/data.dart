@@ -154,6 +154,27 @@ class _DataScreenState extends State<DataScreen> {
     return (o.message, !o.ok);
   }
 
+  /// A new passphrase. On the sending phone the Drive copy is re-uploaded
+  /// under it straight away; every other phone (and the web dashboard) then
+  /// needs the same new one.
+  Future<_Note> _cloudPass(AppState app) async {
+    final cs = CloudSync.instance;
+    final pass = await askBackupPassphrase(context, creating: true);
+    if (pass == null) return ('', false);
+    await cs.setPassphrase(pass);
+    if (cs.role != CloudRole.send) {
+      return ('Passphrase saved. It must match the phone that sends.', false);
+    }
+    cs.markDirty();
+    final o = await cs.run(app.importEdgeBackup);
+    return (
+      o.ok
+          ? 'Passphrase changed. Use the new one on your other phones and the dashboard.'
+          : o.message,
+      !o.ok
+    );
+  }
+
   Widget _cloudGroup(BuildContext c, AppState app) {
     final cs = CloudSync.instance;
     const title = 'Koop Cloud';
@@ -200,6 +221,9 @@ class _DataScreenState extends State<DataScreen> {
             chevron: false),
         SetRow(LucideIcons.refreshCw, C.green, 'Sync now',
             onTap: _busy || cs.busy ? null : () => _run(() => _cloudNow(app))),
+        SetRow(LucideIcons.keyRound, C.orange, 'Change passphrase',
+            sub: 'The cloud copy is locked with it',
+            onTap: _busy || cs.busy ? null : () => _run(() => _cloudPass(app))),
         SetRow(LucideIcons.logOut, C.n500, 'Turn off on this phone',
             sub: 'Your copy in Google Drive stays until you delete it there',
             onTap: _busy

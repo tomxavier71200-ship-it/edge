@@ -79,9 +79,14 @@ class MoreScreen extends StatelessWidget {
             LucideIcons.cloud,
             C.teal,
             'Koop Cloud',
-            cs.on
-                ? '${cs.email ?? 'Signed in'} · ${cs.role == CloudRole.send ? 'Sends' : 'Receives'}'
-                : 'Sign in with Google to use Koop on more phones',
+            !cs.on
+                ? 'Sign in with Google to use Koop on more phones'
+                : cs.busy
+                    ? 'Syncing…'
+                    : cs.lastError ??
+                        cloudAgo(cs.role == CloudRole.send
+                            ? cs.lastUp
+                            : cs.remoteSeen),
             onTap: () => go(c, const DataScreen()),
           );
         },

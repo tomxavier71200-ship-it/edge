@@ -43,6 +43,7 @@ import '../ble/ble_state.dart'
     show AlarmConfirmation, AlarmEffect, LiveStreamOwners, SyncActivityWindow;
 import '../ble/ios_ble_restore.dart';
 import '../cloud/companion_client.dart';
+import '../cloud/cloud_sync.dart';
 import '../compute/derivation_engine.dart';
 import '../compute/derive_scheduler.dart';
 import '../compute/manual_session.dart'
@@ -1734,6 +1735,11 @@ class AppState extends ChangeNotifier {
       // Same signal, for the surfaces that can't listen: home/lock-screen
       // widget, Watch mirror, Siri intents (WidgetService.refresh).
       unawaited(WidgetService.refresh(repo));
+      // Koop Cloud, WHOOP-like: the sync just landed new data, so the sending
+      // phone uploads the full copy now (runIfDue spaces bursts 2 min apart
+      // and is a no-op when Koop Cloud is off or this phone receives).
+      CloudSync.instance.markDirty();
+      unawaited(CloudSync.instance.runIfDue(importEdgeBackup));
       // A heavy finalize is where a freshly-closed sleep window + recovery for a
       // new physiological day lands — fire the "recovery ready" push off it.
       if (heavy) {

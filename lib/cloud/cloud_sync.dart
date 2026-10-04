@@ -60,16 +60,36 @@ const kCloudLastCheckKey = 'cloud.last_check'; // epoch ms, our clock
 const kCloudRemoteSeenKey = 'cloud.remote_seen'; // Drive modifiedTime, ISO
 const _kPassKey = 'cloud.passphrase';
 
-/// A send is a full copy of the database, so at most every few hours; a
-/// receive is a metadata check first and costs nothing when nothing changed.
-const kCloudSendEvery = Duration(hours: 6);
-const kCloudCheckEvery = Duration(minutes: 30);
+/// WHOOP-like: the sending phone uploads the full copy as soon as a band sync
+/// has brought something new ([dirty]), no more often than [kCloudSendGap] so
+/// a burst of drains costs one upload; with nothing new it still re-sends once
+/// a day ([kCloudSendEvery]) as a safety copy. A receiving phone checks every
+/// [kCloudCheckEvery] — a metadata request that costs nothing when unchanged.
+const kCloudSendGap = Duration(minutes: 2);
+const kCloudSendEvery = Duration(hours: 24);
+const kCloudCheckEvery = Duration(minutes: 2);
+const kCloudDirtyKey = 'cloud.dirty';
 
-/// Whether a foreground pass should do anything. Pure, for the tests.
-bool cloudDue(CloudRole role, DateTime now, {DateTime? lastUp, DateTime? lastCheck}) {
-  final last = role == CloudRole.send ? lastUp : lastCheck;
-  final every = role == CloudRole.send ? kCloudSendEvery : kCloudCheckEvery;
-  return last == null || now.difference(last) >= every;
+/// Whether a pass should do anything. Pure, for the tests.
+bool cloudDue(CloudRole role, DateTime now,
+    {DateTime? lastUp, DateTime? lastCheck, bool dirty = false}) {
+  if (role == CloudRole.receive) {
+    return lastCheck == null || now.difference(lastCheck) >= kCloudCheckEvery;
+  }
+  if (lastUp == null) return true;
+  final since = now.difference(lastUp);
+  return (dirty && since >= kCloudSendGap) || since >= kCloudSendEvery;
+}
+
+/// "Synced 3 min ago", the way WHOOP says it. [at] is the last upload (sending
+/// phone) or the newest copy merged (receiving phone); null has never synced.
+String cloudAgo(DateTime? at, [DateTime? now]) {
+  if (at == null) return 'Not synced yet';
+  final d = (now ?? DateTime.now()).difference(at);
+  if (d.inMinutes < 1) return 'Synced just now';
+  if (d.inMinutes < 60) return 'Synced ${d.inMinutes} min ago';
+  if (d.inHours < 24) return 'Synced ${d.inHours} h ago';
+  return 'Synced ${d.inDays} d ago';
 }
 
 /// Whether the copy in Drive is one this phone has not merged yet. Both sides
@@ -106,6 +126,18 @@ class CloudSync extends ChangeNotifier {
   /// that; the row on the Data screen says each upload is a full copy.
   bool get wifiOnly => Prefs.getBool(kCloudWifiOnlyKey, false);
   DateTime? get lastUp => _at(kCloudLastUpKey);
+
+  /// New data since the last upload (a band sync landed). Persisted, so an
+  /// upload that failed or was cut off by the app closing is retried.
+  bool get dirty => Prefs.getBool(kCloudDirtyKey, false);
+  void markDirty() {
+    _dirtyGen++;
+    Prefs.setBool(kCloudDirtyKey, true);
+  }
+
+  // Bumped by every [markDirty]: an upload clears the flag only if no new data
+  // arrived while it was exporting, or that data would be marked as sent.
+  int _dirtyGen = 0;
   DateTime? get lastCheck => _at(kCloudLastCheckKey);
   DateTime? get remoteSeen {
     final s = Prefs.getString(kCloudRemoteSeenKey, '');
@@ -187,7 +219,10 @@ class CloudSync extends ChangeNotifier {
   /// Foreground hook: does nothing unless switched on and due.
   Future<void> runIfDue(Future<int> Function(String path) importBackup) async {
     if (!on || !cloudConfigured || _busy) return;
-    if (!cloudDue(role, DateTime.now(), lastUp: lastUp, lastCheck: lastCheck)) return;
+    if (!cloudDue(role, DateTime.now(),
+        lastUp: lastUp, lastCheck: lastCheck, dirty: dirty)) {
+      return;
+    }
     try {
       await run(importBackup, interactive: false);
     } catch (_) {
@@ -202,8 +237,10 @@ class CloudSync extends ChangeNotifier {
   /// merges through the app's import path, which a headless wake does not run.
   Future<void> runSendInBackground() async {
     await Prefs.ensureLoaded();
+    // Called right after a background drain landed data: that is new data.
+    markDirty();
     if (!on || !cloudConfigured || role != CloudRole.send || _busy) return;
-    if (!cloudDue(role, DateTime.now(), lastUp: lastUp)) return;
+    if (!cloudDue(role, DateTime.now(), lastUp: lastUp, dirty: dirty)) return;
     try {
       await run((_) async => 0, interactive: false);
     } catch (_) {
@@ -259,6 +296,7 @@ class CloudSync extends ChangeNotifier {
         return const CloudOutcome(false, 'Waiting for Wi-Fi.');
       }
     }
+    final gen = _dirtyGen;
     final plain = await LocalDb.exportCopy();
     final enc = '$plain.kbak';
     try {
@@ -277,6 +315,7 @@ class CloudSync extends ChangeNotifier {
       final existing = await api.find(kDriveFileName, parent: folder);
       final up = await api.upload(File(enc), folder, existingId: existing?.id);
       Prefs.setInt(kCloudLastUpKey, DateTime.now().millisecondsSinceEpoch);
+      if (gen == _dirtyGen) Prefs.setBool(kCloudDirtyKey, false);
       // This phone wrote it, so it has "seen" it — switching this phone to
       // receive later must not re-import its own data.
       Prefs.setString(kCloudRemoteSeenKey, up.modified.toIso8601String());

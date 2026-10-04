@@ -36,19 +36,40 @@ void main() {
       expect(cloudDue(CloudRole.receive, now), isTrue);
     });
 
-    test('send waits six hours, receive half an hour', () {
-      final hourAgo = now.subtract(const Duration(hours: 1));
-      expect(cloudDue(CloudRole.send, now, lastUp: hourAgo), isFalse);
-      expect(cloudDue(CloudRole.receive, now, lastCheck: hourAgo), isTrue);
+    test('send uploads after new data, two minutes apart', () {
+      final minAgo = now.subtract(const Duration(minutes: 1));
+      final fiveAgo = now.subtract(const Duration(minutes: 5));
+      // New data, but an upload went out a minute ago: wait (bursts batch).
+      expect(cloudDue(CloudRole.send, now, lastUp: minAgo, dirty: true), isFalse);
+      // New data and the gap has passed: upload now.
+      expect(cloudDue(CloudRole.send, now, lastUp: fiveAgo, dirty: true), isTrue);
+      // Nothing new: no upload just because time passed...
+      expect(cloudDue(CloudRole.send, now, lastUp: fiveAgo), isFalse);
+      // ...except the once-a-day safety copy.
       expect(
           cloudDue(CloudRole.send, now,
-              lastUp: now.subtract(const Duration(hours: 6))),
+              lastUp: now.subtract(const Duration(hours: 24))),
           isTrue);
+    });
+
+    test('receive checks every two minutes', () {
       expect(
           cloudDue(CloudRole.receive, now,
-              lastCheck: now.subtract(const Duration(minutes: 10))),
+              lastCheck: now.subtract(const Duration(minutes: 1))),
           isFalse);
+      expect(
+          cloudDue(CloudRole.receive, now,
+              lastCheck: now.subtract(const Duration(minutes: 3))),
+          isTrue);
     });
+  });
+
+  test('cloudAgo says it the way WHOOP does', () {
+    expect(cloudAgo(null, now), 'Not synced yet');
+    expect(cloudAgo(now.subtract(const Duration(seconds: 20)), now), 'Synced just now');
+    expect(cloudAgo(now.subtract(const Duration(minutes: 3)), now), 'Synced 3 min ago');
+    expect(cloudAgo(now.subtract(const Duration(hours: 5)), now), 'Synced 5 h ago');
+    expect(cloudAgo(now.subtract(const Duration(days: 2)), now), 'Synced 2 d ago');
   });
 
   group('cloudRemoteNewer', () {
