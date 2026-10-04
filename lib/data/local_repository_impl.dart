@@ -135,8 +135,51 @@ class LocalRepositoryImpl extends LocalRepository {
   /// Today request — the latest complete day. A historical date with no row
   /// returns null (→ the caller's honest empty shape), not the latest.
   Future<Map<String, dynamic>?> _bundleForDate(String date) async =>
-      await _bundle(date) ??
-      (_isTodayLabel(date) ? await _latestBundle() : null);
+      _withWhoop(
+        date,
+        await _bundle(date) ??
+            (_isTodayLabel(date) ? await _latestBundle() : null),
+      );
+
+  /// A day the band measured AND the person imported from WHOOP: every day
+  /// screen shows WHOOP's numbers. whoop_import keeps them under `whoop_*`
+  /// keys beside Koop's own; this lays them over a COPY of the bundle at read
+  /// time, so the stored day (and every baseline built from it) is untouched.
+  /// Only fields WHOOP gave are replaced; curves and hypnograms stay Koop's,
+  /// because WHOOP's export has none. `whoop_overlay` tells a screen to say so.
+  Future<Map<String, dynamic>?> _withWhoop(
+    String date,
+    Map<String, dynamic>? b,
+  ) async {
+    if (b == null) return null;
+    Future<num?> w(String k) => LocalDb.metricValueOn(date, 'whoop_$k');
+    final scal = <String, num>{
+      for (final k in const ['readiness', 'rhr', 'rmssd', 'strain', 'resp_rate'])
+        if (await w(k) case final num v) k: v,
+    };
+    final acct = <String, num>{
+      if (await w('tst_min') case final num v) 'tst_sec': v * 60,
+      if (await w('light_min') case final num v) 'light_sec': v * 60,
+      if (await w('deep_min') case final num v) 'deep_sec': v * 60,
+      if (await w('rem_min') case final num v) 'rem_sec': v * 60,
+      if (await w('awake_min') case final num v) 'waso_sec': v * 60,
+    };
+    if (scal.isEmpty && acct.isEmpty) return b;
+    final out = Map<String, dynamic>.of(b)..['whoop_overlay'] = true;
+    out['scalars'] = {...?_sub(b, 'scalars'), ...scal};
+    if (acct.isNotEmpty) {
+      final sleep = Map<String, dynamic>.of(_sub(b, 'sleep') ?? const {});
+      final env = Map<String, dynamic>.of(_sub(b, 'sleep.accounting') ?? const {});
+      final val = {...?_sub(b, 'sleep.accounting.value'), ...acct};
+      if (val.containsKey('light_sec') && val.containsKey('deep_sec')) {
+        val['nrem_sec'] = (val['light_sec'] as num) + (val['deep_sec'] as num);
+      }
+      env['value'] = val;
+      sleep['accounting'] = env;
+      out['sleep'] = sleep;
+    }
+    return out;
+  }
 
   /// THE read seam for the compact curve format: every bundle this class serves
   /// comes through here, so downstream readers keep seeing plain [{t,v}] lists
@@ -1882,7 +1925,20 @@ class LocalRepositoryImpl extends LocalRepository {
       };
     }
     final key = _trendKey(metric);
-    final rows = await LocalDb.metricSeries(key);
+    // Days the band measured AND the person imported from WHOOP draw WHOOP's
+    // number (whoop_import keeps it beside Koop's under `whoop_<key>`). Only
+    // what is drawn changes; Koop's own row stays stored for its baselines.
+    final whoop = {
+      for (final r in await LocalDb.metricSeries('whoop_$key'))
+        if (r['value'] is num) r['date'] as String: r['value'] as num,
+    };
+    final rows = [
+      for (final r in await LocalDb.metricSeries(key))
+        if (whoop[r['date']] case final num w)
+          {...r, 'value': w}
+        else
+          r,
+    ];
     // THE PIN WINS. getToday serves the frozen morning headline for readiness,
     // but metric_series is rewritten by every later re-derive of the same day —
     // which is the pin's whole reason for existing — so Readiness detail drew

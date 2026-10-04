@@ -257,6 +257,11 @@ class WhoopImporter {
       'resp': 'whoop_resp_rate',
       'asleepMin': 'whoop_tst_min',
       'effPct': 'whoop_sleep_perf',
+      'inBedMin': 'whoop_in_bed_min',
+      'lightMin': 'whoop_light_min',
+      'deepMin': 'whoop_deep_min',
+      'remMin': 'whoop_rem_min',
+      'awakeMin': 'whoop_awake_min',
     };
     for (final e in keys.entries) {
       final v = f[e.key] as num?;
