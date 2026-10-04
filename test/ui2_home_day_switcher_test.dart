@@ -107,6 +107,27 @@ void main() {
     expect(find.text('70%'), findsOneWidget);
   });
 
+  testWidgets("a day with WHOOP's imported numbers shows them, labelled",
+      (t) async {
+    final app = AppState.forTesting();
+    addTearDown(app.dispose);
+    app.repo = _WhoopRepo();
+    await t.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.light),
+      home: ChangeNotifierProvider<AppState>.value(
+        value: app,
+        child: const Scaffold(body: HomeScreen(hour: 9)),
+      ),
+    ));
+    await _settle(t);
+    await t.tap(find.bySemanticsLabel('Previous day'));
+    await _settle(t);
+    // WHOOP's 44, not Koop's own 42, and the screen says whose it is.
+    expect(find.text('44%'), findsOneWidget);
+    expect(find.text('42%'), findsNothing);
+    expect(find.textContaining("WHOOP's numbers"), findsOneWidget);
+  });
+
   testWidgets('a past day with nothing recorded says so, not "sync the band"',
       (t) async {
     final app = AppState.forTesting();
@@ -154,4 +175,14 @@ class _EmptyPastRepo extends LocalRepository {
   Future<Map<String, dynamic>> getDayStrain(String date) async => const {};
   @override
   Future<Map<String, dynamic>> getDaySleepV2(String date) async => const {};
+}
+
+/// Yesterday has WHOOP's imported numbers beside Koop's own.
+class _WhoopRepo extends _Repo {
+  @override
+  Future<Map<String, dynamic>> getDayOverview(String date) async => {
+        'readiness': 42,
+        'resting_hr': 60,
+        'whoop': {'readiness': 44.0, 'rhr': 58.0, 'strain': 13.8},
+      };
 }

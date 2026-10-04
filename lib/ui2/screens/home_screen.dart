@@ -1728,6 +1728,11 @@ class HomeData {
   /// `getDayTimeline(today)`: the day's sleep window and sessions.
   final Map<String, dynamic> timeline;
 
+  /// True when this past day's rings show WHOOP's imported numbers (the
+  /// band measured it too; Koop's own stay stored and feed its baselines).
+  /// The screen says so under the band line.
+  final bool whoopNumbers;
+
   const HomeData({
     this.series = const {},
     this.timeline = const {},
@@ -1752,6 +1757,7 @@ class HomeData {
     this.illnessDay,
     this.illnessZ,
     this.insightsStale,
+    this.whoopNumbers = false,
   });
 
   /// The three illness fields, replaced together. Test-facing sugar, and they
@@ -1781,6 +1787,7 @@ class HomeData {
     illnessDay: day,
     illnessZ: z,
     insightsStale: insightsStale,
+    whoopNumbers: whoopNumbers,
   );
 
   /// A day OTHER than today, for the Home day switcher.
@@ -1817,17 +1824,21 @@ class HomeData {
     final overview = await repo.getDayOverview(date);
     final strain = await repo.getDayStrain(date);
     final sleep = await repo.getDaySleepV2(date);
+    // WHOOP's imported numbers, where the person has them for this day, are
+    // what the rings show (labelled); otherwise Koop's own.
+    final w = overview['whoop'] is Map ? overview['whoop'] as Map : const {};
     return HomeData(
+      whoopNumbers: w.isNotEmpty,
       series: await _dashSeries(repo),
       name: profile['name']?.toString(),
       dayId: date,
-      readiness: metricOf(overview['readiness']),
-      rhr: metricOf(overview['resting_hr']),
-      strain: metricOf(strain['strain']),
+      readiness: metricOf(w['readiness'] ?? overview['readiness']),
+      rhr: metricOf(w['rhr'] ?? overview['resting_hr']),
+      strain: metricOf(w['strain'] ?? strain['strain']),
       steps: metricOf(strain['steps']),
       calories: metricOf(strain['calories']),
       caloriesTotal: metricOf(strain['calories_total']),
-      sleepMin: metricOf(sleep['duration_min']),
+      sleepMin: metricOf(w['tst_min'] ?? sleep['duration_min']),
       stepGoal: (profile['step_goal'] as num?)?.toInt() ?? kDefaultStepGoal,
     );
   }
@@ -2459,6 +2470,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
               onTap: () => go(c, const MyDevices()),
             ),
           ),
+          if (d.whoopNumbers)
+            Padding(
+              padding: const EdgeInsets.only(top: S.x2),
+              child: Text(
+                "Rings show WHOOP's numbers for this day, from your WHOOP import.",
+                textAlign: TextAlign.center,
+                style: F.cap.copyWith(color: p.ink3),
+              ),
+            ),
           // ── how far the data reaches · the coach · Customize ──
           Padding(
             padding: const EdgeInsets.only(bottom: S.x2),

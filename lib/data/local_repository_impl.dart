@@ -1571,10 +1571,19 @@ class LocalRepositoryImpl extends LocalRepository {
   @override
   Future<Map<String, dynamic>> getDayOverview(String date) async {
     final b = await _bundleForDate(date);
-    if (b == null) return const {};
+    // WHOOP's own numbers for a day the band also measured (whoop_import keeps
+    // them beside Koop's, never in place of them). Home's day view shows them
+    // in the rings, labelled as WHOOP's; Koop's baselines never read them.
+    final whoop = <String, double>{};
+    for (final k in const ['readiness', 'rhr', 'strain', 'tst_min']) {
+      final v = await LocalDb.metricValueOn(date, 'whoop_$k');
+      if (v != null) whoop[k] = v;
+    }
+    if (b == null && whoop.isEmpty) return const {};
     return {
-      'readiness': _scalar(b, 'readiness'),
-      'resting_hr': _scalar(b, 'rhr')?.round(),
+      'readiness': b == null ? null : _scalar(b, 'readiness'),
+      'resting_hr': b == null ? null : _scalar(b, 'rhr')?.round(),
+      if (whoop.isNotEmpty) 'whoop': whoop,
     };
   }
 
