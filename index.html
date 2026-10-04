@@ -156,7 +156,7 @@ body[data-tab=overview] main>.stats{display:none}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js"></script>
 <script>
 "use strict";
-const KEYS=["readiness","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min","awakenings","sol_min"];
+const KEYS=["readiness","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min","awakenings","sol_min","whoop_readiness","whoop_rmssd","whoop_rhr","whoop_strain","whoop_resp_rate","whoop_tst_min","whoop_sleep_perf"];
 const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 let liveDb=null,data={},tab="recovery",range=1,day=null,chart,donut,sri=null,sriDay=null,sess=null;
 const iso=t=>t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
@@ -293,7 +293,7 @@ let focus=null; // a statistic picked to chart: {k,label,dp,u}
 function statsGrid(rows,cur,was){document.getElementById("st").innerHTML=rows.map(([l,now,before,dp,better,u,k])=>{
   let arr="";if(now!=null&&before!=null&&Math.abs(now-before)>1e-9){const up=now>before,good=better===0?null:(up===(better>0));
     arr=`<span class="arrow" style="color:${good==null?css("--ink3"):good?css("--up"):css("--down")}">${up?"▲":"▼"}</span>`;}
-  return `<div class="stat${k&&focus?.k===k?" sel":""}"${k?` data-k="${k}" data-l="${l}" data-dp="${dp}" data-u="${u??""}" title="Chart ${l} over time"`:""}><div class="l">${l}</div><div class="v">${fmt(null,now,dp,u)}${arr}</div><div class="p">${fmt(null,before,dp,u)}</div></div>`;}).join("");}
+  return `<div class="stat${k&&focus?.k===k?" sel":""}"${k?` data-k="${k}" data-l="${l}" data-dp="${dp}" data-u="${u??""}" title="Chart ${l} over time"`:""}><div class="l">${l}</div><div class="v">${fmt(null,now,dp,u)}${arr}</div><div class="p">${fmt(null,before,dp,u)}</div>${k&&range===1&&get("whoop_"+k,day)!=null?`<div class="p" style="color:#0093e7;font-weight:600" title="WHOOP's own number for this day, from your WHOOP export">WHOOP ${fmt(null,get("whoop_"+k,day),dp,u)}</div>`:""}</div>`;}).join("");}
 
 const ampm=t=>{const x=new Date(t*1000);let h=x.getHours();const ap=h<12?"am":"pm";h=h%12||12;return `${h}:${String(x.getMinutes()).padStart(2,"0")}${ap}`;};
 const ICON={
