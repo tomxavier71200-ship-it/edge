@@ -115,7 +115,7 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 .sarrow{width:38px;border:0;background:#e3e6e9;font-size:22px;color:var(--ink2);cursor:pointer}
 .sarrow:hover{background:#d7dbdf}.sarrow:disabled{opacity:.35;cursor:default}
 .smid{flex:1;min-width:0;display:flex;flex-direction:column}
-#scrub{width:100%;height:96px;display:block;cursor:pointer}
+#scrub{width:100%;height:96px;display:block;cursor:pointer;touch-action:pan-y;user-select:none}
 .slabels{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid #c9cdd1;background:#fff}
 .slabels button{border:0;border-left:1px solid #e3e6e9;background:none;font:600 11px var(--display);color:var(--ink);padding:7px 2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .slabels button:hover{background:#f4f6f7}.slabels button.sel{color:#c3c9cf;background:#fafbfb}
@@ -231,7 +231,7 @@ async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuff
   // Consistency (SRI) exists only as the latest cross-day value, so it is shown for the newest day only.
   sri=null;sriDay=null;try{const r=db.exec("SELECT payload_json,updated_at FROM baselines WHERE key='crossday'");
     if(r[0]){const v=JSON.parse(r[0].values[0][0])?.regularity?.value?.sri;if(typeof v==="number")sri=v;}}catch{}
-  liveDb?.close();liveDb=db;curveCache.clear(); // kept open: curves and workouts are read per day
+  liveDb?.close();liveDb=db;curveCache.clear();dcCache.clear(); // kept open: curves and workouts are read per day
   return {d,name};}
 
 // ---------- per-day reads ----------
@@ -330,12 +330,12 @@ Chart.register({id:"crosshair",afterDatasetsDraw(c){const a=c.tooltip?.getActive
   const x=a[0].element.x,{top,bottom}=c.chartArea,g=c.ctx;g.save();g.strokeStyle="#9aa3ad";g.lineWidth=1;g.beginPath();g.moveTo(x,top);g.lineTo(x,bottom);g.stroke();g.restore();}});
 
 // One day's heart rate on a real time axis (ticks every 4 hours, local time), 0–225 bpm like WHOOP.
-function drawCurve(pts,on,off,title,vs,ws=[]){const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));document.getElementById("ch-title").textContent=title;
+function drawCurve(pts,on,off,title,vs,ws=[],span=null){const wins=Array.isArray(on)?on:[[on,off]];const inW=p=>ws.some(s=>p.t>=s.start&&p.t<=(s.end||s.start));document.getElementById("ch-title").textContent=title;
   document.getElementById("ch-vs").textContent=pts.length?vs:`${nice(day)} · no heart-rate curve stored for this day`;
-  const inSleep=p=>on!=null&&off!=null&&p.t>=on&&p.t<=off;
+  const inSleep=p=>wins.some(([a,b])=>a!=null&&b!=null&&p.t>=a&&p.t<=b);
   // A minute the band was off is a BREAK in the line and its fill (as on WHOOP), never a bridge.
   const seg=f=>{const out=[];pts.forEach((p,i)=>{if(i&&p.t-pts[i-1].t>300)out.push({x:(p.t+pts[i-1].t)/2,y:null});out.push({x:p.t,y:f(p)?p.v:null});});return out;};
-  const t0=pts[0]?.t??dayBounds(day)[0],t1=pts.at(-1)?.t??dayBounds(day)[1],top=Math.max(225,Math.ceil(Math.max(0,...pts.map(p=>p.v))/25)*25);
+  const t0=span?span[0]:pts[0]?.t??dayBounds(day)[0],t1=span?span[1]:pts.at(-1)?.t??dayBounds(day)[1],top=Math.max(225,Math.ceil(Math.max(0,...pts.map(p=>p.v))/25)*25);
   const look={Asleep:["#7e9fb8","#e9eff4","#7d9bb0"],Awake:["#c3c8cd","#f2f3f4","#9aa2aa"],Workout:["#0093e7","rgba(0,0,0,0)","#0093e7"]};
   const ds=(label,f)=>({label,data:seg(f),borderColor:look[label][0],backgroundColor:look[label][1],fill:label==="Workout"?false:"origin",
     pointRadius:0,pointHoverRadius:4.5,pointHoverBorderWidth:2,pointHoverBorderColor:"#fff",pointHoverBackgroundColor:look[label][2],borderWidth:1,tension:0,spanGaps:false});
@@ -367,13 +367,27 @@ function timeline(items){const box=document.getElementById("bubbles");box.innerH
       <span class="tl-below" style="left:${m}px;color:${it.c}">${it.below}</span>`;});
   box.innerHTML=h;box.querySelectorAll(".tl-badge").forEach(b=>b.addEventListener("click",items[+b.dataset.i].go));}
 
-function overviewDay(){const {pts,on,off}=dayCurve(day);sess=sessionsOn(day);
-  drawCurve(pts,on,off,"Day heart rate",`${nice(day)} · hover the line for each minute · click a badge to open it`,sess);
-  const sp=get("sleep_perf",day),tst=get("tst_min",day),items=[];
-  if(on!=null&&off!=null)items.push({a:on,b:off,c:"#7ba1bb",icon:ICON.sleep,top:sp==null?"":`${Math.round(sp)}<small>%</small>`,below:hm(tst??(off-on)/60),
-    title:`Sleep ${ampm(on)} – ${ampm(off)}`,go:()=>{tab="sleep";focus=null;render();}});
-  sess.forEach((s,i)=>items.push({a:s.start,b:s.end||s.start,c:"#0093e7",icon:sportIcon(s.type),top:"",below:s.strain==null?"—":(+s.strain).toFixed(1),
-    title:`${s.type} ${ampm(s.start)}${s.end?" – "+ampm(s.end):""}`,go:()=>{tab="strain";workout=i;focus=null;render();}}));
+// The zoom window the bottom scrubber's handles set ({a,b} epoch seconds), or null for the
+// whole selected day. It may cross midnight: the chart then joins the days it touches.
+let zoom=null;
+const dcCache=new Map(),dayCurveC=d=>{if(!dcCache.has(d))dcCache.set(d,dayCurve(d));return dcCache.get(d);};
+const zoomable=()=>range===1&&!focus&&workout<0&&tab==="overview";
+const selSpan=()=>zoom&&zoomable()?[zoom.a,zoom.b]:dayBounds(day);
+function overviewDay(){sess=sessionsOn(day);const [A,B]=selSpan(),days=[];
+  for(let d=iso(new Date(A*1000));d<=iso(new Date((B-1)*1000));d=shift(d,1))days.push(d);
+  const pts=[],wins=[],items=[],ss=[];
+  days.forEach(d=>{const c=dayCurveC(d);c.pts.forEach(p=>{if(p.t>=A&&p.t<=B)pts.push(p);});
+    if(c.on!=null&&c.off!=null){wins.push([c.on,c.off]);const sp=get("sleep_perf",d),tst=get("tst_min",d);
+      items.push({a:c.on,b:c.off,c:"#7ba1bb",icon:ICON.sleep,top:sp==null?"":`${Math.round(sp)}<small>%</small>`,below:hm(tst??(c.off-c.on)/60),
+        title:`Sleep ${ampm(c.on)} – ${ampm(c.off)}`,go:()=>{day=d;zoom=null;tab="sleep";focus=null;render();}});}
+    (d===day?sess:sessionsOn(d)).forEach((s,i)=>{ss.push(s);items.push({a:s.start,b:s.end||s.start,c:"#0093e7",icon:sportIcon(s.type),top:"",below:s.strain==null?"—":(+s.strain).toFixed(1),
+      title:`${s.type} ${ampm(s.start)}${s.end?" – "+ampm(s.end):""}`,go:()=>{day=d;zoom=null;tab="strain";workout=i;focus=null;render();}});});});
+  const zoomed=!!(zoom&&zoomable()),hrs=(B-A)/3600;
+  drawCurve(pts,wins,null,zoomed?"Heart rate, zoomed":"Day heart rate",
+    zoomed?`${ampm(A)} – ${ampm(B)}${days.length>1?" (across midnight)":""} · ${hrs<1?Math.round(hrs*60)+" min":hrs.toFixed(1)+" h"} · drag the handles below to change · double-click the strip to reset`
+          :`${nice(day)} · hover the line for each minute · drag the handles in the strip below to zoom in`,ss,[A,B]);
+  if(zoomed)document.getElementById("ch-title").insertAdjacentHTML("beforeend",` <button class="back" id="unzoom">Reset zoom</button>`),
+    document.getElementById("unzoom").addEventListener("click",()=>{zoom=null;render();});
   timeline(items);}
 
 function sleepDay(){const {pts,on,off}=dayCurve(day);const pad=30*60;
@@ -411,18 +425,26 @@ function curveFor(d){if(!curveCache.has(d)){const {pts}=dayCurve(d),b=new Map();
     curveCache.set(d,[...b].map(([k,[s,n]])=>({t:k*600+300,v:s/n})));}
   return curveCache.get(d);}
 let scrubDays=[];
+let scrubW=0;
+// Time <-> x on the 7-day strip: each day one equal column, local midnight to midnight.
+function tx(t){const cw=scrubW/7;for(let i=0;i<scrubDays.length;i++){const [a,b]=dayBounds(scrubDays[i]);if(t<b||i===scrubDays.length-1)return i*cw+Math.max(0,Math.min(1,(t-a)/(b-a)))*cw;}return 0;}
+function xt(x){const cw=scrubW/7,i=Math.max(0,Math.min(6,Math.floor(x/cw))),[a,b]=dayBounds(scrubDays[i]);return a+Math.max(0,Math.min(1,(x-i*cw)/cw))*(b-a);}
 function strip(){const today=iso(new Date());let end=shift(day,1);if(end>today)end=today;
   scrubDays=[];for(let i=6;i>=0;i--)scrubDays.push(shift(end,-i));
   const cv=document.getElementById("scrub"),w=cv.clientWidth,h=cv.clientHeight,r=window.devicePixelRatio||1;if(!w)return;
   cv.width=w*r;cv.height=h*r;const g=cv.getContext("2d");g.scale(r,r);g.clearRect(0,0,w,h);
   const cw=w/7,data=scrubDays.map(curveFor),all=data.flat().map(p=>p.v),lo=40,hi=Math.max(140,...all)+8,Y=v=>h-4-(v-lo)/(hi-lo)*(h-14);
-  scrubDays.forEach((d,i)=>{const [a,b]=dayBounds(d),X=t=>i*cw+(t-a)/(b-a)*cw,sel=d===day,pts=data[i];
-    g.fillStyle=sel?"#ffffff":"#eef0f2";g.fillRect(i*cw,0,cw,h);
-    if(pts.length){g.beginPath();pts.forEach((p,j)=>{const x=X(p.t),y=Y(p.v);j?g.lineTo(x,y):g.moveTo(x,y);});
+  scrubW=w;const [SA,SB]=selSpan(),xa=tx(SA),xb=tx(SB);
+  // Each day's line twice: grey everywhere, then red clipped to the selected window.
+  g.fillStyle="#eef0f2";g.fillRect(0,0,w,h);g.fillStyle="#ffffff";g.fillRect(xa,0,xb-xa,h);
+  for(const sel of [false,true]){g.save();if(sel){g.beginPath();g.rect(xa,0,xb-xa,h);g.clip();}
+    scrubDays.forEach((d,i)=>{const [a,b]=dayBounds(d),X=t=>i*cw+(t-a)/(b-a)*cw,pts=data[i];if(!pts.length)return;
+      g.beginPath();pts.forEach((p,j)=>{const x=X(p.t),y=Y(p.v);j?g.lineTo(x,y):g.moveTo(x,y);});
       g.strokeStyle=sel?"#e5262e":"#a9b1b9";g.lineWidth=sel?1.3:1;g.stroke();
-      g.lineTo(X(pts.at(-1).t),h);g.lineTo(X(pts[0].t),h);g.closePath();g.fillStyle=sel?"rgba(229,38,46,.13)":"rgba(169,177,185,.18)";g.fill();}});
-  const si=scrubDays.indexOf(day);
-  if(si>=0)[si*cw,(si+1)*cw].forEach(x=>{g.fillStyle="#1b2026";g.fillRect(x-.75,0,1.5,h);
+      g.lineTo(X(pts.at(-1).t),h);g.lineTo(X(pts[0].t),h);g.closePath();g.fillStyle=sel?"rgba(229,38,46,.13)":"rgba(169,177,185,.18)";g.fill();});
+    g.restore();}
+  g.strokeStyle="#d5d9dd";g.lineWidth=1;for(let i=1;i<7;i++){g.beginPath();g.moveTo(i*cw+.5,0);g.lineTo(i*cw+.5,h);g.stroke();}
+  if(xb>0&&xa<w)[xa,xb].forEach(x=>{g.fillStyle="#1b2026";g.fillRect(x-.75,0,1.5,h);
     g.fillStyle="#fff";g.strokeStyle="#1b2026";g.lineWidth=1;g.beginPath();g.roundRect(x-5,h/2-11,10,22,3);g.fill();g.stroke();
     g.beginPath();g.moveTo(x-1.5,h/2-5);g.lineTo(x-1.5,h/2+5);g.moveTo(x+1.5,h/2-5);g.lineTo(x+1.5,h/2+5);g.stroke();});
   document.getElementById("slabels").innerHTML=scrubDays.map(d=>`<button data-d="${d}" class="${d===day?"sel":""}">${new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</button>`).join("");
@@ -493,11 +515,34 @@ function focusView(){const {k,label,dp,u}=focus,n=range===1?30:range,ds=[];for(l
 document.getElementById("st").addEventListener("click",e=>{const s=e.target.closest(".stat[data-k]");if(!s)return;
   const k=s.dataset.k;focus=focus?.k===k?null:{k,label:s.dataset.l,dp:+s.dataset.dp,u:s.dataset.u};render();});
 function setRange(r){range=r;document.querySelectorAll("#ranges button").forEach(b=>b.classList.toggle("on",+b.dataset.r===r));render();}
-function goDay(d){if(!d||d>iso(new Date()))return;day=d;workout=-1;render();}
+function goDay(d){if(!d||d>iso(new Date()))return;day=d;workout=-1;zoom=null;render();}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;workout=-1;focus=null;render();}));
 document.getElementById("ranges").addEventListener("click",e=>{const r=e.target.dataset.r;if(r)setRange(+r);});
 document.getElementById("subtabs").addEventListener("click",e=>{const w=e.target.closest("button")?.dataset.w;if(w!=null){workout=+w;render();}});
-document.getElementById("scrub").addEventListener("click",e=>{const r=e.target.getBoundingClientRect();goDay(scrubDays[Math.min(6,Math.floor((e.clientX-r.left)/r.width*7))]);});
+// Dragging on the strip, WHOOP-style: a handle resizes the window (the chart above zooms
+// live), the middle slides it, a plain click opens that day, a double-click resets. The
+// window never shrinks below 30 minutes and never leaves the seven days on the strip.
+(()=>{const cv=document.getElementById("scrub");let drag=null,raf=0;
+  const at=e=>e.clientX-cv.getBoundingClientRect().left,MIN=1800;
+  const edges=()=>{const [a]=dayBounds(scrubDays[0]),[,b]=dayBounds(scrubDays.at(-1));return [a,b];};
+  const redraw=()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{strip();if(zoomable()){chart&&(chart.options.animation=false);overviewDay();}});};
+  cv.addEventListener("pointerdown",e=>{if(!zoomable()&&e.button===0){drag={mode:"click",x0:at(e)};return;}
+    const x=at(e),[A,B]=selSpan(),xa=tx(A),xb=tx(B);
+    drag={mode:Math.abs(x-xa)<=10?"a":Math.abs(x-xb)<=10?"b":x>xa&&x<xb?"move":"click",x0:x,t0:xt(x),A,B,moved:false};
+    if(drag.mode!=="click"){cv.setPointerCapture(e.pointerId);e.preventDefault();}});
+  cv.addEventListener("pointermove",e=>{const x=at(e);
+    if(!drag){if(zoomable()){const [A,B]=selSpan(),xa=tx(A),xb=tx(B);cv.style.cursor=Math.abs(x-xa)<=10||Math.abs(x-xb)<=10?"ew-resize":x>xa&&x<xb?"grab":"pointer";}else cv.style.cursor="pointer";return;}
+    if(drag.mode==="click")return;if(Math.abs(x-drag.x0)>2)drag.moved=true;const t=xt(x),[E0,E1]=edges();
+    if(drag.mode==="a")zoom={a:Math.max(E0,Math.min(t,drag.B-MIN)),b:drag.B};
+    else if(drag.mode==="b")zoom={a:drag.A,b:Math.min(E1,Math.max(t,drag.A+MIN))};
+    else{let d=t-drag.t0;d=Math.max(E0-drag.A,Math.min(E1-drag.B,d));zoom={a:drag.A+d,b:drag.B+d};cv.style.cursor="grabbing";}
+    redraw();});
+  cv.addEventListener("pointerup",e=>{const dr=drag;drag=null;if(!dr)return;
+    if(dr.mode==="click"||!dr.moved){const i=Math.min(6,Math.max(0,Math.floor(at(e)/(scrubW/7))));goDay(scrubDays[i]);return;}
+    // A window that ended up covering exactly the selected day is just "no zoom".
+    const [a,b]=dayBounds(day);if(zoom&&Math.abs(zoom.a-a)<60&&Math.abs(zoom.b-b)<60)zoom=null;
+    if(chart)chart.options.animation={duration:300};render();});
+  cv.addEventListener("dblclick",()=>{if(zoom){zoom=null;render();}});})();
 document.getElementById("slabels").addEventListener("click",e=>goDay(e.target.closest("button")?.dataset.d));
 document.getElementById("sprev").addEventListener("click",()=>goDay(shift(day,-1)));
 document.getElementById("snext").addEventListener("click",()=>goDay(shift(day,1)));
