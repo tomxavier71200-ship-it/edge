@@ -241,6 +241,31 @@ class WhoopImporter {
     });
   }
 
+  /// WHOOP's own numbers for a day the band ALSO measured, kept beside Koop's
+  /// under separate `whoop_*` keys so the two can be compared. They never
+  /// feed a Koop score, baseline or ring: nothing reads these keys except a
+  /// side-by-side "WHOOP said" view. Absent fields stay absent.
+  static Future<void> _writeWhoopReference(
+    String date,
+    Map<String, dynamic> f,
+  ) async {
+    const keys = {
+      'recovery': 'whoop_readiness',
+      'rmssd': 'whoop_rmssd',
+      'rhr': 'whoop_rhr',
+      'strain': 'whoop_strain',
+      'resp': 'whoop_resp_rate',
+      'asleepMin': 'whoop_tst_min',
+      'effPct': 'whoop_sleep_perf',
+    };
+    for (final e in keys.entries) {
+      final v = f[e.key] as num?;
+      if (v != null) {
+        await LocalDb.putMetricSeriesValue(date, e.value, v.toDouble());
+      }
+    }
+  }
+
   static Future<_DayWrite> _buildAndWriteDay(
     String date,
     Map<String, dynamic> f,
@@ -252,7 +277,10 @@ class WhoopImporter {
     // `finalized: true` then locked the day so DerivationEngine could never
     // rebuild it from raw. The guard now lives in LocalDb so the other three
     // import paths share it rather than each forgetting it.
-    if (await LocalDb.isMeasuredDay(date)) return _DayWrite.keptExisting;
+    if (await LocalDb.isMeasuredDay(date)) {
+      await _writeWhoopReference(date, f);
+      return _DayWrite.keptExisting;
+    }
 
     final recovery = f['recovery'] as num?;
     final rhr = f['rhr'] as num?;

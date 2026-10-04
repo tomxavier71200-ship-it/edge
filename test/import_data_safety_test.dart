@@ -99,6 +99,15 @@ void main() {
       expect(await _metric(_day, 'readiness'), 91.0);
       // …and the day was NOT force-finalized out of the derivation engine.
       expect((row['finalized'] as num).toInt(), 0);
+      // WHOOP's own numbers are kept BESIDE them, under their own keys, for a
+      // side-by-side comparison — never in place of the measured ones.
+      expect(await _metric(_day, 'whoop_readiness'), 42.0);
+      expect(await _metric(_day, 'whoop_rhr'), 70.0);
+      expect(await _metric(_day, 'whoop_rmssd'), 19.0);
+      expect(await _metric(_day, 'whoop_strain'), 7.5);
+      expect(await _metric(_day, 'whoop_tst_min'), 300.0);
+      expect(await _metric(_day, 'whoop_resp_rate'), isNull,
+          reason: 'a field absent from the export stays absent');
     });
 
     test('writes into a genuinely empty day', () async {
