@@ -286,10 +286,13 @@ Widget syncedThroughLine(
 /// else "Your band". Null when nothing is paired.
 String? bandNameOf(BuildContext c) {
   try {
-    final a = c.watch<AppState>();
-    if (!a.isPaired) return null;
-    if (a.pairedIsMaverick) return 'WHOOP MG';
-    return bandLabelFor(a.device.generation) ?? 'Your band';
+    // `select`, not `watch`: watching rebuilt all of Home on AppState's
+    // ~1 Hz heartbeat during live HR. The name changes only with these three.
+    final (paired, mg, gen) = c.select<AppState, (bool, bool, String?)>(
+        (a) => (a.isPaired, a.pairedIsMaverick, a.device.generation));
+    if (!paired) return null;
+    if (mg) return 'WHOOP MG';
+    return bandLabelFor(gen) ?? 'Your band';
   } catch (_) {
     return null;
   }
@@ -1181,13 +1184,25 @@ class MiniDials extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: S.x2),
-                          Text(
-                            r.label.toUpperCase(),
-                            style: F.over.copyWith(
-                              color: p.ink2,
-                              letterSpacing: 1.4,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                r.label.toUpperCase(),
+                                style: F.over.copyWith(
+                                  color: p.ink2,
+                                  letterSpacing: 1.4,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              // An early estimate or rough guide keeps its
+                              // label here too, so it never reads as the
+                              // settled score once the big ring scrolls away.
+                              if (r.early)
+                                Text(r.sub,
+                                    style: F.cap.copyWith(color: p.ink3)),
+                            ],
                           ),
                         ],
                       ),
@@ -1815,24 +1830,40 @@ class HomeData {
     return out;
   }
 
+  /// [series] is the dashboard history already on screen: it does not depend
+  /// on the day, so a day switch reuses it instead of re-reading 13 charts.
   static Future<HomeData> loadForDay(
     LocalRepository repo,
     String date, [
     AppLocalizations? l,
+    Map<String, List<ChartPoint>>? series,
   ]) async {
-    final profile = await repo.getProfile();
-    final overview = await repo.getDayOverview(date);
-    final strain = await repo.getDayStrain(date);
-    final sleep = await repo.getDaySleepV2(date);
+    // Independent reads, run together.
+    final r = await Future.wait<Map<String, dynamic>>([
+      repo.getProfile(),
+      repo.getDayOverview(date),
+      repo.getDayStrain(date),
+      repo.getDaySleepV2(date),
+    ]);
+    final (profile, overview, strain, sleep) = (r[0], r[1], r[2], r[3]);
     // WHOOP's imported numbers, where the person has them for this day, are
     // what the rings show (labelled); otherwise Koop's own.
     final w = overview['whoop'] is Map ? overview['whoop'] as Map : const {};
     return HomeData(
       whoopNumbers: w.isNotEmpty,
-      series: await _dashSeries(repo),
+      series: series ?? await _dashSeries(repo),
       name: profile['name']?.toString(),
       dayId: date,
       readiness: metricOf(w['readiness'] ?? overview['readiness']),
+      // The same labelled estimates the day showed when it was today, so a
+      // past day does not read "Not scored" where it once read "Early
+      // estimate". Only when neither WHOOP nor the full score has a number.
+      readinessEarly: w['readiness'] == null
+          ? metricOf(overview['readiness_early'])
+          : Metric.empty,
+      readinessRough: w['readiness'] == null
+          ? metricOf(overview['readiness_rough'])
+          : Metric.empty,
       rhr: metricOf(w['rhr'] ?? overview['resting_hr']),
       strain: metricOf(w['strain'] ?? strain['strain']),
       steps: metricOf(strain['steps']),
@@ -2083,6 +2114,19 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
 
   void _openCustomize() => go(context, const CustomizeScreen());
 
+  /// A ring's own screen, for the day the switcher is SHOWING — a past day's
+  /// ring used to open today's screen under a different number. Recovery's
+  /// screen is about today only, so a past day opens its recovery trend.
+  void _openRing(BuildContext c, HomeRingKind k) {
+    final past = _day != null && _day != todayLabel() ? _day : null;
+    go(c, switch (k) {
+      HomeRingKind.recovery =>
+        past == null ? const ReadinessDetail() : const MetricDetail('readiness'),
+      HomeRingKind.strain => DayStrainDetail(day: past),
+      HomeRingKind.sleep => SleepDetail(day: past),
+    });
+  }
+
   /// Which of Peak / Perform / Get by the Tonight card is showing.
   int _planSel = 0;
 
@@ -2109,7 +2153,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   @override
   void reload() => _load();
 
-  Future<void> _load() async {
+  /// [reuseSeries]: only a day switch may keep the dashboard history it has;
+  /// a reload after a sync must re-read it.
+  Future<void> _load({bool reuseSeries = false}) async {
     final repo = repoOf(context);
     if (repo == null) {
       if (mounted) setState(() => _loading = false);
@@ -2121,7 +2167,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       final l = AppLocalizations.of(context);
       final d = day == null || day == todayLabel()
           ? await HomeData.load(repo, l)
-          : await HomeData.loadForDay(repo, day, l);
+          : await HomeData.loadForDay(
+              repo, day, l, reuseSeries ? _d?.series : null);
       final days = await repo.availableDays();
       if (stillNewest(#home, t)) {
         setState(
@@ -2142,7 +2189,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       _day = day;
       _loading = true;
     });
-    _load();
+    _load(reuseSeries: true);
   }
 
   /// The "nothing derived yet" card, upgraded with the one thing it used to
@@ -2561,11 +2608,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             if (RingTrio.has(d))
               RingTrio(
                 d: d,
-                onOpen: (k) => go(c, switch (k) {
-                  HomeRingKind.recovery => const ReadinessDetail(),
-                  HomeRingKind.strain => const DayStrainDetail(),
-                  HomeRingKind.sleep => const SleepDetail(),
-                }),
+                onOpen: (k) => _openRing(c, k),
               )
             else
               Builder(
@@ -2711,11 +2754,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             child: _miniDials
                 ? MiniDials(
                     d: d,
-                    onOpen: (k) => go(c, switch (k) {
-                      HomeRingKind.recovery => const ReadinessDetail(),
-                      HomeRingKind.strain => const DayStrainDetail(),
-                      HomeRingKind.sleep => const SleepDetail(),
-                    }),
+                    onOpen: (k) => _openRing(c, k),
                   )
                 : const SizedBox.shrink(),
           ),

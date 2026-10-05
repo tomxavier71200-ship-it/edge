@@ -13,6 +13,8 @@
 //     against the 30-day mean) and is hidden when there is not enough of
 //     either to compare.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +24,7 @@ import '../../notify/notification_center.dart';
 import '../../notify/notification_prefs.dart';
 import '../../state/app_state.dart';
 import '../../state/prefs.dart';
+import '../../theme/theme_switcher.dart' show themedRoute;
 import '../activity/day_strain.dart' show DayStrainDetail;
 import '../ui2.dart';
 import 'home_screen.dart';
@@ -258,9 +261,8 @@ Widget _dashRow(
 /// scale, 0–100%) on one chart, WHOOP's weekly view. A day with no value is a
 /// gap in its line, never a zero. Null when neither series has two days.
 Widget? strainRecoveryCard(BuildContext c, HomeData d) {
-  final s = lastDays(denseDays(_upTo(d, d.series['strain'] ?? const []), 7), 7);
-  final r =
-      lastDays(denseDays(_upTo(d, d.series['readiness'] ?? const []), 7), 7);
+  final s = _weekTo(d, d.series['strain'] ?? const []);
+  final r = _weekTo(d, d.series['readiness'] ?? const []);
   int count(List<double?> v) => v.where((x) => x != null).length;
   if (count(s.values) < 2 && count(r.values) < 2) return null;
   final p = P.of(c);
@@ -280,6 +282,27 @@ Widget? strainRecoveryCard(BuildContext c, HomeData d) {
       ),
     ]),
   );
+}
+
+/// The seven days ENDING ON THE DAY HOME IS SHOWING, one slot per calendar
+/// day (null = no value), with weekday labels — "Today" only when that day is
+/// today. [denseDays] and [lastDays] both count back from now, which on a
+/// past day showed the wrong week (or, past seven days back, nothing).
+({List<double?> values, List<String> labels}) _weekTo(
+    HomeData d, List<ChartPoint> pts) {
+  final now = DateTime.now();
+  final viewed = d.dayId == null ? null : DateTime.tryParse(d.dayId!);
+  final back = viewed == null ? 0 : math.max(0, calendarDaysBetween(viewed, now));
+  final values = denseDays(pts, 7 + back).sublist(0, 7);
+  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final end = DateTime(now.year, now.month, now.day - back);
+  final labels = [
+    for (var i = 6; i >= 0; i--)
+      i == 0 && back == 0
+          ? 'Today'
+          : wd[DateTime(end.year, end.month, end.day - i).weekday - 1],
+  ];
+  return (values: values, labels: labels);
 }
 
 class _StrainRecovery extends CustomPainter {
@@ -498,14 +521,32 @@ class MonitorTiles extends StatefulWidget {
   State<MonitorTiles> createState() => _MonitorTilesState();
 }
 
+/// Scored 15-minute windows today before the Stress Monitor shows a level:
+/// one window is ~15 minutes of beats, and a confident colour on that is
+/// the thin-data stress reading AGENTS §4.1 calls out. Four is an hour.
+const kStressTileMinWindows = 4;
+
 class _MonitorTilesState extends State<MonitorTiles> {
   /// Latest scored 15-minute window today, 0–100, and when; null for none.
   ({double score, DateTime at})? _stress;
+
+  /// How many windows today scored — the level waits for
+  /// [kStressTileMinWindows].
+  int _scored = 0;
 
   @override
   void initState() {
     super.initState();
     _loadStress();
+  }
+
+  /// Home hands a NEW HomeData after every reload (a sync landed), and this
+  /// State outlives it — so re-read, or the tile keeps its first answer all
+  /// day.
+  @override
+  void didUpdateWidget(MonitorTiles old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.d, widget.d)) _loadStress();
   }
 
   Future<void> _loadStress() async {
@@ -515,38 +556,48 @@ class _MonitorTilesState extends State<MonitorTiles> {
       final today = todayLabel();
       final s = await repo.getDayStress(today);
       ({double score, DateTime at})? last;
+      var scored = 0;
       for (final e in (s['stress_day'] is List ? s['stress_day'] as List : const [])) {
         if (e is! Map || e['t'] is! num || e['score'] is! num) continue;
         final at =
             DateTime.fromMillisecondsSinceEpoch((e['t'] as num).toInt() * 1000);
         if (dayLabelOf(at) != today) continue;
+        scored++;
         last = (score: (e['score'] as num).toDouble(), at: at);
       }
-      if (mounted) setState(() => _stress = last);
+      if (mounted) setState(() => (_stress = last, _scored = scored));
     } catch (_) {}
   }
 
   /// The overnight vitals the Health overview judges, counted the same way
   /// (normalRangeOf: newest point against the earlier nights). Only those with
   /// a range count; none with a range → null, and the tile says so.
-  (int, int)? _inRange() {
+  ///
+  /// Only LAST NIGHT is judged (a point dated today): a newest point from days
+  /// ago is not today's status, and "Within range" on it was a stale verdict
+  /// in the today slot. [ranged] says whether any range exists at all, so the
+  /// tile can tell "no reading today" from "range still building".
+  ({(int, int)? counts, bool ranged}) _inRange() {
     var inside = 0, total = 0;
+    var ranged = false;
     for (final k in const ['hrv', 'resting_hr', 'resp_rate']) {
       final pts = widget.d.series[k] ?? const [];
       final r = normalRangeOf(pts).range;
       if (r == null || pts.isEmpty) continue;
-      total++;
+      ranged = true;
       final newest = pts.reduce((a, b) => b.t > a.t ? b : a);
+      if (daysBehind(newest.t) != 0) continue;
+      total++;
       if (r.contains(newest.v)) inside++;
     }
-    return total == 0 ? null : (inside, total);
+    return (counts: total == 0 ? null : (inside, total), ranged: ranged);
   }
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final hr = _inRange();
-    final s = _stress;
+    final (counts: hr, :ranged) = _inRange();
+    final s = _scored >= kStressTileMinWindows ? _stress : null;
     final v = s == null ? null : s.score / 100 * 3;
     final lvl = v == null ? null : stressLevelOf(v);
     Widget tile(String title, VoidCallback onTap, Widget badge, String word,
@@ -602,9 +653,15 @@ class _MonitorTilesState extends State<MonitorTiles> {
                     size: 18,
                     color: hr == null ? p.ink3 : p.on(all ? C.green : C.orange)),
                 hr == null ? p.ink3 : (all ? C.green : C.orange)),
-            hr == null ? 'Building range' : all ? 'Within range' : 'Outside range',
+            hr == null
+                ? (ranged ? 'No reading' : 'Building range')
+                : all
+                    ? 'Within range'
+                    : 'Outside range',
             hr == null ? p.ink3 : p.on(all ? C.green : C.orange),
-            hr == null ? 'Needs 7 nights' : '${hr.$1}/${hr.$2} metrics',
+            hr == null
+                ? (ranged ? 'Not yet today' : 'Needs 7 nights')
+                : '${hr.$1}/${hr.$2} metrics',
           ),
           const SizedBox(width: S.x3),
           tile(
@@ -618,7 +675,10 @@ class _MonitorTilesState extends State<MonitorTiles> {
             lvl == null ? 'No reading' : kStressLevelWords[lvl],
             lvl == null ? p.ink3 : p.on(kStressLevelColors[lvl]),
             s == null
-                ? 'Not yet today'
+                ? (_scored == 0
+                    ? 'Not yet today'
+                    : 'Needs an hour of wear ($_scored of '
+                        '$kStressTileMinWindows)')
                 : clock(s.at.hour * 60 + s.at.minute),
           ),
         ]),
@@ -664,8 +724,11 @@ class _DetectedWorkoutCardState extends State<DetectedWorkoutCard> {
       padding: const EdgeInsets.only(top: S.x3),
       child: Surface(
         onTap: () async {
-          await Navigator.of(c).push(MaterialPageRoute<void>(
-              builder: (_) => WorkoutSuggestionScreen(preloaded: _all)));
+          // Through themedRoute like every other Home drill-down (see `go`),
+          // awaited so the card re-reads what the review screen changed.
+          await Navigator.of(c).push(themedRoute<void>(
+              (_) => WorkoutSuggestionScreen(preloaded: _all),
+              name: 'WorkoutSuggestionScreen'));
           if (mounted) _load();
         },
         semanticLabel: 'Review a detected workout',

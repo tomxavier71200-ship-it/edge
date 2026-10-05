@@ -103,8 +103,9 @@ class DayStrainData {
 
   bool get hasCurve => curve.any((v) => v != null);
 
-  static Future<DayStrainData> load(LocalRepository repo) async {
-    final asked = todayLabel();
+  /// [date] is a `YYYY-MM-DD` to open (Home's day switcher); null is today.
+  static Future<DayStrainData> load(LocalRepository repo, {String? date}) async {
+    final asked = date ?? todayLabel();
     final s = await repo.getDayStrain(asked);
     if (s.isEmpty) return const DayStrainData();
 
@@ -154,7 +155,7 @@ class DayStrainData {
 
     // The target is about TODAY; a curve that fell back to yesterday gets none.
     (double, double)? target;
-    if (day != null && dayLabelOf(day) == asked) {
+    if (day != null && dayLabelOf(day) == asked && asked == todayLabel()) {
       try {
         final coach = (await repo.getToday())['coach'];
         final t = coach is Map ? coach['strain_target'] : null;
@@ -194,7 +195,10 @@ class DayStrainData {
 class DayStrainDetail extends StatefulWidget {
   /// Preloaded, for goldens. Null means read the repo on open.
   final DayStrainData? data;
-  const DayStrainDetail({super.key, this.data});
+
+  /// The day to open, `YYYY-MM-DD`; null is today.
+  final String? day;
+  const DayStrainDetail({super.key, this.data, this.day});
 
   @override
   State<DayStrainDetail> createState() => _DayStrainDetailState();
@@ -222,7 +226,7 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
       return;
     }
     try {
-      final d = await DayStrainData.load(repo);
+      final d = await DayStrainData.load(repo, date: widget.day);
       if (mounted) setState(() => (_d = d, _loading = false));
     } catch (_) {
       if (mounted) setState(() => _loading = false);

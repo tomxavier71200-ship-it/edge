@@ -1626,6 +1626,10 @@ class LocalRepositoryImpl extends LocalRepository {
     if (b == null && whoop.isEmpty) return const {};
     return {
       'readiness': b == null ? null : _scalar(b, 'readiness'),
+      // Bundle-only estimates (null whenever the full score exists), so a
+      // past day on Home keeps the label it had when it was today.
+      'readiness_early': b == null ? null : _scalar(b, 'readiness_early'),
+      'readiness_rough': b == null ? null : _scalar(b, 'readiness_rough'),
       'resting_hr': b == null ? null : _scalar(b, 'rhr')?.round(),
       if (whoop.isNotEmpty) 'whoop': whoop,
     };
