@@ -392,10 +392,14 @@ class _SignalPriorityScreenState extends State<SignalPriorityScreen> {
                         ReorderableListView(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          onReorderItem: (from, to) async {
+                          // `onReorderItem` replaces this only from Flutter
+                          // 3.47; CI builds on 3.41.6, which lacks it.
+                          // ignore: deprecated_member_use
+                          onReorder: (from, to) async {
                             final ids = [...?_order[sig]];
-                            // onReorderItem's `to` is already the index AFTER removal.
-                            ids.insert(to, ids.removeAt(from));
+                            // ReorderableListView's `to` is the index BEFORE removal.
+                            ids.insert(
+                                to > from ? to - 1 : to, ids.removeAt(from));
                             try {
                               await LocalDb.setSignalPriority(sig, ids);
                             } catch (_) {
