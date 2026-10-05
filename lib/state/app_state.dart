@@ -99,6 +99,7 @@ import '../notify/device_alerts.dart';
 import '../notify/notification_relay.dart';
 import '../notify/notification_service.dart';
 import '../notify/tap_router.dart';
+import '../notify/wear_reminder.dart';
 import '../notify/water_buzzer.dart';
 import '../sync/background_sync.dart' show checkSyncStaleness;
 import '../sync/edge_tracking.dart';
@@ -263,6 +264,7 @@ class AppState extends ChangeNotifier {
 
   DeviceState get device => engine.state;
   final DeviceAlerts _deviceAlerts = DeviceAlerts();
+  final WearReminder _wearReminder = WearReminder();
 
   /// Band-gesture → action mapping (double-tap, etc.). Exposed for the settings UI.
   final GestureSettings gestureSettings = GestureSettings();
@@ -1560,6 +1562,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _syncQuietTimer?.cancel();
     _syncQuietTimer = null;
+    _wearReminder.dispose();
     _disposed = true;
     _ecg?.dispose();
     _ecgTransport?.dispose();
@@ -3979,6 +3982,12 @@ class AppState extends ChangeNotifier {
       batteryPct: s.batteryPct,
       charging: s.charging,
       chargingTs: s.chargingTs,
+    );
+    // "Put Koop back on" after 20 min off the wrist (connected only).
+    _wearReminder.onDeviceState(
+      connected: s.connection == 'connected',
+      wristOn: s.wristOn,
+      charging: s.charging,
     );
     final roundedPct = s.batteryPct?.round();
     if (roundedPct != _storedBatteryPct ||
