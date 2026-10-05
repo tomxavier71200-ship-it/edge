@@ -21,6 +21,13 @@ import 'home_screen.dart' show clock, hm;
 /// One 15-minute reading on the 0–3 scale.
 typedef StressReading = ({DateTime at, double v});
 
+/// Scored 15-minute windows today before any screen states a stress LEVEL
+/// for the day (Home's tile, the Health stress gauge). One window is about
+/// 15 minutes of beats, and a confident level on that is the thin-data
+/// stress reading AGENTS §4.1 calls out. Four is an hour. The individual
+/// readings still draw as what they are.
+const kStressMinWindows = 4;
+
 /// A span the day's timeline marks: sleep, or a workout.
 typedef Span = ({int from, int to});
 

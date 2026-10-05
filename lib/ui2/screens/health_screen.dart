@@ -761,6 +761,31 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         onFix: syncOf(c),
         icon: LucideIcons.activity,
       ));
+    } else if (scored.length < kStressMinWindows) {
+      // Real readings, but too few to state the day's level: show them as
+      // what they are, with the count, and no gauge or verdict.
+      out.addAll([
+        StatusCard(
+          'Not enough for a stress level yet',
+          '${scored.length} of $kStressMinWindows readings so far today. '
+              'A level needs about an hour of wear; the readings below are '
+              'each 15 minutes.',
+          icon: LucideIcons.activity,
+        ),
+        Section(
+          'Today',
+          Surface(
+            child: StressLine(
+              readings: [
+                for (final b in scored) (at: b.at, v: b.score! / 100 * 3),
+              ],
+              sleep: _sSpans.sleep,
+              work: _sSpans.work,
+              day: DateTime.now(),
+            ),
+          ),
+        ),
+      ]);
     } else {
       final last = scored.last;
       final v = last.score! / 100 * 3;

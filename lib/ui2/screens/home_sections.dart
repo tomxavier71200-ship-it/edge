@@ -34,6 +34,7 @@ import 'log_workout.dart'
     show LogWorkout, Suggestion, WorkoutSuggestionScreen, activeSuggestions;
 import 'metric_detail.dart' show MetricDetail, specOf;
 import 'sleep_detail.dart';
+import 'stress_detail.dart' show kStressMinWindows;
 
 /// Days a dashboard average needs before it exists.
 const kBaselineMin = 4;
@@ -521,17 +522,12 @@ class MonitorTiles extends StatefulWidget {
   State<MonitorTiles> createState() => _MonitorTilesState();
 }
 
-/// Scored 15-minute windows today before the Stress Monitor shows a level:
-/// one window is ~15 minutes of beats, and a confident colour on that is
-/// the thin-data stress reading AGENTS §4.1 calls out. Four is an hour.
-const kStressTileMinWindows = 4;
-
 class _MonitorTilesState extends State<MonitorTiles> {
   /// Latest scored 15-minute window today, 0–100, and when; null for none.
   ({double score, DateTime at})? _stress;
 
   /// How many windows today scored — the level waits for
-  /// [kStressTileMinWindows].
+  /// [kStressMinWindows].
   int _scored = 0;
 
   @override
@@ -597,7 +593,7 @@ class _MonitorTilesState extends State<MonitorTiles> {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final (counts: hr, :ranged) = _inRange();
-    final s = _scored >= kStressTileMinWindows ? _stress : null;
+    final s = _scored >= kStressMinWindows ? _stress : null;
     final v = s == null ? null : s.score / 100 * 3;
     final lvl = v == null ? null : stressLevelOf(v);
     Widget tile(String title, VoidCallback onTap, Widget badge, String word,
@@ -678,7 +674,7 @@ class _MonitorTilesState extends State<MonitorTiles> {
                 ? (_scored == 0
                     ? 'Not yet today'
                     : 'Needs an hour of wear ($_scored of '
-                        '$kStressTileMinWindows)')
+                        '$kStressMinWindows)')
                 : clock(s.at.hour * 60 + s.at.minute),
           ),
         ]),

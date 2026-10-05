@@ -1624,7 +1624,11 @@ class LocalRepositoryImpl extends LocalRepository {
         if (all[k] case final double v) k: v,
     };
     if (b == null && whoop.isEmpty) return const {};
+    // The day's sleep performance as stored on the day itself (the coach's
+    // share of need slept; only days derived since `sleep_perf` exists).
+    final sleepPerf = await LocalDb.metricValueOn(date, 'sleep_perf');
     return {
+      'sleep_perf': ?sleepPerf,
       'readiness': b == null ? null : _scalar(b, 'readiness'),
       // Bundle-only estimates (null whenever the full score exists), so a
       // past day on Home keeps the label it had when it was today.

@@ -1382,6 +1382,21 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
     case HomeRingKind.sleep:
       final v = d.sleepMin.value;
       final need = d.sleepNeedMin.value;
+      // A past day has no live need, but may have its own stored performance.
+      final perf = d.sleepPerf.value;
+      if (v != null && (need == null || need <= 0) && perf != null) {
+        return _RingState(
+          k,
+          l?.homeRingSleep ?? 'Sleep',
+          LucideIcons.moon,
+          C.sleep,
+          value: '${perf.round()}%',
+          sub: hm(v),
+          frac: perf / 100,
+          n: perf.toDouble(),
+          fmt: (x) => '${x.round()}%',
+        );
+      }
       return v == null
           ? _gap(
               k,
@@ -1706,6 +1721,11 @@ class HomeData {
 
   final int stepGoal;
   final Metric sleepNeedMin;
+
+  /// A PAST day's stored sleep performance (0–100), for the sleep ring when
+  /// there is no live sleep need to divide by. Empty on today and on days
+  /// derived before `sleep_perf` was stored.
+  final Metric sleepPerf;
   final Metric bedtime;
   final Map<String, dynamic>? strainTarget;
 
@@ -1765,6 +1785,7 @@ class HomeData {
     this.strain = Metric.empty,
     this.stepGoal = kDefaultStepGoal,
     this.sleepNeedMin = Metric.empty,
+    this.sleepPerf = Metric.empty,
     this.bedtime = Metric.empty,
     this.strainTarget,
     this.heldOverNight,
@@ -1795,6 +1816,7 @@ class HomeData {
     strain: strain,
     stepGoal: stepGoal,
     sleepNeedMin: sleepNeedMin,
+    sleepPerf: sleepPerf,
     bedtime: bedtime,
     strainTarget: strainTarget,
     heldOverNight: heldOverNight,
@@ -1870,6 +1892,11 @@ class HomeData {
       calories: metricOf(strain['calories']),
       caloriesTotal: metricOf(strain['calories_total']),
       sleepMin: metricOf(w['tst_min'] ?? sleep['duration_min']),
+      // Koop's own performance only beside Koop's own duration: under a
+      // WHOOP duration it would be a share of a different night's number.
+      sleepPerf: w['tst_min'] == null
+          ? metricOf(overview['sleep_perf'])
+          : Metric.empty,
       stepGoal: (profile['step_goal'] as num?)?.toInt() ?? kDefaultStepGoal,
     );
   }
