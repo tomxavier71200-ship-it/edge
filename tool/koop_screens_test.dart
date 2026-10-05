@@ -7,7 +7,6 @@
 
 import 'dart:math' as math;
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -17,8 +16,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/data/day_label.dart';
 import 'package:openstrap_edge/models/metric.dart';
 import 'package:openstrap_edge/ui2/screens/home_sections.dart';
-import 'package:openstrap_edge/ui2/screens/metric_detail.dart';
-import 'package:openstrap_edge/ui2/screens/readiness_detail.dart';
 import 'package:openstrap_edge/ui2/screens/streak_screen.dart';
 import 'package:openstrap_edge/ui2/screens/more_screen.dart';
 import 'package:openstrap_edge/ui2/screens/sleep_whoop.dart';

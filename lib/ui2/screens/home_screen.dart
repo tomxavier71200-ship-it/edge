@@ -2129,8 +2129,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         );
       }
     } catch (_) {
-      if (stillNewest(#home, t))
+      if (stillNewest(#home, t)) {
         setState(() => (_loading = false, _failed = true));
+      }
     }
   }
 

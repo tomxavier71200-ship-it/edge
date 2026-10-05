@@ -29,7 +29,7 @@ const kMonthMinDays = 14;
 /// Recorded days a week needs — the same floor as a dashboard average.
 const kWeekMinDays = 4;
 
-typedef _Pts = List<({int t, double v})>;
+typedef MonthPoints = List<({int t, double v})>;
 
 /// One metric over one period (local days).
 class MonthStat {
@@ -45,7 +45,7 @@ String dayLabelOfSec(int t) =>
 
 /// The points of [pts] whose own local day is in [from, to). Day labels are
 /// ISO dates, so they compare as strings. Pure.
-_Pts inRange(_Pts pts, DateTime from, DateTime to) {
+MonthPoints inRange(MonthPoints pts, DateTime from, DateTime to) {
   final a = dayLabelOf(from), b = dayLabelOf(to);
   return [
     for (final p in pts)
@@ -57,7 +57,7 @@ _Pts inRange(_Pts pts, DateTime from, DateTime to) {
 }
 
 /// The mean over [from, to)'s recorded days, or null under [minDays].
-MonthStat? rangeStat(_Pts pts, DateTime from, DateTime to, int minDays) {
+MonthStat? rangeStat(MonthPoints pts, DateTime from, DateTime to, int minDays) {
   final m = inRange(pts, from, to);
   if (m.length < minDays) return null;
   return MonthStat(
@@ -65,18 +65,18 @@ MonthStat? rangeStat(_Pts pts, DateTime from, DateTime to, int minDays) {
 }
 
 /// The highest point in [from, to), or null when it has none.
-({int t, double v})? rangeMax(_Pts pts, DateTime from, DateTime to) {
+({int t, double v})? rangeMax(MonthPoints pts, DateTime from, DateTime to) {
   final m = inRange(pts, from, to);
   if (m.isEmpty) return null;
   return m.reduce((a, b) => b.v > a.v ? b : a);
 }
 
 // The calendar-month shorthands the monthly test and callers use.
-_Pts inMonth(_Pts pts, int y, int m) =>
+MonthPoints inMonth(MonthPoints pts, int y, int m) =>
     inRange(pts, DateTime(y, m), DateTime(y, m + 1));
-MonthStat? monthStat(_Pts pts, int y, int m) =>
+MonthStat? monthStat(MonthPoints pts, int y, int m) =>
     rangeStat(pts, DateTime(y, m), DateTime(y, m + 1), kMonthMinDays);
-({int t, double v})? monthMax(_Pts pts, int y, int m) =>
+({int t, double v})? monthMax(MonthPoints pts, int y, int m) =>
     rangeMax(pts, DateTime(y, m), DateTime(y, m + 1));
 
 /// Monday of [d]'s week, local.
@@ -108,7 +108,7 @@ class PeriodReport extends StatefulWidget {
 }
 
 class _PeriodReportState extends State<PeriodReport> {
-  Map<String, _Pts>? _series;
+  Map<String, MonthPoints>? _series;
 
   bool get _week => widget.period == ReportPeriod.week;
   int get _min => _week ? kWeekMinDays : kMonthMinDays;
@@ -134,7 +134,7 @@ class _PeriodReportState extends State<PeriodReport> {
 
   Future<void> _load() async {
     final repo = context.read<AppState>().repo;
-    final out = <String, _Pts>{};
+    final out = <String, MonthPoints>{};
     if (repo != null) {
       for (final r in _rows) {
         try {
@@ -203,7 +203,7 @@ class _PeriodReportState extends State<PeriodReport> {
     ]);
   }
 
-  List<Widget> _body(P p, Map<String, _Pts> s, DateTime from, DateTime to) {
+  List<Widget> _body(P p, Map<String, MonthPoints> s, DateTime from, DateTime to) {
     final prevFrom = _shift(from, -1);
     final days = {
       for (final pts in s.values)

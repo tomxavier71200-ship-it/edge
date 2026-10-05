@@ -135,7 +135,7 @@ class ImportedMeasurementImporter {
         startTime: start,
         endTime: end,
       );
-      return LocalDb.putImportedMeasurements(rowsFrom(points));
+      return await LocalDb.putImportedMeasurements(rowsFrom(points));
     } catch (e) {
       debugPrint('[imported_measurement] read: $e');
       return 0;

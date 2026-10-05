@@ -7,7 +7,6 @@
 // files pubspec.yaml bundles.
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
