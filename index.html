@@ -552,13 +552,13 @@ document.getElementById("next").addEventListener("click",()=>goDay(shift(day,1))
 document.getElementById("today").addEventListener("click",()=>goDay(iso(new Date())));
 document.addEventListener("keydown",e=>{if(e.target.matches("input"))return;if(e.key==="ArrowLeft")goDay(shift(day,-1));if(e.key==="ArrowRight")goDay(shift(day,1));});
 let rz;window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(render,150);});
-async function load(blob,label){
+async function load(blob,label,keep=false){const keepDay=keep?day:null;
   status("Reading…");const pass=passphrase(),r=await readBackup(blob,pass);data=r.d;
   try{if(document.getElementById("remember").checked&&pass)localStorage.setItem(PASS_KEY,pass);}catch{}showSaved();
   if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
-  const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=dates.at(-1)||iso(new Date());
-  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;workout=-1;
-  document.getElementById("source").hidden=true;status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);render();}
+  const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=keepDay&&keepDay<=iso(new Date())?keepDay:dates.at(-1)||iso(new Date());
+  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;if(!keep)workout=-1;
+  if(!keep)status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);render();}
 document.getElementById("file").addEventListener("change",()=>document.getElementById("loader").requestSubmit());
 document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const f=document.getElementById("file").files[0];
   if(!f){status("Choose your Koop backup file first.");return;}
@@ -592,11 +592,31 @@ document.getElementById("gsign").addEventListener("click",async()=>{
     status("Downloading your Koop Cloud copy…");
     const blob=await drive(`${DRIVE}/${f.id}?alt=media`,true);
     await load(blob,`Koop Cloud copy saved ${new Date(f.modifiedTime).toLocaleString()}`);
+    cloudAt=f.modifiedTime;cloudLabel();
     document.getElementById("gsign").textContent="Reload from Drive";}
   catch(err){const msg=err.message||String(err);
     // A remembered passphrase that no longer opens the file (changed in the app): forget it and ask.
     if(/Wrong passphrase/.test(msg)&&savedPass()){try{localStorage.removeItem(PASS_KEY);}catch{}showSaved();status("The remembered passphrase no longer opens your Koop Cloud copy. Type the current one.");}
     else status(msg);}});
+// WHOOP-like freshness: once signed in, look at the Drive copy every 2 minutes and,
+// when the phone has uploaded a newer one, reload it in place (same day, same tab).
+// A lapsed Google token is never re-requested from here — a sign-in popup that opens
+// by itself would be blocked anyway — the tag just asks for a click instead.
+let cloudAt=null;
+function cloudLabel(stale){const s=document.getElementById("source");if(!cloudAt){return;}
+  const m=Math.round((Date.now()-new Date(cloudAt))/60000);
+  s.hidden=false;s.style.background=stale?"#fde8e8":"#e6f6ec";s.style.color=stale?"#9b1c1c":"#11663a";
+  s.textContent=stale?"Sign in again to keep syncing":m<1?"Synced just now":m<60?`Synced ${m} min ago`:m<1440?`Synced ${Math.round(m/60)} h ago`:`Synced ${Math.round(m/1440)} d ago`;}
+setInterval(async()=>{if(!token||!cloudAt)return;
+  try{const q=encodeURIComponent("name = 'koop-cloud.kbak' and trashed = false");
+    let r=await fetch(`${DRIVE}?q=${q}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=1&fields=files(id,modifiedTime,size)`,{headers:{Authorization:"Bearer "+token}});
+    if(r.status===401){token=null;cloudLabel(true);return;}if(!r.ok)return;
+    const f=(await r.json()).files?.[0];
+    if(f&&new Date(f.modifiedTime)>new Date(cloudAt)){
+      r=await fetch(`${DRIVE}/${f.id}?alt=media`,{headers:{Authorization:"Bearer "+token}});if(!r.ok)return;
+      await load(await r.blob(),"",true);cloudAt=f.modifiedTime;}
+    cloudLabel();}catch{}},120000);
+setInterval(()=>{if(token)cloudLabel();},30000);
 document.getElementById("forget").addEventListener("click",()=>{try{localStorage.removeItem(PASS_KEY);}catch{}showSaved();document.getElementById("pass").focus();});
 showSaved();if(savedPass())status("Showing example data. Your passphrase is remembered here: click Sign in with Google to open your own data.");
 data=example();day=iso(new Date());render();
