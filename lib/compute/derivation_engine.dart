@@ -5229,7 +5229,13 @@ class DerivationEngine {
       // draw a week of it (WHOOP's weekly trend). Null when the coach had no
       // need or no night — an absent point, never a zero. REPLACE by date: the
       // day's last run wins, as it does for every other series key.
-      await LocalDb.putMetricSeriesValue(builtForDay, 'sleep_perf', sleepPerf);
+      // The coach scores the most recent night it can find, however old, so
+      // only a day with its OWN night (its tst_min) gets the value — otherwise
+      // an unworn night would repeat the last real one in the weekly trend.
+      final ownNight =
+          await LocalDb.metricValueOn(builtForDay, 'tst_min') != null;
+      await LocalDb.putMetricSeriesValue(
+          builtForDay, 'sleep_perf', ownNight ? sleepPerf : null);
       if (dropped.isNotEmpty) {
         // Loud, not debug-only: a dropped field is a metric the user will see
         // as absent, and the reason lives here and nowhere else.

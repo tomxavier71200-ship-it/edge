@@ -87,7 +87,13 @@ a hotspot.
    `decoded_rr` beats in the same batch.
 3. **Never fabricate a metric.** Absent input ⇒ null / `Metric.absent` / "—". No
    imputation, no substituted defaults, no deriving one metric from another as a
-   fallback. Most-violated rule in the repo (§4.1).
+   fallback. Most-violated rule in the repo (§4.1). **One documented
+   exception (Koop fork, owner's explicit choice):** `readiness_rough`
+   (`compute/onehz_pipeline.dart`, `kRoughRhr*`/`kRoughResp*`) scores nights
+   1–4 against adult population references. It must stay labelled "Rough
+   guide", bundle-only (never the `readiness` series, baselines, alerts or
+   exports), and give way to the personal early estimate. No other metric may
+   cite it as precedent.
 4. **Bump `kAlgoVersion`** (`compute/derivation_engine.dart`) whenever any
    analytics *output* changes, including via a sibling re-pin. Rows are immutable
    per version; without a bump nothing recomputes. Add a changelog entry above

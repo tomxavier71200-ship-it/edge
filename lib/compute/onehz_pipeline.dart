@@ -115,7 +115,8 @@ const int kReadinessEarlyMinBaseline = 4;
 /// norms depend on the device and method, so a population value would be a
 /// guess about this band, not about the person. Labelled "Rough guide" in the
 /// UI, never written to the readiness series, and superseded by the early
-/// estimate as soon as four of the person's own nights exist.
+/// estimate as soon as four of the person's own nights exist. This is the ONE
+/// documented exception to the no-substituted-defaults rule (AGENTS.md §3.3).
 const double kRoughRhrMean = 58, kRoughRhrSd = 8; // bpm, sleeping low-30 min
 const double kRoughRespMean = 14.5, kRoughRespSd = 2; // breaths/min asleep
 

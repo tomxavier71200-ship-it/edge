@@ -24,6 +24,14 @@ class Prefs {
     } catch (_) {/* reads fall back to defaults */}
   }
 
+  /// Re-read from disk: picks up keys another isolate (the Android background
+  /// sync) wrote since this cache loaded. Best-effort, like [ensureLoaded].
+  static Future<void> reload() async {
+    try {
+      await _sp?.reload();
+    } catch (_) {}
+  }
+
   /// Whether storage is actually available, i.e. whether a `getX` default is
   /// "the key is unset" or "we cannot see what you chose".
   ///

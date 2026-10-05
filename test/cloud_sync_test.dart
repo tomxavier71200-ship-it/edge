@@ -28,6 +28,13 @@ void main() {
     });
   });
 
+  test('no role until the person picks one: a new phone never sends', () {
+    expect(CloudRole.fromName(''), isNull);
+    expect(CloudRole.fromName(null), isNull);
+    expect(CloudRole.fromName('send'), CloudRole.send);
+    expect(CloudRole.fromName('receive'), CloudRole.receive);
+  });
+
   final now = DateTime(2026, 10, 3, 12);
 
   group('cloudDue', () {

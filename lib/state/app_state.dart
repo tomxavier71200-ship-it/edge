@@ -1735,10 +1735,10 @@ class AppState extends ChangeNotifier {
       // Same signal, for the surfaces that can't listen: home/lock-screen
       // widget, Watch mirror, Siri intents (WidgetService.refresh).
       unawaited(WidgetService.refresh(repo));
-      // Koop Cloud, WHOOP-like: the sync just landed new data, so the sending
-      // phone uploads the full copy now (runIfDue spaces bursts 2 min apart
-      // and is a no-op when Koop Cloud is off or this phone receives).
-      CloudSync.instance.markDirty();
+      // Koop Cloud, WHOOP-like: if this pass followed a drain that stored new
+      // rows, the sending phone uploads the full copy now (runIfDue checks the
+      // data mark, spaces bursts 2 min apart, and is a no-op when Koop Cloud
+      // is off or this phone receives).
       unawaited(CloudSync.instance.runIfDue(importEdgeBackup));
       // A heavy finalize is where a freshly-closed sleep window + recovery for a
       // new physiological day lands — fire the "recovery ready" push off it.

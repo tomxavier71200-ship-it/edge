@@ -20,6 +20,7 @@
 
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:ui' show IsolateNameServer;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -47,8 +48,14 @@ enum CloudRole {
   send,
   receive;
 
-  static CloudRole fromName(String? n) =>
-      CloudRole.values.firstWhere((r) => r.name == n, orElse: () => CloudRole.send);
+  /// Null until the person picks one: a default of `send` let a freshly
+  /// signed-in second phone upload its empty database over the real copy.
+  static CloudRole? fromName(String? n) {
+    for (final r in CloudRole.values) {
+      if (r.name == n) return r;
+    }
+    return null;
+  }
 }
 
 const kCloudOnKey = 'cloud.on';
@@ -69,6 +76,10 @@ const kCloudSendGap = Duration(minutes: 2);
 const kCloudSendEvery = Duration(hours: 24);
 const kCloudCheckEvery = Duration(minutes: 2);
 const kCloudDirtyKey = 'cloud.dirty';
+// The database's data mark ([LocalDb.cloudDataMark]) as of the last upload:
+// "new data" is a mark that moved, not a sync that merely ran.
+const kCloudUpMarkKey = 'cloud.up_mark';
+const _kSendLockName = 'koop.cloud.send';
 
 /// Whether a pass should do anything. Pure, for the tests.
 bool cloudDue(CloudRole role, DateTime now,
@@ -116,7 +127,7 @@ class CloudSync extends ChangeNotifier {
   String? lastError;
 
   bool get on => Prefs.getBool(kCloudOnKey, false);
-  CloudRole get role => CloudRole.fromName(Prefs.getString(kCloudRoleKey, ''));
+  CloudRole? get role => CloudRole.fromName(Prefs.getString(kCloudRoleKey, ''));
   String? get email {
     final e = Prefs.getString(kCloudEmailKey, '');
     return e.isEmpty ? null : e;
@@ -194,6 +205,8 @@ class CloudSync extends ChangeNotifier {
     Prefs.setBool(kCloudOnKey, false);
     Prefs.setString(kCloudEmailKey, '');
     Prefs.setString(kCloudRemoteSeenKey, '');
+    Prefs.setString(kCloudRoleKey, '');
+    Prefs.setString(kCloudUpMarkKey, '');
     Prefs.setInt(kCloudLastUpKey, 0);
     Prefs.setInt(kCloudLastCheckKey, 0);
     await _secure.delete(key: _kPassKey);
@@ -218,9 +231,16 @@ class CloudSync extends ChangeNotifier {
 
   /// Foreground hook: does nothing unless switched on and due.
   Future<void> runIfDue(Future<int> Function(String path) importBackup) async {
-    if (!on || !cloudConfigured || _busy) return;
-    if (!cloudDue(role, DateTime.now(),
-        lastUp: lastUp, lastCheck: lastCheck, dirty: dirty)) {
+    // The Android background sync writes these keys from its own isolate, so
+    // re-read them: a stale cache re-uploaded what it had just sent.
+    await Prefs.reload();
+    notifyListeners();
+    final r = role;
+    if (!on || !cloudConfigured || _busy || r == null) return;
+    if (!cloudDue(r, DateTime.now(),
+        lastUp: lastUp,
+        lastCheck: lastCheck,
+        dirty: r == CloudRole.send && await _hasNewData())) {
       return;
     }
     try {
@@ -237,10 +257,13 @@ class CloudSync extends ChangeNotifier {
   /// merges through the app's import path, which a headless wake does not run.
   Future<void> runSendInBackground() async {
     await Prefs.ensureLoaded();
-    // Called right after a background drain landed data: that is new data.
-    markDirty();
+    await Prefs.reload();
     if (!on || !cloudConfigured || role != CloudRole.send || _busy) return;
-    if (!cloudDue(role, DateTime.now(), lastUp: lastUp, dirty: dirty)) return;
+    // A wake that drained nothing has nothing new to send.
+    if (!cloudDue(CloudRole.send, DateTime.now(),
+        lastUp: lastUp, dirty: await _hasNewData())) {
+      return;
+    }
     try {
       await run((_) async => 0, interactive: false);
     } catch (_) {
@@ -265,8 +288,12 @@ class CloudSync extends ChangeNotifier {
       }
       final token = await _token(interactive: interactive);
       if (token == null) return _fail('Sign in to Google again to keep syncing.');
+      final r = role;
+      if (r == null) {
+        return _fail('Choose whether this phone sends or receives first.');
+      }
       final api = DriveApi(token);
-      return role == CloudRole.send
+      return r == CloudRole.send
           ? await _send(api, pass, interactive: interactive)
           : await _receive(api, pass, importBackup);
     } on DriveException catch (e) {
@@ -283,6 +310,41 @@ class CloudSync extends ChangeNotifier {
     }
   }
 
+  /// The manual flag (a passphrase change) or a data mark that moved since
+  /// the last upload.
+  Future<bool> _hasNewData() async =>
+      dirty ||
+      await LocalDb.cloudDataMark() != Prefs.getString(kCloudUpMarkKey, '');
+
+  /// One upload at a time across the WHOLE process: the Android background
+  /// sync and the foreground app are separate isolates, so `_busy` alone let
+  /// both create a "Koop" folder at once. The name is registered atomically;
+  /// a holder that died without releasing it (its isolate was killed) no
+  /// longer answers the ping, and the lock is taken over.
+  static Future<ReceivePort?> _takeSendLock() async {
+    final port = ReceivePort();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (IsolateNameServer.registerPortWithName(port.sendPort, _kSendLockName)) {
+        port.listen((m) {
+          if (m is SendPort) m.send(true);
+        });
+        return port;
+      }
+      final holder = IsolateNameServer.lookupPortByName(_kSendLockName);
+      if (holder != null) {
+        final reply = ReceivePort();
+        holder.send(reply.sendPort);
+        final alive = await reply.first
+            .timeout(const Duration(seconds: 2), onTimeout: () => false);
+        reply.close();
+        if (alive == true) break;
+      }
+      IsolateNameServer.removePortNameMapping(_kSendLockName);
+    }
+    port.close();
+    return null;
+  }
+
   CloudOutcome _fail(String m) {
     lastError = m;
     return CloudOutcome(false, m);
@@ -296,7 +358,21 @@ class CloudSync extends ChangeNotifier {
         return const CloudOutcome(false, 'Waiting for Wi-Fi.');
       }
     }
+    final lock = await _takeSendLock();
+    if (lock == null) return const CloudOutcome(false, 'Already uploading.');
+    try {
+      return await _sendLocked(api, pass);
+    } finally {
+      IsolateNameServer.removePortNameMapping(_kSendLockName);
+      lock.close();
+    }
+  }
+
+  Future<CloudOutcome> _sendLocked(DriveApi api, String pass) async {
     final gen = _dirtyGen;
+    // Taken BEFORE the export: data landing during it moves the mark again,
+    // so the next pass still sends it.
+    final mark = await LocalDb.cloudDataMark();
     final plain = await LocalDb.exportCopy();
     final enc = '$plain.kbak';
     try {
@@ -316,6 +392,7 @@ class CloudSync extends ChangeNotifier {
       final up = await api.upload(File(enc), folder, existingId: existing?.id);
       Prefs.setInt(kCloudLastUpKey, DateTime.now().millisecondsSinceEpoch);
       if (gen == _dirtyGen) Prefs.setBool(kCloudDirtyKey, false);
+      Prefs.setString(kCloudUpMarkKey, mark);
       // This phone wrote it, so it has "seen" it — switching this phone to
       // receive later must not re-import its own data.
       Prefs.setString(kCloudRemoteSeenKey, up.modified.toIso8601String());

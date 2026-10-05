@@ -152,17 +152,18 @@ class LocalRepositoryImpl extends LocalRepository {
     Map<String, dynamic>? b,
   ) async {
     if (b == null) return null;
-    Future<num?> w(String k) => LocalDb.metricValueOn(date, 'whoop_$k');
+    final w = await LocalDb.whoopValuesOn(date);
+    if (w.isEmpty) return b;
     final scal = <String, num>{
       for (final k in const ['readiness', 'rhr', 'rmssd', 'strain', 'resp_rate'])
-        if (await w(k) case final num v) k: v,
+        if (w[k] case final num v) k: v,
     };
     final acct = <String, num>{
-      if (await w('tst_min') case final num v) 'tst_sec': v * 60,
-      if (await w('light_min') case final num v) 'light_sec': v * 60,
-      if (await w('deep_min') case final num v) 'deep_sec': v * 60,
-      if (await w('rem_min') case final num v) 'rem_sec': v * 60,
-      if (await w('awake_min') case final num v) 'waso_sec': v * 60,
+      if (w['tst_min'] case final num v) 'tst_sec': v * 60,
+      if (w['light_min'] case final num v) 'light_sec': v * 60,
+      if (w['deep_min'] case final num v) 'deep_sec': v * 60,
+      if (w['rem_min'] case final num v) 'rem_sec': v * 60,
+      if (w['awake_min'] case final num v) 'waso_sec': v * 60,
     };
     if (scal.isEmpty && acct.isEmpty) return b;
     final out = Map<String, dynamic>.of(b)..['whoop_overlay'] = true;
@@ -1617,11 +1618,11 @@ class LocalRepositoryImpl extends LocalRepository {
     // WHOOP's own numbers for a day the band also measured (whoop_import keeps
     // them beside Koop's, never in place of them). Home's day view shows them
     // in the rings, labelled as WHOOP's; Koop's baselines never read them.
-    final whoop = <String, double>{};
-    for (final k in const ['readiness', 'rhr', 'strain', 'tst_min']) {
-      final v = await LocalDb.metricValueOn(date, 'whoop_$k');
-      if (v != null) whoop[k] = v;
-    }
+    final all = await LocalDb.whoopValuesOn(date);
+    final whoop = <String, double>{
+      for (final k in const ['readiness', 'rhr', 'strain', 'tst_min'])
+        if (all[k] case final double v) k: v,
+    };
     if (b == null && whoop.isEmpty) return const {};
     return {
       'readiness': b == null ? null : _scalar(b, 'readiness'),

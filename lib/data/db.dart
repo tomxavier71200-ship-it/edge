@@ -9344,6 +9344,30 @@ class LocalDb {
     return (rows.first['value'] as num?)?.toDouble();
   }
 
+  /// Every non-null `whoop_*` value on [date], keyed WITHOUT the prefix — one
+  /// query for the read seam's WHOOP overlay instead of one per key.
+  static Future<Map<String, double>> whoopValuesOn(String date) async {
+    final db = await instance;
+    final rows = await db.rawQuery(
+      "SELECT key, value FROM metric_series WHERE date = ? "
+      "AND key LIKE 'whoop\\_%' ESCAPE '\\' AND value IS NOT NULL",
+      [date],
+    );
+    return {
+      for (final r in rows)
+        (r['key'] as String).substring(6): (r['value'] as num).toDouble(),
+    };
+  }
+
+  /// Koop Cloud's "is there new data" mark: the newest 1 Hz row's rowid
+  /// (INSERT OR REPLACE gives every insert, backfill included, a new one) —
+  /// O(1), and it moves only when a drain or import actually stored rows.
+  static Future<String> cloudDataMark() async {
+    final db = await instance;
+    final r = await db.rawQuery('SELECT MAX(rowid) AS m FROM decoded_onehz');
+    return '${r.first['m'] ?? 0}';
+  }
+
   /// The FROZEN personal movement floor (g, dynAmp units) + when it was frozen.
   ///
   /// Persisted rather than recomputed because a floor that keeps tracking the

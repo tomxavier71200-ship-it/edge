@@ -143,7 +143,8 @@ class _DataScreenState extends State<DataScreen> {
     await CloudSync.instance.setPassphrase(pass);
     try {
       final email = await CloudSync.instance.signIn();
-      return ('Signed in as $email. Use the same passphrase on your other phones.', false);
+      return ('Signed in as $email. Now choose whether this phone has the band. '
+          'Use the same passphrase on your other phones.', false);
     } catch (e) {
       return ('Google sign-in did not finish: $e', true);
     }
@@ -194,22 +195,34 @@ class _DataScreenState extends State<DataScreen> {
             onTap: _busy ? null : () => _run(_cloudOn)),
       ]);
     }
-    final send = cs.role == CloudRole.send;
-    final last = send ? cs.lastUp : cs.remoteSeen;
     return ListenableBuilder(
       listenable: cs,
-      builder: (c, _) => settingsGroup(c, title, [
+      builder: (c, _) {
+        // Read inside the builder so a role pick redraws the group.
+        final send = cs.role == CloudRole.send;
+        final last = send ? cs.lastUp : cs.remoteSeen;
+        return settingsGroup(c, title, [
         SetRow(LucideIcons.user, C.blue, 'Google account',
             value: cs.email ?? '—', chevron: false),
-        SetRow(send ? LucideIcons.cloudUpload : LucideIcons.cloudDownload,
-            C.teal, 'This phone',
-            sub: send
-                ? 'Has the band. Sends its data to Drive'
-                : 'Receives the data from the phone with the band',
-            value: send ? 'Sends' : 'Receives',
-            onTap: _busy
-                ? null
-                : () => cs.setRole(send ? CloudRole.receive : CloudRole.send)),
+        // No default: a new phone picks, so it never uploads over the copy
+        // the phone with the band made.
+        if (cs.role == null) ...[
+          SetRow(LucideIcons.cloudUpload, C.teal, 'This phone has the band',
+              sub: 'It sends its data to Drive',
+              onTap: _busy ? null : () => cs.setRole(CloudRole.send)),
+          SetRow(LucideIcons.cloudDownload, C.teal, 'Another phone has the band',
+              sub: 'This phone receives the data from it',
+              onTap: _busy ? null : () => cs.setRole(CloudRole.receive)),
+        ] else
+          SetRow(send ? LucideIcons.cloudUpload : LucideIcons.cloudDownload,
+              C.teal, 'This phone',
+              sub: send
+                  ? 'Has the band. Sends its data to Drive'
+                  : 'Receives the data from the phone with the band',
+              value: send ? 'Sends' : 'Receives',
+              onTap: _busy
+                  ? null
+                  : () => cs.setRole(send ? CloudRole.receive : CloudRole.send)),
         if (send)
           SetRow(LucideIcons.wifi, C.purple, 'Upload on Wi-Fi only',
               sub: 'Each upload is a full copy of your data',
@@ -232,7 +245,8 @@ class _DataScreenState extends State<DataScreen> {
                       await cs.signOut();
                       return ('Koop Cloud is off on this phone.', false);
                     })),
-      ]),
+        ]);
+      },
     );
   }
   /// The same VACUUM'd snapshot as [_exportDb], sealed with AES-256-GCM under
