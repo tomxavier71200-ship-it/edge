@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Only our own inline code, the two pinned CDN scripts and Google sign-in may run; data may
+     only go to Google. Keeps a stray script from reading the passphrase or the Drive token. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src https://www.googleapis.com https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'none'">
 <title>Koop Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Montserrat:wght@400;600;700&display=swap">
@@ -145,7 +148,7 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 <div class="band"><div class="bar">
   <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span class="calic" id="calic">1</span><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><button class="today" id="today" hidden>Today</button></div>
   <form class="loader" id="loader"><span class="tag" id="source">Example data</span>
-    <span id="passwrap"><input id="pass" type="password" placeholder="Koop Cloud passphrase" autocomplete="current-password" aria-label="Koop Cloud passphrase"><label class="rem"><input type="checkbox" id="remember" checked>Remember</label></span>
+    <span id="passwrap"><input id="pass" type="password" placeholder="Koop Cloud passphrase" autocomplete="current-password" aria-label="Koop Cloud passphrase"><label class="rem"><input type="checkbox" id="remember">Remember</label></span>
     <span id="saved" hidden></span><button type="button" class="forget" id="forget" hidden>Forget passphrase</button>
     <button class="open google" type="button" id="gsign"><svg width="15" height="15" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Sign in with Google</button>
     <label class="filelink" title="Open a Koop backup file instead">Open file<input id="file" type="file" accept=".kbak,.osbk,.db,.gz" hidden></label></form>
@@ -161,8 +164,9 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 <section class="scrub"><div class="scrubin"><div class="scr"><button class="sarrow" id="sprev" aria-label="Previous day">‹</button><div class="smid"><canvas id="scrub" aria-label="Seven days of heart rate; click a day to open it"></canvas><div class="slabels" id="slabels"></div></div><button class="sarrow" id="snext" aria-label="Next day">›</button></div></div></section>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js"></script>
+<!-- Integrity-pinned: a changed CDN file is refused instead of running beside the decrypted data. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js" integrity="sha384-HsZTUvpU2OF6Ji8M1RDRzicqZcrPbL3SJBk+mdTHEDDW2aBGac2IUl5f3I2ZQlHu" crossorigin="anonymous"></script>
 <script>
 "use strict";
 const KEYS=["readiness","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min","awakenings","sol_min","whoop_readiness","whoop_rmssd","whoop_rhr","whoop_strain","whoop_resp_rate","whoop_tst_min","whoop_sleep_perf"];
@@ -254,12 +258,16 @@ function sessionsOn(d){
     let zones=[],hr=[];try{const z=JSON.parse(o.zone_min_json||"[]");if(Array.isArray(z))zones=z;}catch{}
     try{hr=decodeCurve(JSON.parse(o.trace_json||"{}")?.hr);}catch{}
     if(o.status&&/discard|delet|reject/i.test(o.status))return null;
-    const ty=String(o.type||"workout").replace(/_/g," ");
+    // The type is free text from a WHOOP export and lands in innerHTML and a title
+    // attribute below: drop HTML metacharacters here, once, for every place it is shown.
+    const ty=String(o.type||"workout").replace(/_/g," ").replace(/[<>"'&`]/g,"")||"workout";
     return {id:o.id,type:ty[0].toUpperCase()+ty.slice(1),start:secs(o.start_ts),end:secs(o.end_ts),strain:o.strain,max_hr:o.max_hr,avg_hr:o.avg_hr??null,
       calories:o.calories,duration_min:o.duration_min,zones,hr};}).filter(Boolean);}
 
 function status(t){const s=document.getElementById("status");s.textContent=t;s.hidden=!t;}
-// The passphrase can be remembered in THIS browser (the person's choice, on by default), so later
+// The passphrase can be remembered in THIS browser (the person's choice, OFF by default: it is
+// stored as plain text, readable by any script on this origin, which the scripts below are
+// integrity-pinned and CSP-limited to keep to our own), so later
 // visits are one click: Sign in with Google. It is never sent anywhere. Storage can be blocked or
 // empty (private windows); every access is guarded and the field simply asks again.
 const PASS_KEY="koop.passphrase";

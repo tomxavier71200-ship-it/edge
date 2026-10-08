@@ -538,6 +538,9 @@ class AppState extends ChangeNotifier {
       onProgress: onProgress,
     );
     lastNoopImport = res;
+    // Imports never touch the band's 1 Hz table that Koop Cloud's data mark
+    // watches, so say it outright: this is new data to send.
+    CloudSync.instance.markDirty();
     // The rows are durable — tell the screens that read them. Without this an
     // import landed days, sessions and journal rows into a database every live
     // tab had already finished reading, and the only way to see them was to
@@ -571,6 +574,7 @@ class AppState extends ChangeNotifier {
       onProgress: onProgress,
     );
     lastWhoopImport = res;
+    CloudSync.instance.markDirty(); // see importNoopCsv
     bumpInsights(); // see importNoopCsv — imported rows have to reach the tabs
     notifyListeners();
     return res.days;
@@ -590,6 +594,10 @@ class AppState extends ChangeNotifier {
     // truncated backup fails loudly; `gzip.decoder` returns partial output
     // without raising and would restore short while reporting success.
     final counts = await LocalDb.importFromDbFile(path);
+    // New data for a SENDING phone's next upload (see importNoopCsv). A
+    // receiving phone merges through here too; it never sends, so the flag
+    // is inert there.
+    CloudSync.instance.markDirty();
     // Imported rows include derived day_result/metric_series → refresh rollups.
     try {
       await _derive.finalizeImport(_profile);

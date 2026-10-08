@@ -13,7 +13,9 @@ import 'package:flutter/services.dart';
 import '../data/local_repository.dart';
 import '../models/metric.dart';
 import '../models/payloads.dart';
-import '../ui2/screens/home_screen.dart' show hm, readinessBand;
+import '../ui2/screens/home_screen.dart' show hm, pointsOf, readinessBand;
+import '../ui2/screens/home_sections.dart' show recoveryStreak;
+import '../ui2/screens/metric_detail.dart' show specOf;
 
 class WidgetService {
   static const _platform = MethodChannel('openstrap/ios_config');
@@ -83,6 +85,14 @@ class WidgetService {
     try {
       await push(TodayData.fromJson(await repo.getToday()));
     } catch (_) {/* the widget is a mirror; it must never break its source */}
+    // The streak too, from the same readiness series Home counts it from —
+    // this path also runs headless (iOS BGTask, after an Android sync), where
+    // Home's build never does, so the widget's streak went stale.
+    try {
+      final pts =
+          pointsOf(await repo.getChart(specOf('readiness').chartKey));
+      await pushStreak(recoveryStreak(pts, DateTime.now()));
+    } catch (_) {}
   }
 
   /// True when [t] is describing a day that is more than one calendar day
@@ -384,6 +394,10 @@ class WidgetService {
         await HomeWidget.saveWidgetData<int>(k, -1);
       }
       await HomeWidget.saveWidgetData<double>('strain', -1.0);
+      // No streak survives a wipe (0 = not shown); and the change gate must
+      // let the next real streak through.
+      await HomeWidget.saveWidgetData<int>('streak', 0);
+      _lastStreak = null;
       // The three resolved home rings. `state: 2` with no reason and no arc is
       // the honest shape of a wiped database — not a ring reporting zero.
       for (final r in const ['recovery', 'strain', 'sleep']) {

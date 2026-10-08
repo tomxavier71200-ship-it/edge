@@ -1941,13 +1941,21 @@ class LocalRepositoryImpl extends LocalRepository {
       for (final r in await LocalDb.metricSeries('whoop_$key'))
         if (r['value'] is num) r['date'] as String: r['value'] as num,
     };
+    final own = await LocalDb.metricSeries(key);
+    final ownDates = {for (final r in own) r['date']};
     final rows = [
-      for (final r in await LocalDb.metricSeries(key))
+      for (final r in own)
         if (whoop[r['date']] case final num w)
           {...r, 'value': w}
         else
           r,
-    ];
+      // A day the band measured but where Koop's own value for THIS metric
+      // came back empty still has WHOOP's number; draw it rather than a gap.
+      // (whoop_* keys exist only for days the band measured, see
+      // whoop_import's _writeWhoopReference.)
+      for (final e in whoop.entries)
+        if (!ownDates.contains(e.key)) {'date': e.key, 'value': e.value},
+    ]..sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
     // THE PIN WINS. getToday serves the frozen morning headline for readiness,
     // but metric_series is rewritten by every later re-derive of the same day —
     // which is the pin's whole reason for existing — so Readiness detail drew

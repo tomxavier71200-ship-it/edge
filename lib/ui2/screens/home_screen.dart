@@ -39,7 +39,6 @@ import '../../ai/briefing.dart'
         BriefingStore,
         currentBriefingPeriod,
         resolveBriefingToShow;
-import '../../widget/widget_service.dart';
 import '../../data/day_label.dart' show todayLabel, calendarDaysBetween, dayLabelOf;
 import '../../data/db.dart' show DbRebuild;
 import '../../data/journal_fields.dart' show formatMinuteOfDay;
@@ -2100,6 +2099,20 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   int? _streakChecked;
   bool _ignite = false;
 
+  /// The recovery streak for the HomeData on screen, computed once per data
+  /// object: build runs on every scroll and tick, and walking the whole
+  /// readiness series each time was wasted work. The home widget's copy is
+  /// written by WidgetService.refresh, off the build path.
+  HomeData? _streakFor;
+  int _streak = 0;
+  int _streakOf(HomeData d) {
+    if (!identical(_streakFor, d)) {
+      _streakFor = d;
+      _streak = recoveryStreak(d.series['readiness'] ?? const [], DateTime.now());
+    }
+    return _streak;
+  }
+
   bool _igniteFor(int n) {
     if (_streakChecked != n) {
       _streakChecked = n;
@@ -2450,11 +2463,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     // Above the greeting, not below it: if the app had to rebuild the database
     // to start, that outranks anything else this screen has to say today.
     final rebuilt = dbRebuiltCard(dbRebuildOf(c), l);
-    // The home widget's streak follows Home's (written only on a change).
-    if (isToday && widget.data == null) {
-      unawaited(WidgetService.pushStreak(
-          recoveryStreak(d.series['readiness'] ?? const [], DateTime.now())));
-    }
+    // The streak, worked out once per load (see [_streakOf]), not per build.
+    final streak = _streakOf(d);
 
     final list = _refreshable(
       ListView(
@@ -2484,11 +2494,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   () => go(c, const ProfileHome()),
                 ),
                 // The streak: days in a row with a recovery score, from two.
-                if (recoveryStreak(
-                      d.series['readiness'] ?? const [],
-                      DateTime.now(),
-                    )
-                    case final n when n >= 2) ...[
+                if (streak case final n when n >= 2) ...[
                   const SizedBox(width: S.x2),
                   // Ignites once when the streak has grown since last seen;
                   // opens the streak screen.

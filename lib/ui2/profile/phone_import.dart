@@ -33,6 +33,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:openstrap_analytics/onehz.dart' as ana;
 
+import '../../cloud/cloud_sync.dart';
 import '../../data/db.dart';
 import '../../health/health_import_state.dart';
 import '../../health/health_measurement_import.dart';
@@ -169,6 +170,9 @@ class _PhoneImportState extends State<PhoneImport> {
       );
     }
     final n = await importer.sync();
+    // Koop Cloud's data mark only watches the band's table; imported
+    // measurements are new data to send too.
+    if (n > 0) CloudSync.instance.markDirty();
     return n == 0
         ? (
             l?.phoneImportNothingCameBack(storeName) ??

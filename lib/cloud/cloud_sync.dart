@@ -18,6 +18,7 @@
 // the platform keystore; a forgotten passphrase means the cloud copy cannot be
 // opened — the same contract as the encrypted backup, for the same reason.
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:ui' show IsolateNameServer;
@@ -286,7 +287,10 @@ class CloudSync extends ChangeNotifier {
       if (pass == null || pass.isEmpty) {
         return _fail('Set the cloud passphrase first.');
       }
-      final token = await _token(interactive: interactive);
+      // Bounded like every Drive call (see kDriveCallTimeout): an
+      // interactive sign-in gets time for the person to pick an account.
+      final token = await _token(interactive: interactive).timeout(
+          interactive ? const Duration(minutes: 3) : kDriveCallTimeout);
       if (token == null) return _fail('Sign in to Google again to keep syncing.');
       final r = role;
       if (r == null) {
@@ -300,6 +304,8 @@ class CloudSync extends ChangeNotifier {
       return _fail(e.unauthorized
           ? 'Google sign-in expired. Tap Sync now to sign in again.'
           : 'Google Drive refused the request (${e.status}).');
+    } on TimeoutException {
+      return _fail('Google Drive did not answer. It will try again shortly.');
     } catch (e) {
       return _fail('$e');
     } finally {

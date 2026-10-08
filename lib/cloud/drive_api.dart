@@ -17,6 +17,19 @@ const kDriveScope = 'https://www.googleapis.com/auth/drive.file';
 const kDriveFolderName = 'Koop';
 const kDriveFileName = 'koop-cloud.kbak';
 
+/// Every call is bounded: with no limit, a stalled link (a captive Wi-Fi
+/// portal, a VPN dropping packets) never returned, and CloudSync's busy flag
+/// stayed set until the app was killed. A [TimeoutException] fails the pass
+/// like any network error, and the next one retries.
+const kDriveCallTimeout = Duration(seconds: 30);
+
+/// The whole-database upload: generous, since it can be tens of MB on a
+/// slow mobile link.
+const kDriveTransferTimeout = Duration(minutes: 10);
+
+/// A download stalled this long between chunks is dead.
+const kDriveIdleTimeout = Duration(seconds: 60);
+
 const _api = 'https://www.googleapis.com/drive/v3/files';
 const _upload = 'https://www.googleapis.com/upload/drive/v3/files';
 const _folderMime = 'application/vnd.google-apps.folder';
@@ -71,7 +84,7 @@ class DriveApi {
       'pageSize': '1',
       'fields': 'files(id,modifiedTime,size)',
     });
-    final r = await _c.get(uri, headers: _auth);
+    final r = await _c.get(uri, headers: _auth).timeout(kDriveCallTimeout);
     _check(r, r.body);
     final files = (jsonDecode(r.body) as Map)['files'] as List? ?? const [];
     if (files.isEmpty) return null;
@@ -87,11 +100,13 @@ class DriveApi {
   Future<String> folder() async {
     final found = await find(kDriveFolderName, folder: true);
     if (found != null) return found.id;
-    final r = await _c.post(
-      Uri.parse('$_api?fields=id'),
-      headers: {..._auth, 'Content-Type': 'application/json'},
-      body: jsonEncode({'name': kDriveFolderName, 'mimeType': _folderMime}),
-    );
+    final r = await _c
+        .post(
+          Uri.parse('$_api?fields=id'),
+          headers: {..._auth, 'Content-Type': 'application/json'},
+          body: jsonEncode({'name': kDriveFolderName, 'mimeType': _folderMime}),
+        )
+        .timeout(kDriveCallTimeout);
     _check(r, r.body);
     return (jsonDecode(r.body) as Map)['id'] as String;
   }
@@ -116,7 +131,8 @@ class DriveApi {
       'name': kDriveFileName,
       if (existingId == null) 'parents': [parent],
     });
-    final opened = await http.Response.fromStream(await _c.send(start));
+    final opened = await http.Response.fromStream(
+        await _c.send(start).timeout(kDriveCallTimeout));
     _check(opened, opened.body);
     final session = opened.headers['location'];
     if (session == null) throw DriveException(opened.statusCode, 'no upload session');
@@ -125,9 +141,10 @@ class DriveApi {
       ..headers['Content-Length'] = '$len'
       ..contentLength = len;
     final sent = _c.send(put);
-    await put.sink.addStream(src.openRead());
+    await put.sink.addStream(src.openRead()).timeout(kDriveTransferTimeout);
     await put.sink.close();
-    final r = await http.Response.fromStream(await sent);
+    final r = await http.Response.fromStream(
+        await sent.timeout(kDriveTransferTimeout));
     _check(r, r.body);
     final f = jsonDecode(r.body) as Map;
     return DriveFile(
@@ -143,13 +160,14 @@ class DriveApi {
   Future<void> download(String id, File dest) async {
     final req = http.Request('GET', Uri.parse('$_api/$id?alt=media'))
       ..headers.addAll(_auth);
-    final r = await _c.send(req);
+    final r = await _c.send(req).timeout(kDriveCallTimeout);
     if (r.statusCode != 200) {
       throw DriveException(r.statusCode, await r.stream.bytesToString());
     }
     final staging = File('${dest.path}.part');
     try {
-      await r.stream.pipe(staging.openWrite());
+      // Idle limit, not a total one: a slow link finishes, a dead one fails.
+      await r.stream.timeout(kDriveIdleTimeout).pipe(staging.openWrite());
       await staging.rename(dest.path);
     } catch (_) {
       try {
