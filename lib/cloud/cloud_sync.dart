@@ -230,22 +230,32 @@ class CloudSync extends ChangeNotifier {
     return (await acct.authorizationClient.authorizeScopes(const [kDriveScope])).accessToken;
   }
 
-  /// Foreground hook: does nothing unless switched on and due.
-  Future<void> runIfDue(Future<int> Function(String path) importBackup) async {
+  /// Foreground hook: does nothing unless switched on and due. [importWhoop]
+  /// lets a SENDING phone pick up a WHOOP export the web dashboard sent; it
+  /// looks for one every [kCloudCheckEvery] (a metadata request) even when
+  /// there is nothing of its own to upload.
+  Future<void> runIfDue(
+    Future<int> Function(String path) importBackup, {
+    Future<int> Function(List<String> paths)? importWhoop,
+  }) async {
     // The Android background sync writes these keys from its own isolate, so
     // re-read them: a stale cache re-uploaded what it had just sent.
     await Prefs.reload();
     notifyListeners();
     final r = role;
     if (!on || !cloudConfigured || _busy || r == null) return;
-    if (!cloudDue(r, DateTime.now(),
+    final now = DateTime.now();
+    final due = cloudDue(r, now,
         lastUp: lastUp,
         lastCheck: lastCheck,
-        dirty: r == CloudRole.send && await _hasNewData())) {
-      return;
-    }
+        dirty: r == CloudRole.send && await _hasNewData());
+    final check = r == CloudRole.send &&
+        importWhoop != null &&
+        cloudDue(CloudRole.receive, now, lastCheck: lastCheck);
+    if (!due && !check) return;
     try {
-      await run(importBackup, interactive: false);
+      await run(importBackup,
+          importWhoop: importWhoop, interactive: false, upload: due);
     } catch (_) {
       // `run` records the error for the screen; a resume hook must not throw.
     }
@@ -274,9 +284,14 @@ class CloudSync extends ChangeNotifier {
 
   /// One pass in this phone's direction. [interactive] lets Google show its
   /// sign-in again when the token has lapsed — only from a button press.
+  /// A sending phone first imports any WHOOP export the dashboard sent
+  /// ([importWhoop]); with [upload] false it uploads only if that brought
+  /// something in.
   Future<CloudOutcome> run(
     Future<int> Function(String path) importBackup, {
+    Future<int> Function(List<String> paths)? importWhoop,
     bool interactive = true,
+    bool upload = true,
   }) async {
     if (_busy) return const CloudOutcome(false, 'Already syncing.');
     _busy = true;
@@ -297,9 +312,15 @@ class CloudSync extends ChangeNotifier {
         return _fail('Choose whether this phone sends or receives first.');
       }
       final api = DriveApi(token);
-      return r == CloudRole.send
-          ? await _send(api, pass, interactive: interactive)
-          : await _receive(api, pass, importBackup);
+      if (r == CloudRole.receive) return await _receive(api, pass, importBackup);
+      final picked =
+          importWhoop == null ? 0 : await _pickUpWhoop(api, pass, importWhoop);
+      if (!upload && picked == 0) return const CloudOutcome(true, 'Up to date.');
+      final sent = await _send(api, pass, interactive: interactive);
+      return picked == 0 || !sent.ok
+          ? sent
+          : CloudOutcome(true,
+              'Imported $picked WHOOP export${picked == 1 ? '' : 's'} from your Koop Cloud and uploaded.');
     } on DriveException catch (e) {
       return _fail(e.unauthorized
           ? 'Google sign-in expired. Tap Sync now to sign in again.'
@@ -314,6 +335,56 @@ class CloudSync extends ChangeNotifier {
       _busy = false;
       notifyListeners();
     }
+  }
+
+  /// Import every WHOOP export the web dashboard left in Drive > Koop
+  /// ([kDriveWhoopFileName]), through the app's own WHOOP importer, then move
+  /// it to the Drive bin. Returns how many were imported. One that will not
+  /// open (sent under another passphrase) stays put and says so; one that
+  /// opens but is not a WHOOP export is binned with the reason, rather than
+  /// failing again every pass.
+  Future<int> _pickUpWhoop(
+    DriveApi api,
+    String pass,
+    Future<int> Function(List<String> paths) importWhoop,
+  ) async {
+    Prefs.setInt(kCloudLastCheckKey, DateTime.now().millisecondsSinceEpoch);
+    final folder = await api.find(kDriveFolderName, folder: true);
+    if (folder == null) return 0;
+    final files = await api.findAll(kDriveWhoopFileName, parent: folder.id);
+    var n = 0;
+    for (final f in files) {
+      final tmp = await getTemporaryDirectory();
+      final stamp = '${DateTime.now().millisecondsSinceEpoch}-$n';
+      final enc = File('${tmp.path}/whoop-$stamp.kbak');
+      final zip = File('${tmp.path}/whoop-$stamp.zip');
+      try {
+        await api.download(f.id, enc);
+        try {
+          await Isolate.run(() => decryptBackupFile(enc, zip, pass));
+        } catch (_) {
+          lastError = 'A WHOOP export in your Koop Cloud would not open: it '
+              'was sent with a different passphrase than this phone has.';
+          continue;
+        }
+        try {
+          await importWhoop([zip.path]);
+          n++;
+        } catch (e) {
+          lastError = 'A WHOOP export from your Koop Cloud could not be '
+              'imported: $e';
+        }
+        await api.trash(f.id);
+      } finally {
+        // The decrypted export is health data in plaintext.
+        for (final x in [enc, zip]) {
+          try {
+            if (await x.exists()) await x.delete();
+          } catch (_) {}
+        }
+      }
+    }
+    return n;
   }
 
   /// The manual flag (a passphrase change) or a data mark that moved since

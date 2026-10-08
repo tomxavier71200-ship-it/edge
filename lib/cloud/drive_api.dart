@@ -17,6 +17,10 @@ const kDriveScope = 'https://www.googleapis.com/auth/drive.file';
 const kDriveFolderName = 'Koop';
 const kDriveFileName = 'koop-cloud.kbak';
 
+/// A WHOOP export the web dashboard sent, locked with the Koop Cloud
+/// passphrase. The sending phone imports and bins it (CloudSync).
+const kDriveWhoopFileName = 'whoop-import.kbak';
+
 /// Every call is bounded: with no limit, a stalled link (a captive Wi-Fi
 /// portal, a VPN dropping packets) never returned, and CloudSync's busy flag
 /// stayed set until the app was killed. A [TimeoutException] fails the pass
@@ -94,6 +98,42 @@ class DriveApi {
       DateTime.parse(f['modifiedTime'] as String),
       int.tryParse('${f['size']}'),
     );
+  }
+
+  /// Every non-trashed item called [name] in [parent], oldest first (the
+  /// dashboard may have sent more than one WHOOP export before a pickup).
+  Future<List<DriveFile>> findAll(String name, {required String parent}) async {
+    final uri = Uri.parse(_api).replace(queryParameters: {
+      'q': "name = '${name.replaceAll("'", r"\'")}' and trashed = false and "
+          "'$parent' in parents",
+      'spaces': 'drive',
+      'orderBy': 'modifiedTime',
+      'pageSize': '20',
+      'fields': 'files(id,modifiedTime,size)',
+    });
+    final r = await _c.get(uri, headers: _auth).timeout(kDriveCallTimeout);
+    _check(r, r.body);
+    return [
+      for (final f in ((jsonDecode(r.body) as Map)['files'] as List? ?? const []))
+        DriveFile(
+          (f as Map)['id'] as String,
+          DateTime.parse(f['modifiedTime'] as String),
+          int.tryParse('${f['size']}'),
+        ),
+    ];
+  }
+
+  /// Move file [id] to the Drive bin: recoverable there for 30 days, so a
+  /// file handled by mistake is never gone outright.
+  Future<void> trash(String id) async {
+    final r = await _c
+        .patch(
+          Uri.parse('$_api/$id'),
+          headers: {..._auth, 'Content-Type': 'application/json'},
+          body: jsonEncode({'trashed': true}),
+        )
+        .timeout(kDriveCallTimeout);
+    _check(r, r.body);
   }
 
   /// The "Koop" folder's id, created on first use.

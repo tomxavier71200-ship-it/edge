@@ -1750,7 +1750,8 @@ class AppState extends ChangeNotifier {
       // rows, the sending phone uploads the full copy now (runIfDue checks the
       // data mark, spaces bursts 2 min apart, and is a no-op when Koop Cloud
       // is off or this phone receives).
-      unawaited(CloudSync.instance.runIfDue(importEdgeBackup));
+      unawaited(CloudSync.instance
+          .runIfDue(importEdgeBackup, importWhoop: importWhoopCsvs));
       // A heavy finalize is where a freshly-closed sleep window + recovery for a
       // new physiological day lands — fire the "recovery ready" push off it.
       if (heavy) {

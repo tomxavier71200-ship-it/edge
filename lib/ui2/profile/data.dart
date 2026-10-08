@@ -151,7 +151,8 @@ class _DataScreenState extends State<DataScreen> {
   }
 
   Future<_Note> _cloudNow(AppState app) async {
-    final o = await CloudSync.instance.run(app.importEdgeBackup);
+    final o = await CloudSync.instance
+        .run(app.importEdgeBackup, importWhoop: app.importWhoopCsvs);
     return (o.message, !o.ok);
   }
 

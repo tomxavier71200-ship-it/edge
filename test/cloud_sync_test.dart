@@ -166,6 +166,36 @@ void main() {
       expect(up.id, 'old');
     });
 
+    test('findAll lists every WHOOP export in the folder, oldest first', () async {
+      final api = DriveApi('t', client: MockClient((r) async {
+        expect(r.url.queryParameters['q'], contains("name = 'whoop-import.kbak'"));
+        expect(r.url.queryParameters['q'], contains("'F' in parents"));
+        expect(r.url.queryParameters['orderBy'], 'modifiedTime');
+        return http.Response(
+            jsonEncode({
+              'files': [
+                {'id': 'a', 'modifiedTime': '2026-10-03T08:00:00Z'},
+                {'id': 'b', 'modifiedTime': '2026-10-04T08:00:00Z'},
+              ]
+            }),
+            200);
+      }));
+      final fs = await api.findAll(kDriveWhoopFileName, parent: 'F');
+      expect(fs.map((f) => f.id), ['a', 'b']);
+    });
+
+    test('trash moves the file to the bin, it does not delete it', () async {
+      late http.Request seen;
+      final api = DriveApi('t', client: MockClient((r) async {
+        seen = r;
+        return http.Response('{}', 200);
+      }));
+      await api.trash('x');
+      expect(seen.method, 'PATCH');
+      expect(seen.url.path, endsWith('/files/x'));
+      expect(jsonDecode(seen.body), {'trashed': true});
+    });
+
     test('a failed download leaves no file behind', () async {
       final dest = File('${tmp.path}/out');
       final api = DriveApi('t', client: MockClient((_) async => http.Response('gone', 404)));

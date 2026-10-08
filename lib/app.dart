@@ -105,7 +105,8 @@ class _OpenStrapAppState extends State<OpenStrapApp> with WidgetsBindingObserver
       unawaited(app.runBackupIfDue());
       // Koop Cloud: send this phone's copy to Drive, or merge the newer one
       // from it — when switched on and due. Same foreground-only honesty.
-      unawaited(CloudSync.instance.runIfDue(app.importEdgeBackup));
+      unawaited(CloudSync.instance
+          .runIfDue(app.importEdgeBackup, importWhoop: app.importWhoopCsvs));
       // Re-publish the widget snapshot. `has_data` is decided WHEN THE
       // SNAPSHOT IS WRITTEN (WidgetService.push evaluates isStale there), and
       // the widget process never runs Dart — so a snapshot written while fresh
