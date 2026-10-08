@@ -67,6 +67,7 @@ body[data-tab=overview] main>.stats{display:none}
 .forget{border:0;background:none;color:var(--ink3);font:600 11px var(--display);cursor:pointer;text-decoration:underline}
 .filelink{font:600 12px var(--display);color:var(--ink2);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .filelink:hover{color:var(--ink)}
+button.filelink{background:none;border:0;padding:0}
 .open.google{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--ink);border:1px solid #d5d9dd;border-radius:999px;padding:7px 14px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .open.google:hover{background:#f8f9fa}
 #status{max-width:1100px;margin:10px auto 0;padding:8px 16px;font-size:12px;color:var(--ink2)}
@@ -151,7 +152,8 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
     <span id="passwrap"><input id="pass" type="password" placeholder="Koop Cloud passphrase" autocomplete="current-password" aria-label="Koop Cloud passphrase"><label class="rem"><input type="checkbox" id="remember">Remember</label></span>
     <span id="saved" hidden></span><button type="button" class="forget" id="forget" hidden>Forget passphrase</button>
     <button class="open google" type="button" id="gsign"><svg width="15" height="15" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Sign in with Google</button>
-    <label class="filelink" title="Open a Koop backup file instead">Open file<input id="file" type="file" accept=".kbak,.osbk,.db,.gz" hidden></label></form>
+    <label class="filelink" title="Open a Koop backup, or a WHOOP export (.zip or its CSV files)">Open file<input id="file" type="file" accept=".kbak,.osbk,.db,.gz,.zip,.csv" multiple hidden></label>
+    <button type="button" class="filelink" id="wsend" hidden title="Encrypt this WHOOP export with your passphrase and put it in your Koop Cloud; the phone with the band imports it on its next sync">Send to Koop Cloud</button></form>
 </div></div>
 <div id="status" hidden></div>
 <div class="rangerow"><div class="subtabs" id="subtabs" hidden></div><div class="ranges" id="ranges"><button data-r="180">6m</button><button data-r="90">3m</button><button data-r="30">1m</button><button data-r="14">2w</button><button data-r="7">1w</button><button data-r="1" class="on">1d</button></div></div>
@@ -225,7 +227,11 @@ async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuff
     try{buf=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv,additionalData:hdr,tagLength:128},key,buf.slice(38)));}
     catch{throw new Error("Wrong passphrase, or the file is damaged.");}}
   if(buf[0]===0x1f&&buf[1]===0x8b){buf=new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());}
-  const SQL=await initSqlJs(),db=new SQL.Database(buf);
+  const SQL=await initSqlJs();return loadDb(new SQL.Database(buf));}
+
+// Everything below reads an open database the same way, whether it came from a Koop
+// backup or was built in memory from a WHOOP export (readWhoop).
+function loadDb(db){
   const res=db.exec(`SELECT date,key,value FROM metric_series WHERE value IS NOT NULL AND key IN (${KEYS.map(k=>`'${k}'`).join(",")})`);
   let name=null;try{const p=db.exec("SELECT value FROM kv WHERE key='profile_name'");name=p[0]?.values[0][0]??null;}catch{}
   const d={};KEYS.concat(["inbed_min"]).forEach(k=>d[k]=new Map());(res[0]?.values||[]).forEach(([dt,k,v])=>d[k].set(dt,v));
@@ -237,6 +243,90 @@ async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuff
     if(r[0]){const v=JSON.parse(r[0].values[0][0])?.regularity?.value?.sri;if(typeof v==="number")sri=v;}}catch{}
   liveDb?.close();liveDb=db;curveCache.clear();dcCache.clear(); // kept open: curves and workouts are read per day
   return {d,name};}
+
+// ---------- a WHOOP export, read in this browser (nothing is uploaded) ----------
+// The same columns the app's importer reads (lib/import/whoop_import.dart), matched on WHOOP's
+// English header names and merged per day: a later file's non-empty value wins, an empty one
+// never erases. It becomes an in-memory database shaped like a Koop backup, so every view works.
+const ENERGY=["energy burned (cal)","energy burned (kcal)","energy burned (kilocalories)","energy burned (kj)","energy burned (kilojoules)","energy burned (kilojoule)","energy burned"];
+let whoopZip=null; // the export re-packed as one .zip, kept only for "Send to Koop Cloud"
+async function inflate(b){return new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());}
+async function unzip(buf){const dv=new DataView(buf.buffer,buf.byteOffset,buf.byteLength),out=[];let e=-1;
+  for(let i=buf.length-22;i>=Math.max(0,buf.length-65557);i--)if(dv.getUint32(i,true)===0x06054b50){e=i;break;}
+  if(e<0)throw new Error("That .zip file could not be read.");
+  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);
+  if(n===0xffff||p===0xffffffff)throw new Error("That .zip is too large to read here. Unzip it and open its CSV files instead.");
+  for(let k=0;k<n&&dv.getUint32(p,true)===0x02014b50;k++){
+    const m=dv.getUint16(p+10,true),cs=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),lo=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(buf.subarray(p+46,p+46+nl));p+=46+nl+dv.getUint16(p+30,true)+dv.getUint16(p+32,true);
+    if(!/\.csv$/i.test(name)||/(^|\/)__MACOSX\//.test(name)||(m!==0&&m!==8))continue;
+    const ds=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true),raw=buf.subarray(ds,ds+cs);
+    out.push({name:name.split("/").pop(),bytes:m===8?await inflate(raw):raw.slice()});}
+  return out;}
+// RFC 4180: quoted fields may hold commas, doubled quotes and newlines (free-text activity names).
+function parseCsv(text){const rows=[];let row=[],f="",q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else if(c==='"')q=true;else if(c===","){row.push(f);f="";}
+    else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(f);f="";if(row.some(x=>x!==""))rows.push(row);row=[];}
+    else f+=c;}
+  row.push(f);if(row.some(x=>x!==""))rows.push(row);return rows;}
+// WHOOP writes local wall-clock times ("2024-01-15 06:30:12"); ISO with an offset is absolute.
+function wts(s){s=(s||"").trim();if(!s)return null;let d=new Date(s.replace(" ","T").replace(/([+-]\d{2})(\d{2})$/,"$1:$2"));
+  if(isNaN(d)){const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(!m)return null;d=new Date(+m[1],m[2]-1,+m[3]);}
+  return Math.floor(d.getTime()/1000);}
+async function readWhoop(files){const csvs=[];
+  for(const f of files){const b=new Uint8Array(await f.arrayBuffer());
+    if(/\.zip$/i.test(f.name))csvs.push(...await unzip(b));else if(/\.csv$/i.test(f.name))csvs.push({name:f.name,bytes:b});}
+  if(!csvs.length)throw new Error("No CSV files were found in that WHOOP export.");
+  const days=new Map(),work=[],num=v=>{const x=parseFloat(v);return isFinite(x)?x:null;};let known=0,seen="";
+  for(const c of csvs){const rows=parseCsv(new TextDecoder().decode(c.bytes).replace(/^﻿/,""));if(!rows.length)continue;
+    const ix=new Map(rows[0].map((x,i)=>[x.trim().toLowerCase(),i])),has=k=>ix.has(k);
+    const kind=has("activity name")||has("workout start time")?"w":has("recovery score %")||has("asleep duration (min)")||has("day strain")||has("sleep onset")?"d":null;
+    if(!kind){seen||=rows[0].slice(0,6).join(", ");continue;}known++;
+    const pick=ns=>{for(const n of ns)if(ix.has(n))return [n,ix.get(n)];return [null,-1];};
+    for(const r of rows.slice(1)){const g=ns=>{const i=pick(ns)[1];return i<0?"":(r[i]??"").trim();},n=ns=>num(g(ns));
+      // Energy's unit comes from the header that matched, never from the size of the number.
+      const kcal=()=>{const [h,i]=pick(ENERGY),v=i<0?null:num(r[i]);return v==null?null:/kj|kilojoule/.test(h)?v/4.184:/cal/.test(h)?v:null;};
+      if(kind==="w"){const st=wts(g(["workout start time","start time"]));if(st==null)continue;const en=wts(g(["workout end time","end time"]));
+        work.push([`whoop_${st}`,st,en,(g(["activity name","activity"])||"other").toLowerCase(),"done",n(["activity strain","strain"]),
+          n(["max hr (bpm)","max heart rate (bpm)"]),n(["average hr (bpm)","average heart rate (bpm)"]),kcal(),en!=null?Math.round((en-st)/60):null]);continue;}
+      const at=wts(g(["wake onset","sleep onset","cycle start time"]))??wts(g(["cycle start time","sleep onset"]));if(at==null)continue;
+      const date=iso(new Date(at*1000)),f={readiness:n(["recovery score %","recovery score"]),rhr:n(["resting heart rate (bpm)","resting heart rate"]),
+        rmssd:n(["heart rate variability (ms)","heart rate variability (rmssd) (ms)"]),strain:n(["day strain","strain"]),calories:kcal(),
+        resp_rate:n(["respiratory rate (rpm)","respiratory rate"]),tst_min:n(["asleep duration (min)","asleep duration (minutes)"]),
+        inbed:n(["in bed duration (min)","in bed duration (minutes)"]),light_min:n(["light sleep duration (min)","light sleep duration (minutes)"]),
+        deep_min:n(["deep (sws) duration (min)","deep sleep duration (min)","deep (sws) duration (minutes)"]),rem_min:n(["rem duration (min)","rem duration (minutes)"]),
+        sleep_perf:n(["sleep performance %","sleep performance"]),efficiency:n(["sleep efficiency %"]),on:wts(g(["sleep onset"])),off:wts(g(["wake onset"]))};
+      const m=days.get(date)||{};for(const k in f)if(f[k]!=null)m[k]=f[k];days.set(date,m);}}
+  if(!known)throw new Error("These files don't look like a WHOOP export: it needs WHOOP's English column names, e.g. \"Recovery score %\""+(seen?` (found: ${seen})`:"")+".");
+  const SQL=await initSqlJs(),db=new SQL.Database();
+  db.run("CREATE TABLE metric_series(date TEXT,key TEXT,value REAL);CREATE TABLE day_result(day_id TEXT,algo_version INTEGER,payload_json TEXT,window_json TEXT);"+
+    "CREATE TABLE sessions(id TEXT,start_ts INTEGER,end_ts INTEGER,type TEXT,status TEXT,strain REAL,max_hr REAL,avg_hr REAL,calories REAL,duration_min INTEGER,zone_min_json TEXT,trace_json TEXT)");
+  const ms=db.prepare("INSERT INTO metric_series VALUES (?,?,?)"),dr=db.prepare("INSERT INTO day_result VALUES (?,0,?,NULL)");
+  for(const [date,m] of days){for(const k of KEYS)if(m[k]!=null)ms.run([date,k,m[k]]);
+    const sleep={};if(m.on!=null&&m.off!=null&&m.off>m.on)sleep.window={value:{onset_ms:m.on*1000,offset_ms:m.off*1000}};
+    if(m.inbed!=null)sleep.accounting={value:{in_bed_sec:m.inbed*60}};dr.run([date,JSON.stringify({sleep})]);}
+  ms.free();dr.free();const ss=db.prepare("INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL)");work.forEach(w=>ss.run(w));ss.free();
+  return {...loadDb(db),days:days.size,workouts:work.length,csvs};}
+
+// One .zip of the export's CSVs, stored uncompressed: what "Send to Koop Cloud" locks and
+// uploads, and what the app's WHOOP importer unwraps on the phone.
+function crc32(b){let crc=-1;for(let i=0;i<b.length;i++){let c=(crc^b[i])&255;for(let k=0;k<8;k++)c=c&1?(c>>>1)^0xEDB88320:c>>>1;crc=(crc>>>8)^c;}return (crc^-1)>>>0;}
+function zipStore(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;
+  for(const f of files){const nm=enc.encode(f.name),crc=crc32(f.bytes),len=f.bytes.length,h=new DataView(new ArrayBuffer(30)),c=new DataView(new ArrayBuffer(46));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint32(14,crc,true);h.setUint32(18,len,true);h.setUint32(22,len,true);h.setUint16(26,nm.length,true);
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint32(16,crc,true);c.setUint32(20,len,true);c.setUint32(24,len,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    parts.push(new Uint8Array(h.buffer),nm,f.bytes);cd.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+len;}
+  const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);
+  e.setUint32(12,cd.reduce((a,x)=>a+x.length,0),true);e.setUint32(16,off,true);return new Blob([...parts,...cd,new Uint8Array(e.buffer)]);}
+// The app's backup lock (lib/import/backup_crypto.dart), so the phone opens it with the same
+// passphrase: "OSBK" ver1 kdf1 iterations(BE) salt16 nonce12, AES-256-GCM, header as AAD.
+async function seal(bytes,pass){const iter=210000,salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),hdr=new Uint8Array(38);
+  hdr.set([0x4f,0x53,0x42,0x4b,1,1]);new DataView(hdr.buffer).setUint32(6,iter);hdr.set(salt,10);hdr.set(iv,26);
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+  const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt"]);
+  return new Blob([hdr,new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:hdr,tagLength:128},key,bytes))]);}
 
 // ---------- per-day reads ----------
 function dayCurve(d){
@@ -560,17 +650,26 @@ document.getElementById("next").addEventListener("click",()=>goDay(shift(day,1))
 document.getElementById("today").addEventListener("click",()=>goDay(iso(new Date())));
 document.addEventListener("keydown",e=>{if(e.target.matches("input"))return;if(e.key==="ArrowLeft")goDay(shift(day,-1));if(e.key==="ArrowRight")goDay(shift(day,1));});
 let rz;window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(render,150);});
-async function load(blob,label,keep=false){const keepDay=keep?day:null;
-  status("Reading…");const pass=passphrase(),r=await readBackup(blob,pass);data=r.d;
+async function load(blob,label,keep=false){
+  status("Reading…");const pass=passphrase(),r=await readBackup(blob,pass);
   try{if(document.getElementById("remember").checked&&pass)localStorage.setItem(PASS_KEY,pass);}catch{}showSaved();
+  whoopZip=null;document.getElementById("wsend").hidden=true;
+  show(r,keep);if(!keep)status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);}
+function show(r,keep){const keepDay=keep?day:null;data=r.d;
   if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
   const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=keepDay&&keepDay<=iso(new Date())?keepDay:dates.at(-1)||iso(new Date());
-  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;if(!keep)workout=-1;
-  if(!keep)status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);render();}
+  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;if(!keep)workout=-1;render();}
+// A WHOOP export (its .zip, or the CSVs inside it): shown from this browser alone. The Drive
+// refresh stops (cloudAt) so the page does not swap it for the Koop Cloud copy.
+async function loadWhoop(files){status("Reading the WHOOP export…");const r=await readWhoop(files);
+  cloudAt=null;show(r,false);whoopZip=zipStore(r.csvs);document.getElementById("wsend").hidden=false;
+  const s=document.getElementById("source");s.hidden=false;s.textContent="WHOOP export";s.style.background="";s.style.color="";
+  status(`WHOOP export: ${r.days} days, ${r.workouts} workouts. Read in this browser only; nothing was sent. "Send to Koop Cloud" puts it on your phones too.`);}
 document.getElementById("file").addEventListener("change",()=>document.getElementById("loader").requestSubmit());
-document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const f=document.getElementById("file").files[0];
-  if(!f){status("Choose your Koop backup file first.");return;}
-  try{await load(f,f.name);}catch(err){status(err.message||String(err));}});
+document.getElementById("loader").addEventListener("submit",async e=>{e.preventDefault();const fs=[...document.getElementById("file").files];
+  if(!fs.length){status("Choose a Koop backup or a WHOOP export first.");return;}
+  try{if(fs.some(f=>/\.(zip|csv)$/i.test(f.name)))await loadWhoop(fs);else await load(fs[0],fs[0].name);}
+  catch(err){status(err.message||String(err));}});
 
 // ---------- Koop Cloud: Google sign-in, then the same file the phones upload ----------
 // Same Google project as the app (KOOP), same drive.file permission: it can see only the
@@ -625,6 +724,32 @@ setInterval(async()=>{if(!token||!cloudAt)return;
       await load(await r.blob(),"",true);cloudAt=f.modifiedTime;}
     cloudLabel();}catch{}},120000);
 setInterval(()=>{if(token)cloudLabel();},30000);
+// "Send to Koop Cloud": the export, locked with the Koop Cloud passphrase, goes into Drive >
+// Koop as its own file (whoop-import.kbak). Not into koop-cloud.kbak: the phone with the band
+// overwrites that on every upload. That phone imports this file on its next Koop Cloud sync,
+// moves it to the Drive bin, and its next upload carries the days to every phone and here.
+async function authed(url,opt={}){const go=()=>fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+token}});
+  let r=await go();if(r.status===401){token=await askToken();r=await go();}
+  if(!r.ok)throw new Error(`Google Drive answered ${r.status}.`);return r;}
+document.getElementById("wsend").addEventListener("click",async()=>{
+  if(location.protocol==="file:"){status("Sending works on the hosted dashboard page, not on a file opened from disk.");return;}
+  const pass=passphrase();if(!pass){status("Type your Koop Cloud passphrase first: the export is locked with it, like your Koop Cloud copy.");document.getElementById("pass").focus();return;}
+  if(!whoopZip)return;
+  try{if(!token){status("Signing in with Google…");token=await askToken();}
+    status("Locking the export with your passphrase (a few seconds)…");
+    const sealed=await seal(new Uint8Array(await whoopZip.arrayBuffer()),pass);
+    status("Uploading to your Koop Cloud…");
+    const fq=encodeURIComponent("name = 'Koop' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+    let folder=(await drive(`${DRIVE}?q=${fq}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=1&fields=files(id)`)).files?.[0]?.id;
+    if(!folder)folder=(await (await authed(DRIVE+"?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name:"Koop",mimeType:"application/vnd.google-apps.folder"})})).json()).id;
+    const b="koop"+crypto.getRandomValues(new Uint32Array(2)).join(""),meta=JSON.stringify({name:"whoop-import.kbak",parents:[folder]});
+    await authed("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",{method:"POST",
+      headers:{"Content-Type":`multipart/related; boundary=${b}`},
+      body:new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: application/octet-stream\r\n\r\n`,sealed,`\r\n--${b}--`])});
+    document.getElementById("wsend").hidden=true;
+    status("Sent to your Koop Cloud. The phone with the band imports it on its next sync (open Koop there, or tap Sync now under Koop Cloud); then it reaches every phone and this page.");}
+  catch(err){status(err.message||String(err));}});
 document.getElementById("forget").addEventListener("click",()=>{try{localStorage.removeItem(PASS_KEY);}catch{}showSaved();document.getElementById("pass").focus();});
 showSaved();if(savedPass())status("Showing example data. Your passphrase is remembered here: click Sign in with Google to open your own data.");
 data=example();day=iso(new Date());render();
