@@ -149,9 +149,20 @@ String todayIso() {
 
 final _shot = GlobalKey();
 
+/// `--dart-define=KOOP_TEXT_SCALE=2` renders at the phone's 200% text size
+/// (files get a `_x2` suffix) — the accessibility check for clipping and
+/// overflow. Default 1.
+final _textScale =
+    double.tryParse(const String.fromEnvironment('KOOP_TEXT_SCALE')) ?? 1.0;
+
 Widget _frame(Widget child) => MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.dark),
+      builder: (c, w) => MediaQuery(
+        data: MediaQuery.of(c)
+            .copyWith(textScaler: TextScaler.linear(_textScale)),
+        child: w!,
+      ),
       home: RepaintBoundary(
         key: _shot,
         child: Builder(
@@ -374,12 +385,33 @@ void main() {
       for (var i = 0; i < 80; i++) {
         await t.pump(const Duration(milliseconds: 20));
       }
+      // `--dart-define=KOOP_A11Y=1`: Flutter's own accessibility guidelines
+      // (tap-target size, labelled tap targets, text contrast), PRINTED per
+      // screen rather than failing, so one run lists every gap.
+      if (const bool.fromEnvironment('KOOP_A11Y')) {
+        final sem = t.ensureSemantics();
+        for (final (label, g) in [
+          ('tap target 48x48', androidTapTargetGuideline),
+          ('tap target 44x44', iOSTapTargetGuideline),
+          ('labelled tap target', labeledTapTargetGuideline),
+          ('text contrast', textContrastGuideline),
+        ]) {
+          try {
+            await expectLater(t, meetsGuideline(g));
+          } on TestFailure catch (e) {
+            // ignore: avoid_print
+            print('A11Y[$name][$label] ${e.message}');
+          }
+        }
+        sem.dispose();
+      }
       final box =
           _shot.currentContext!.findRenderObject()! as RenderRepaintBoundary;
       await t.runAsync(() async {
         final img = await box.toImage(pixelRatio: 2);
         final png = await img.toByteData(format: ui.ImageByteFormat.png);
-        File('build/koop_screens/$name.png')
+        final suffix = _textScale == 1.0 ? '' : '_x${_textScale.round()}';
+        File('build/koop_screens/$name$suffix.png')
           ..createSync(recursive: true)
           ..writeAsBytesSync(png!.buffer.asUint8List());
       });
