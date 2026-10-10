@@ -13,6 +13,8 @@
 // relative oxygen-dip screen, never an absolute saturation, so there is no
 // "95%" to show.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -123,28 +125,53 @@ class HealthMonitorCard extends StatelessWidget {
   }
 }
 
-/// The Health Monitor screen: whether the band is connected, the live heart
-/// rate while it is, then [children] — the per-vital cards the Health tab
-/// built.
-class HealthMonitorScreen extends StatelessWidget {
-  final List<Widget> children;
-  const HealthMonitorScreen({super.key, required this.children});
+/// The Health Monitor screen, WHOOP's: whether the band is connected, the
+/// live heart rate while it is, then the overnight vitals two to a row —
+/// each against the person's usual range, tapping through to its history —
+/// and, under them, why any vital is missing.
+class HealthMonitorScreen extends StatefulWidget {
+  final List<Widget> tiles, gaps;
+  const HealthMonitorScreen(
+      {super.key, required this.tiles, this.gaps = const []});
+
+  @override
+  State<HealthMonitorScreen> createState() => _HealthMonitorScreenState();
+}
+
+class _HealthMonitorScreenState extends State<HealthMonitorScreen> {
+  /// Held so the live stream is asked for while this screen is open and
+  /// released when it closes. Null without an AppState above (goldens).
+  AppState? _owner;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_owner != null) return;
+    try {
+      _owner = context.read<AppState>()..retainLiveHrView();
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _owner?.releaseLiveHrView();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    // No AppState above (a golden): renders as not connected, no live rate.
-    bool connected = false;
-    int? hr;
-    try {
-      connected = c.select<AppState, bool>((a) => a.isConnected);
-      hr = c.select<AppState, int?>((a) => a.device.liveHr);
-    } catch (_) {}
+    final connected =
+        _owner != null && c.select<AppState, bool>((a) => a.isConnected);
+    final t = widget.tiles;
     return detailScaffold(c, 'Health monitor', [
       const SizedBox(height: S.x2),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x4),
-        decoration: BoxDecoration(color: p.bg, borderRadius: R.rLg),
+        decoration: BoxDecoration(
+            color: p.dark ? p.bg : p.card2,
+            borderRadius: R.rLg,
+            border: Border.all(color: p.line)),
         child: Row(children: [
           Icon(LucideIcons.watch, size: 22, color: p.ink2),
           const SizedBox(width: S.x3),
@@ -157,27 +184,172 @@ class HealthMonitorScreen extends StatelessWidget {
               size: 22, color: connected ? p.on(C.green) : p.ink3),
         ]),
       ),
-      if (connected && hr != null && hr > 0) ...[
+      if (connected) ...[
         const SizedBox(height: S.x4),
-        Text('HEART RATE',
-            style: F.over.copyWith(
-                color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
-        const SizedBox(height: S.x2),
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Icon(LucideIcons.heart, size: 26, color: p.on(C.strain)),
-          const SizedBox(width: S.x2),
-          Text('$hr', style: F.n48.copyWith(color: p.ink)),
-          const SizedBox(width: S.x2),
-          Padding(
-            padding: const EdgeInsets.only(bottom: S.x2),
-            child: Text('BPM', style: F.over.copyWith(color: p.ink2)),
-          ),
-        ]),
+        const LiveHrPanel(),
       ],
       const SizedBox(height: S.x4),
-      ...children,
+      if (t.isEmpty && widget.gaps.isEmpty)
+        const StatusCard('No overnight vitals yet',
+            'They are read from your sleep; wear the band overnight and sync.',
+            icon: LucideIcons.moon),
+      // Two tiles to a row, WHOOP's grid.
+      for (var i = 0; i < t.length; i += 2) ...[
+        IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: t[i]),
+            const SizedBox(width: S.x3),
+            Expanded(child: i + 1 < t.length ? t[i + 1] : const SizedBox()),
+          ]),
+        ),
+        const SizedBox(height: S.x3),
+      ],
+      for (final g in widget.gaps) ...[g, const SizedBox(height: S.x3)],
     ]);
   }
+}
+
+/// WHOOP's live heart-rate strip: the number, BPM and zone on the left, the
+/// last readings as a line on a grid to the right, ending in a dot under a
+/// dashed "now" line. Reads the live stream off [AppState]; [preview] hands
+/// it fixed inputs for the gallery.
+class LiveHrPanel extends StatelessWidget {
+  const LiveHrPanel({super.key})
+      : _hr = null,
+        _trace = const [],
+        _zone = null,
+        _preview = false;
+  const LiveHrPanel.preview(
+      {super.key, required int hr, required List<int> trace, int? zone})
+      : _hr = hr,
+        _trace = trace,
+        _zone = zone,
+        _preview = true;
+
+  final int? _hr;
+  final List<int> _trace;
+  final int? _zone;
+  final bool _preview;
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final hr = _preview ? _hr : c.select<AppState, int?>((a) => a.liveHr);
+    var trace = _trace;
+    var zone = _zone;
+    if (!_preview) {
+      c.select<AppState, int>((a) => a.liveHrTraceRev);
+      final app = c.read<AppState>();
+      trace = app.liveHrTrace();
+      zone = hr == null ? null : app.zoneOfLiveHr(hr);
+    }
+    final zc = zone == null ? p.ink3 : ZoneBar.cols(p)[zone - 1];
+    return Semantics(
+      label: hr == null
+          ? 'Heart rate, waiting for a reading'
+          : 'Heart rate $hr beats per minute${zone == null ? '' : ', zone $zone'}',
+      // As tall as the readout needs at large text, never shorter than the
+      // chart wants.
+      child: IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SizedBox(
+            width: 120,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('HEART RATE',
+                  style: F.over.copyWith(
+                      color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+              const SizedBox(height: S.x2),
+              Icon(LucideIcons.heart, size: 22, color: p.on(C.blue)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(hr == null ? '—' : '$hr',
+                    style: F.n48.copyWith(color: p.ink)),
+              ),
+              Text('BPM', style: F.over.copyWith(color: p.ink2, letterSpacing: 1.6)),
+              const SizedBox(height: S.x3),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(zone == null ? 'Zone 0' : 'Zone $zone',
+                    style: F.body.copyWith(color: zone == null ? p.ink2 : zc)),
+              ),
+              const SizedBox(height: S.x2),
+              Row(children: [
+                for (var i = 0; i < 5; i++) ...[
+                  if (i > 0) const SizedBox(width: 3),
+                  Expanded(
+                    child: Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                          color: zone == i + 1 ? zc : p.track,
+                          borderRadius: R.rPill),
+                    ),
+                  ),
+                ],
+              ]),
+            ]),
+          ),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 150),
+              child: CustomPaint(painter: _LiveLine(trace, p)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _LiveLine extends CustomPainter {
+  final List<int> t;
+  final P p;
+  _LiveLine(this.t, this.p);
+
+  @override
+  void paint(Canvas cv, Size s) {
+    final grid = Paint()
+      ..color = p.line.withValues(alpha: .5)
+      ..strokeWidth = 1;
+    const step = 18.0;
+    for (var x = 0.0; x < s.width; x += step) {
+      cv.drawLine(Offset(x, 0), Offset(x, s.height), grid);
+    }
+    for (var y = 0.0; y < s.height; y += step) {
+      cv.drawLine(Offset(0, y), Offset(s.width, y), grid);
+    }
+    final endX = s.width - 8;
+    final dash = Paint()
+      ..color = p.ink2
+      ..strokeWidth = 1.5;
+    for (var y = 0.0; y < s.height; y += 7) {
+      cv.drawLine(Offset(endX, y), Offset(endX, y + 3.5), dash);
+    }
+    if (t.length < 2) return;
+    final lo = t.reduce(math.min) - 5, hi = t.reduce(math.max) + 5;
+    double y(int v) => s.height * (1 - (v - lo) / (hi - lo));
+    final path = Path();
+    for (var i = 0; i < t.length; i++) {
+      final x = endX * i / (t.length - 1);
+      if (i == 0) {
+        path.moveTo(x, y(t[i]));
+      } else {
+        path.lineTo(x, y(t[i]));
+      }
+    }
+    cv.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = p.on(C.blue));
+    cv.drawCircle(Offset(endX, y(t.last)), 7, Paint()..color = p.ink);
+  }
+
+  @override
+  bool shouldRepaint(_LiveLine o) => o.t != t || o.p.dark != p.dark;
 }
 
 class StressMonitorCard extends StatelessWidget {
@@ -234,14 +406,20 @@ class StressMonitorCard extends StatelessWidget {
                 Text('Not enough readings yet',
                     style: F.body.copyWith(color: p.ink3))
               else ...[
-                Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text(hmOfMin(h), style: F.n34.copyWith(color: p.ink)),
-                  const SizedBox(width: S.x1),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: S.x1),
-                    child: Text('hrs', style: F.body.copyWith(color: p.ink2)),
-                  ),
-                ]),
+                // Scales down rather than running past the chart at large
+                // text.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text(hmOfMin(h), style: F.n34.copyWith(color: p.ink)),
+                    const SizedBox(width: S.x1),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: S.x1),
+                      child: Text('hrs', style: F.body.copyWith(color: p.ink2)),
+                    ),
+                  ]),
+                ),
                 if (t != null) ...[
                   const SizedBox(height: S.x2),
                   Container(
@@ -250,9 +428,13 @@ class StressMonitorCard extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: p.wash(dir == 0 ? C.n500 : (dir < 0 ? C.green : C.orange)),
                         borderRadius: R.rSm),
-                    child: Text(
-                        '${dir > 0 ? '▲' : dir < 0 ? '▼' : '•'} vs. typical $weekday',
-                        style: F.cap.copyWith(color: col, fontWeight: FontWeight.w700)),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                          '${dir > 0 ? '▲' : dir < 0 ? '▼' : '•'} vs. typical $weekday',
+                          style: F.cap.copyWith(color: col, fontWeight: FontWeight.w700)),
+                    ),
                   ),
                 ],
               ],

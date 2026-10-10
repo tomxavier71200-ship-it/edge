@@ -8,7 +8,6 @@
 // app that are absolute.
 
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -22,7 +21,6 @@ import '../../l10n/app_localizations.dart';
 import '../../models/metric.dart';
 import '../../state/app_state.dart';
 import '../ui2.dart';
-import 'calm_breathing.dart';
 import 'circadian_detail.dart';
 import 'ecg.dart' show EcgEntryCard, pairedIsMaverickOf;
 import 'findings_log.dart';
@@ -30,10 +28,10 @@ import 'home_screen.dart';
 import 'healthspan_screen.dart' show HealthspanScreen, kHabitMinDays;
 import 'health_monitor.dart';
 import 'stress_detail.dart';
+import 'stress_monitor.dart';
 import 'investigate.dart';
 import 'metric_detail.dart';
 import 'naps.dart';
-import 'wellness_screen.dart' show stressLevelLabel;
 
 /// A read this screen can live without. The wear block and the nap block are
 /// ADDITIONS to the repository interface, so an implementation written before
@@ -627,275 +625,34 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     if (i == 1) _loadExplore();
     if (i == 3) _loadVitals();
     if (i == 4) _loadLabs();
-    if (i == 6) _loadStress();
   }
 
-  /// Today's stress block (`getDayStress`), or null before the first read.
-  Map<String, dynamic>? _s;
-  bool _sFailed = false;
-
-  /// Today's sleep and workout spans, for marking the line and splitting
-  /// the time; empty when the timeline could not be read.
-  ({List<Span> sleep, List<Span> work}) _sSpans = (sleep: const [], work: const []);
-
-  /// The same weekday's splits from up to four earlier weeks — only weeks
-  /// with at least two hours of readings, so a barely-worn day is no usual.
-  List<StressSplit> _sUsual = const [];
+  /// Today's stress, for the Overview's Stress Monitor card; null before the
+  /// first read.
+  StressDay? _sd;
 
   Future<void> _loadStress() async {
     final repo = repoOf(context);
     if (repo == null) return;
     final t = beginRead(#stress);
     try {
-      final today = todayLabel();
-      final s = await _soft(() => repo.getDayStress(today));
-      var spans = (sleep: const <Span>[], work: const <Span>[]);
-      try {
-        spans = timelineSpans(await repo.getDayTimeline(today));
-      } catch (_) {}
-      final usual = <StressSplit>[];
-      final now = DateTime.now();
-      for (var k = 1; k <= 4; k++) {
-        final day = dayLabelOf(DateTime(now.year, now.month, now.day - 7 * k));
-        try {
-          final r = stressReadings(await repo.getDayStress(day), day);
-          if (r.length < 8) continue;
-          var sp = (sleep: const <Span>[], work: const <Span>[]);
-          try {
-            sp = timelineSpans(await repo.getDayTimeline(day));
-          } catch (_) {}
-          usual.add(stressSplit(r, sleep: sp.sleep, work: sp.work));
-        } catch (_) {}
-      }
-      if (stillNewest(#stress, t)) {
-        setState(() {
-          _s = s;
-          _sFailed = false;
-          _sSpans = spans;
-          _sUsual = usual;
-        });
-      }
-    } catch (_) {
-      if (stillNewest(#stress, t)) setState(() => _sFailed = true);
-    }
+      final d = await StressDay.load(repo, todayLabel());
+      if (stillNewest(#stress, t)) setState(() => _sd = d);
+    } catch (_) {}
   }
 
   /// WHOOP's Stress Monitor card on the Health tab: today's time at high
   /// stress against a typical day of this weekday, and today's readings.
   /// Opens the Stress tab. The time needs [kStressMinWindows] readings.
   Widget _stressCard(BuildContext c) {
-    final s = _s;
-    final readings = s == null ? const <StressReading>[] : stressReadings(s, todayLabel());
-    final split = stressSplit(readings, sleep: _sSpans.sleep, work: _sSpans.work);
-    final usual = typicalSplit(_sUsual);
+    final d = _sd;
     return StressMonitorCard(
-      highMin: readings.length < kStressMinWindows
-          ? null
-          : split.total[2].toDouble(),
-      typicalHighMin: usual?.total[2].toDouble(),
+      highMin: d == null || d.calculating ? null : d.split.total[2].toDouble(),
+      typicalHighMin: d?.usual?.total[2].toDouble(),
       weekday: weekdayName(DateTime.now()).substring(0, 3),
-      readings: readings,
-      onTap: () => _select(6),
+      readings: d?.readings ?? const [],
+      onTap: () => go(c, const StressMonitorScreen()),
     );
-  }
-
-  /// Whole day, outside activities, and sleep, each against the same
-  /// weekday's usual when there are at least two earlier ones.
-  List<Widget> _splitCards(List<_StressBin> scored) {
-    final now = DateTime.now();
-    final split = stressSplit(
-        [for (final b in scored) (at: b.at, v: b.score! / 100 * 3)],
-        sleep: _sSpans.sleep,
-        work: _sSpans.work);
-    final usual = typicalSplit(_sUsual);
-    final wd = weekdayName(now);
-    final versus = usual == null
-        ? 'Today · the usual $wd needs two earlier ${wd}s with readings'
-        : 'Today vs. a typical $wd';
-    const parts = [
-      ('Total day', 'Stress through the whole day, including sleep and activities.'),
-      ('Outside activities', 'Stress outside workouts and sleep.'),
-      ('Sleep', 'Stress while asleep.'),
-    ];
-    return [
-      for (var i = 0; i < 3; i++) ...[
-        const SizedBox(height: S.x3),
-        StressSplitCard(
-          title: parts[i].$1,
-          blurb: parts[i].$2,
-          versus: versus,
-          today: split.of(i),
-          usual: usual?.of(i),
-        ),
-      ],
-    ];
-  }
-
-  // ─────────────── STRESS ───────────────
-  //
-  // Daytime stress is the nightly Baevsky SI run per 15 minutes of the day
-  // (`stress_day`, see onehz_pipeline `stressPerWindow`), shown on a 0–3
-  // scale: score / 100 × 3. Only the scale is new here; the number is the
-  // pipeline's. A window with no reading draws nothing and is not counted.
-  Widget _stressTab(BuildContext c) {
-    final p = P.of(c);
-    final l = AppLocalizations.of(c);
-    final s = _s;
-    if (s == null) {
-      if (_sFailed) {
-        return _readFailed('stress', () {
-          setState(() => _sFailed = false);
-          _loadStress();
-        });
-      }
-      if (repoOf(c) == null) {
-        return const StatusCard('No stress reading yet today',
-            'Stress is read from your beat-to-beat data.',
-            icon: LucideIcons.activity);
-      }
-      return const Center(child: CircularProgressIndicator());
-    }
-    final today = todayLabel();
-    final bins = <_StressBin>[
-      for (final e in (s['stress_day'] is List ? s['stress_day'] as List : const []))
-        if (e is Map && e['t'] is num)
-          _StressBin(DateTime.fromMillisecondsSinceEpoch(
-                  (e['t'] as num).toInt() * 1000),
-              (e['score'] as num?)?.toDouble()),
-    ].where((b) => dayLabelOf(b.at) == today).toList();
-    final scored = [for (final b in bins) if (b.score != null) b];
-
-    final nightBlk = s['stress'];
-    final night = nightBlk is Map ? nightBlk['score'] as num? : null;
-    final nightLevel = nightBlk is Map && nightBlk['level'] is String
-        ? stressLevelLabel(l, nightBlk['level'] as String)
-        : null;
-
-    final out = <Widget>[];
-    if (scored.isEmpty) {
-      out.add(StatusCard(
-        'No stress reading yet today',
-        bins.isEmpty
-            ? 'Stress is read from beat-to-beat data, and nothing from today '
-                'has been synced and processed yet.'
-            : 'Today\'s beat data is too thin for a reading so far. Each '
-                '15 minutes needs a few hundred clean beats.',
-        fix: syncOf(c) == null ? '' : 'Sync the band',
-        onFix: syncOf(c),
-        icon: LucideIcons.activity,
-      ));
-    } else if (scored.length < kStressMinWindows) {
-      // Real readings, but too few to state the day's level: show them as
-      // what they are, with the count, and no gauge or verdict.
-      out.addAll([
-        StatusCard(
-          'Not enough for a stress level yet',
-          '${scored.length} of $kStressMinWindows readings so far today. '
-              'A level needs about an hour of wear; the readings below are '
-              'each 15 minutes.',
-          icon: LucideIcons.activity,
-        ),
-        Section(
-          'Today',
-          Surface(
-            child: StressLine(
-              readings: [
-                for (final b in scored) (at: b.at, v: b.score! / 100 * 3),
-              ],
-              sleep: _sSpans.sleep,
-              work: _sSpans.work,
-              day: DateTime.now(),
-            ),
-          ),
-        ),
-      ]);
-    } else {
-      final last = scored.last;
-      final v = last.score! / 100 * 3;
-      final mins = [0, 0, 0];
-      for (final b in scored) {
-        mins[stressLevelOf(b.score! / 100 * 3)] += 15;
-      }
-      out.addAll([
-        Center(
-          child: SizedBox(
-            width: 250,
-            height: 140,
-            child: CustomPaint(
-              painter: _StressGauge(v / 3, p),
-              child: Align(
-                alignment: const Alignment(0, .85),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(v.toStringAsFixed(1),
-                        style: F.n48.copyWith(color: p.ink)),
-                    Text('of 3', style: F.cap.copyWith(color: p.ink3)),
-                  ]),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: S.x3),
-        Center(
-          child: Text(
-            '${kStressLevelWords[stressLevelOf(v)]} stress · as of ${clock(last.at.hour * 60 + last.at.minute)}',
-            textAlign: TextAlign.center,
-            style: F.head.copyWith(color: p.on(kStressLevelColors[stressLevelOf(v)])),
-          ),
-        ),
-        Section(
-          'Today',
-          Surface(
-            child: StressLine(
-              readings: [
-                for (final b in scored) (at: b.at, v: b.score! / 100 * 3),
-              ],
-              sleep: _sSpans.sleep,
-              work: _sSpans.work,
-              day: DateTime.now(),
-            ),
-          ),
-        ),
-        ..._splitCards(scored),
-      ]);
-    }
-    out.addAll([
-      Section(
-        l?.wellnessStressLastNight ?? 'Stress last night',
-        night == null
-            ? StatusCard(
-                l?.wellnessNoStressTitle ?? 'No stress reading last night',
-                l?.wellnessNoStressBody ??
-                    'Stress is read from beat timing while you were resting '
-                        'overnight, and last night produced no reading.',
-                icon: LucideIcons.activity,
-              )
-            : SignalCard(
-                LucideIcons.activity,
-                C.purple,
-                l?.wellnessAutonomicTension ?? 'Autonomic tension',
-                night.round().toString(),
-                unit: '/100',
-                sub: (nightLevel ?? '').toUpperCase(),
-              ),
-      ),
-      const SizedBox(height: S.x5),
-      ActionCard('Breathe for 2 minutes', 'Slow breathing to settle your system',
-          'Start', LucideIcons.wind, C.blue,
-          onTap: () => go(c, const CalmBreathing())),
-      const SizedBox(height: S.x4),
-      Text(
-        'How it works: the Baevsky stress index on your beat-to-beat data in '
-        '15-minute windows, the same formula as the nightly reading, shown '
-        'from 0 to 3. Under 1 is low, under 2 is medium, 2 and up is high. '
-        'Exercise raises it too. A window without enough clean beats shows '
-        'nothing rather than a guess. Updates after each band sync.',
-        style: F.cap.copyWith(color: p.ink3),
-      ),
-    ]);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
   }
 
   @override
@@ -920,7 +677,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
           2 => _trends(c, d),
           3 => _vitals(c, d),
           5 => const _LiveTab(),
-          6 => _stressTab(c),
+          6 => const StressMonitorView(),
           _ => _labs(c),
         },
     ]);
@@ -930,10 +687,10 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   Widget _overview(BuildContext c, HealthData d) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
-    final rows = <Widget>[];
     final gaps = <Widget>[];
-    var ranged = 0, inRange = 0;
-    final tiles = <Widget>[];
+
+    // One tile per vital, by metric key; shown in WHOOP's order.
+    final tiles = <String, Widget>{};
     // Each vital's verdict for WHOOP's Health Monitor card, by metric key.
     final status = <String, VitalStatus>{};
 
@@ -962,36 +719,39 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         return;
       }
       // Against the reader's own usual range once there is one; until then
-      // the plain row, saying how many more nights the range needs.
+      // the tile says how many more nights the range needs.
       final nr = normalRangeOf(d.points(metricKey));
       final v = m.value;
       status[metricKey] = VitalStatus.building;
       if (nr.range != null && v != null) {
-        ranged++;
         final inside = nr.range!.contains(v.toDouble());
-        if (inside) inRange++;
         status[metricKey] = inside ? VitalStatus.inside : VitalStatus.outside;
         // A WHOOP-style tile once there is a range to stand it against.
-        tiles.add(RangeTile(
+        tiles[metricKey] = RangeTile(
             icon: icon,
             name: name,
             value: v.toDouble(),
             unit: unit,
             range: nr.range!,
             fmt: fmt ?? (x) => x.round().toString(),
-            onTap: () => go(c, MetricDetail(metricKey))));
+            onTap: () => go(c, MetricDetail(metricKey)));
         return;
       }
+      // No range yet: the same tile, saying how many more nights it needs
+      // rather than judging the number.
+      if (v == null) return;
       final left = kRangeMinNights - nr.nights;
-      rows.add(MetricRow(icon, col, name, value,
-          sub: left > 0 && nr.nights > 0
-              ? '$sub · usual range in $left more '
-                  'night${left == 1 ? '' : 's'}'
-              : sub,
+      tiles[metricKey] = RangeTile(
+          icon: icon,
+          name: name,
+          value: v.toDouble(),
           unit: unit,
-          series: series,
-          rising: rising,
-          onTap: () => go(c, MetricDetail(metricKey))));
+          range: null,
+          note: left > 0
+              ? 'usual range in $left more night${left == 1 ? '' : 's'}'
+              : null,
+          fmt: fmt ?? (x) => x.round().toString(),
+          onTap: () => go(c, MetricDetail(metricKey)));
     }
 
     // Five of these rows come off the overnight block, and `getToday` holds
@@ -1035,39 +795,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
                 'Read only from sleep, and no night was scored.')
             : '');
 
-    row(sleepMin, LucideIcons.moon, C.blue, l?.healthRowSleep ?? 'Sleep',
-        night == null ? (l?.healthSubLastNight ?? 'Last night') : prettyDay(night),
-        hm(sleepMin.value), '', d.spark('sleep', 24), 'sleep',
-        fmt: (x) => hm(x),
-        // More sleep is the direction this app coaches towards — `sleepNeed`
-        // exists to say you are short of it, never over it.
-        rising: Rising.good,
-        whyAbsent: l?.healthWhySleepNotLongEnough ??
-            'No sleep period long enough to score was recorded.');
-
-    final stressBlock = d.today['stress'];
-    final stressScore =
-        stressBlock is Map ? (stressBlock['score'] as num?) : null;
-    row(
-        d.stress,
-        LucideIcons.brain,
-        C.purple,
-        l?.healthRowStress ?? 'Stress',
-        ofNight((stressBlock is Map ? stressBlock['level']?.toString() : null) ??
-            (l?.healthRowStress ?? 'Stress')),
-        stressScore == null ? '' : '${stressScore.round()}',
-        // 0–100, and the scale has to be on the row. Wellness has always shown
-        // it for the same number.
-        '/100',
-        d.spark('stress', 24),
-        'stress',
-        rising: Rising.bad,
-        // Was 'No resting stretch long enough last night.' — one of several
-        // gates stress abstains on, asserted for all of them.
-        whyAbsent: sleepMin.isEmpty
-            ? (l?.healthWhyReadFromNight ??
-                'Read from the night, and no night was scored.')
-            : '');
+    // Sleep and the nightly stress score are not Health Monitor vitals —
+    // WHOOP's monitor shows the overnight four; both have their own screens.
 
     final respMetric = d.resp;
     row(respMetric, LucideIcons.wind, C.teal, l?.healthRowRespRate ?? 'Respiratory rate',
@@ -1233,46 +962,16 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         ],
         onTap: () => go(
           c,
-          HealthMonitorScreen(children: [
-            // The one-line answer first: is last night normal for me? Only
-            // rows with a usual range count, so a new user sees no verdict.
-            if (ranged > 0) ...[
-              RangeBanner(
-                  inside: inRange,
-                  total: ranged,
-                  when: night == null
-                      ? (l?.healthSubLastNight ?? 'Last night')
-                      : prettyDay(night)),
-              const SizedBox(height: S.x3),
+          HealthMonitorScreen(
+            // WHOOP's grid order: breathing, resting heart rate, HRV, skin
+            // temperature. A vital with no reading last night has no tile;
+            // its reason is among the gaps under the grid.
+            tiles: [
+              for (final k in ['resp_rate', 'resting_hr', 'hrv', 'skin_temp'])
+                ?tiles[k],
             ],
-            // Two tiles to a row, WHOOP's Health Monitor grid.
-            for (var i = 0; i < tiles.length; i += 2) ...[
-              IntrinsicHeight(
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: tiles[i]),
-                      const SizedBox(width: S.x3),
-                      Expanded(
-                          child: i + 1 < tiles.length
-                              ? tiles[i + 1]
-                              : const SizedBox()),
-                    ]),
-              ),
-              const SizedBox(height: S.x3),
-            ],
-            if (rows.isNotEmpty)
-              Surface(
-                pad: const EdgeInsets.symmetric(horizontal: S.x4),
-                child: Column(children: [
-                  for (var i = 0; i < rows.length; i++) ...[
-                    if (i > 0) Divider(color: p.line, height: 1),
-                    rows[i],
-                  ],
-                ]),
-              ),
-            for (final g in gaps) ...[const SizedBox(height: S.x3), g],
-          ]),
+            gaps: gaps,
+          ),
         ),
       ),
       const SizedBox(height: S.x3),
@@ -2276,11 +1975,6 @@ class _LiveTabState extends State<_LiveTab> {
 
 // ─────────────── STRESS drawing ───────────────
 
-class _StressBin {
-  final DateTime at;
-  final double? score; // 0–100, null = window without a reading
-  const _StressBin(this.at, this.score);
-}
 
 const kStressLevelWords = ['Low', 'Medium', 'High'];
 
@@ -2291,41 +1985,4 @@ const kStressLevelColors = [C.blue, C.green, C.orange];
 /// 0–3 value → level index. The cut points are the display scale's thirds.
 int stressLevelOf(double v) => v < 1 ? 0 : v < 2 ? 1 : 2;
 
-/// The 0–3 gauge: a half ring shading green → yellow → red, filled to [frac].
-class _StressGauge extends CustomPainter {
-  final double frac;
-  final P p;
-  const _StressGauge(this.frac, this.p);
-
-  @override
-  void paint(Canvas cv, Size s) {
-    const w = 14.0;
-    final r = math.min(s.width / 2, s.height) - w;
-    final center = Offset(s.width / 2, s.height - w / 2);
-    final rect = Rect.fromCircle(center: center, radius: r);
-    final f = frac.clamp(0.0, 1.0);
-    Paint stroke() => Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w
-      ..strokeCap = StrokeCap.round;
-    cv.drawArc(rect, math.pi, math.pi, false, stroke()..color = p.track);
-    cv.drawArc(
-        rect,
-        math.pi,
-        math.pi * f,
-        false,
-        stroke()
-          ..shader = const SweepGradient(
-            startAngle: math.pi,
-            endAngle: 2 * math.pi,
-            colors: kStressLevelColors,
-          ).createShader(rect));
-    final a = math.pi + math.pi * f;
-    final m = center + Offset(math.cos(a) * r, math.sin(a) * r);
-    cv.drawCircle(m, w * .62, Paint()..color = p.ink);
-  }
-
-  @override
-  bool shouldRepaint(_StressGauge old) => old.frac != frac || old.p.dark != p.dark;
-}
 

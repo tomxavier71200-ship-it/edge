@@ -11,12 +11,14 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/day_label.dart';
 import '../grammar.dart';
 import '../theme.dart';
 import 'health_screen.dart' show kStressLevelColors, kStressLevelWords, stressLevelOf;
-import 'home_screen.dart' show clock, hm;
+import 'detail_trends.dart' show hmOfMin;
+import 'home_screen.dart' show clock;
 
 /// One 15-minute reading on the 0–3 scale.
 typedef StressReading = ({DateTime at, double v});
@@ -116,6 +118,12 @@ class StressLine extends StatelessWidget {
   /// An optional window narrower than the day — the sleep screen draws the
   /// night only. Null draws midnight to midnight.
   final DateTime? from, to;
+
+  /// The reading a finger picked (Stress Monitor): a line and a ring on it.
+  final StressReading? selected;
+
+  /// A dashed line at the right edge: the window ends now.
+  final bool markEnd;
   const StressLine(
       {super.key,
       required this.readings,
@@ -123,7 +131,9 @@ class StressLine extends StatelessWidget {
       required this.work,
       required this.day,
       this.from,
-      this.to});
+      this.to,
+      this.selected,
+      this.markEnd = false});
 
   /// Five evenly spaced clock labels over the drawn window.
   List<String> _labels() {
@@ -153,7 +163,7 @@ class StressLine extends StatelessWidget {
           height: 150,
           child: CustomPaint(
             size: Size.infinite,
-            painter: _LinePainter(readings, sleep, work, day, p, from, to),
+            painter: _LinePainter(readings, sleep, work, day, p, from, to, selected, markEnd),
           ),
         ),
         const SizedBox(height: S.x2),
@@ -187,12 +197,14 @@ class _LinePainter extends CustomPainter {
   final DateTime day;
   final P p;
   final DateTime? from, to;
+  final StressReading? sel;
+  final bool markEnd;
   _LinePainter(this.r, this.sleep, this.work, this.day, this.p,
-      [this.from, this.to]);
+      [this.from, this.to, this.sel, this.markEnd = false]);
 
   @override
   void paint(Canvas cv, Size s) {
-    const left = 26.0, top = 14.0;
+    const left = 26.0, top = 26.0;
     final w = s.width - left, h = s.height - top;
     final start = from ?? DateTime(day.year, day.month, day.day);
     final end = to ?? DateTime(day.year, day.month, day.day + 1);
@@ -212,8 +224,23 @@ class _LinePainter extends CustomPainter {
         ..layout();
       tp.paint(cv, Offset(0, y(v.toDouble()) - tp.height / 2));
     }
+    // A moon over each sleep and a pulse over each workout, centred on the
+    // span's mark, as WHOOP labels its day chart.
+    void icon(IconData i, Span sp, Color col) {
+      final tp = TextPainter(
+          text: TextSpan(
+              text: String.fromCharCode(i.codePoint),
+              style: F.cap.copyWith(
+                  fontFamily: i.fontFamily, package: i.fontPackage, color: col)),
+          textDirection: TextDirection.ltr)
+        ..layout();
+      final cx = (x(sp.from) + x(sp.to)) / 2;
+      tp.paint(cv, Offset((cx - tp.width / 2).clamp(left, s.width - tp.width), 0));
+    }
+
     // Sleep, shaded; workouts as a mark above the chart.
     for (final sp in sleep) {
+      icon(LucideIcons.moon, sp, p.on(C.sleep));
       cv.drawRect(Rect.fromLTRB(x(sp.from), top, x(sp.to), top + h),
           Paint()..color = p.on(C.sleep).withValues(alpha: .10));
       cv.drawLine(Offset(x(sp.from), top - 6), Offset(x(sp.to), top - 6),
@@ -223,6 +250,7 @@ class _LinePainter extends CustomPainter {
             ..strokeCap = StrokeCap.round);
     }
     for (final sp in work) {
+      icon(LucideIcons.activity, sp, p.on(C.strain));
       cv.drawRect(Rect.fromLTRB(x(sp.from), top, math.max(x(sp.to), x(sp.from) + 2), top + h),
           Paint()..color = p.on(C.strain).withValues(alpha: .14));
       cv.drawLine(Offset(x(sp.from), top - 6),
@@ -253,27 +281,69 @@ class _LinePainter extends CustomPainter {
         cv.drawCircle(Offset(ax, ay), 2, Paint()..color = col);
       }
     }
+    // Now: a dashed line down the right edge, WHOOP's "live" end.
+    if (markEnd) {
+      final dash = Paint()
+        ..color = p.ink2
+        ..strokeWidth = 1.5;
+      for (var yy = top - 8; yy < top + h; yy += 6) {
+        cv.drawLine(Offset(s.width - 1, yy), Offset(s.width - 1, math.min(yy + 3, top + h)), dash);
+      }
+      cv.drawCircle(Offset(s.width - 1, top + h), 3, Paint()..color = p.ink);
+    }
+    final pick = sel;
+    if (pick != null) {
+      final sx = x(pick.at.millisecondsSinceEpoch ~/ 1000), sy = y(pick.v);
+      cv.drawLine(Offset(sx, top), Offset(sx, top + h),
+          Paint()
+            ..color = p.ink
+            ..strokeWidth = 1);
+      cv.drawCircle(Offset(sx, sy), 5, Paint()..color = p.ink);
+      cv.drawCircle(Offset(sx, sy), 3,
+          Paint()..color = p.on(kStressLevelColors[stressLevelOf(pick.v)]));
+    }
   }
 
   @override
   bool shouldRepaint(_LinePainter o) =>
-      o.r != r || o.sleep != sleep || o.work != work || o.p.dark != p.dark;
+      o.r != r ||
+      o.sleep != sleep ||
+      o.work != work ||
+      o.p.dark != p.dark ||
+      o.sel != sel ||
+      o.from != from ||
+      o.to != to;
 }
 
-/// One part of the day (whole day, outside activities, sleep): a stacked bar
-/// for today, a thin one for the usual, and the minutes at each level with
-/// their change.
+/// One part of the day (whole day, outside activities, sleep), WHOOP's card:
+/// the part's icon and name, "SAT, OCT 10 STRESS VS. TYPICAL SATURDAY", a
+/// thick stacked bar for the day and a thin one for the usual, the time at
+/// each level with its change, and "See trends".
 class StressSplitCard extends StatelessWidget {
   final String title, blurb, versus;
+  final IconData? icon;
   final List<int> today;
   final List<int>? usual;
+  final VoidCallback? onTrends;
   const StressSplitCard(
       {super.key,
       required this.title,
       required this.blurb,
       required this.versus,
       required this.today,
-      this.usual});
+      this.usual,
+      this.icon,
+      this.onTrends});
+
+  /// The change chip: a percentage against a usual above zero; against a
+  /// usual of zero the plain added time (a percentage of nothing is not a
+  /// number); nothing without a usual.
+  static String? change(int now, int? usual) {
+    if (usual == null) return null;
+    final d = changePct(now, usual);
+    if (d != null) return '${d >= 0 ? '▲' : '▼'} ${d.abs()}%';
+    return now == 0 ? null : '▲ ${hmOfMin(now.toDouble())}';
+  }
 
   @override
   Widget build(BuildContext c) {
@@ -302,18 +372,33 @@ class StressSplitCard extends StatelessWidget {
     }
 
     return Surface(
+      semanticLabel: '$title. ${[
+        for (var i = 0; i < 3; i++)
+          '${kStressLevelWords[i]} ${hmOfMin(today[i].toDouble())}',
+      ].join(', ')}',
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text(title.toUpperCase(),
-            style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
-        const SizedBox(height: S.x2),
-        Text(versus, style: F.cap.copyWith(color: p.ink3)),
+        Row(children: [
+          if (icon != null) ...[
+            Icon(icon, size: 18, color: p.ink3),
+            const SizedBox(width: S.x2),
+          ],
+          Expanded(
+            child: Text(title.toUpperCase(),
+                style: F.over.copyWith(
+                    color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+          ),
+        ]),
+        const SizedBox(height: S.x3),
+        Text(versus.toUpperCase(),
+            style: F.over.copyWith(
+                color: p.ink2, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
         const SizedBox(height: S.x3),
         stack(today, 12, 1),
         if (usual != null) ...[
-          const SizedBox(height: S.x1),
+          const SizedBox(height: S.x2),
           stack(usual!, 6, .45),
         ],
-        const SizedBox(height: S.x3),
+        const SizedBox(height: S.x4),
         Row(children: [
           for (var i = 0; i < 3; i++)
             Expanded(
@@ -323,31 +408,48 @@ class StressSplitCard extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.topLeft,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(hm(today[i].toDouble()), style: F.n24.copyWith(color: p.ink)),
-                if (changePct(today[i], usual?[i]) case final d?)
-                  Container(
-                    margin: const EdgeInsets.only(top: S.x1),
-                    padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: 2),
-                    decoration: BoxDecoration(color: p.card2, borderRadius: R.rSm),
-                    child: Text('${d >= 0 ? '▲' : '▼'} ${d.abs()}%',
-                        style: F.cap.copyWith(color: p.ink2)),
-                  ),
-                const SizedBox(height: S.x1),
-                Row(children: [
-                  Container(
-                      width: 8,
-                      height: 8,
-                      color: p.on(kStressLevelColors[i])),
-                  const SizedBox(width: S.x1),
-                  Text(kStressLevelWords[i].toUpperCase(),
-                      style: F.over.copyWith(color: p.ink2, letterSpacing: 1.2)),
+                  Text(hmOfMin(today[i].toDouble()),
+                      style: F.n24.copyWith(color: p.ink)),
+                  if (change(today[i], usual?[i]) case final d?)
+                    Container(
+                      margin: const EdgeInsets.only(top: S.x1),
+                      padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: 2),
+                      decoration: BoxDecoration(color: p.card2, borderRadius: R.rSm),
+                      child: Text(d, style: F.cap.copyWith(color: p.ink2)),
+                    ),
+                  const SizedBox(height: S.x1),
+                  Row(children: [
+                    Container(
+                        width: 8,
+                        height: 8,
+                        color: p.on(kStressLevelColors[i])),
+                    const SizedBox(width: S.x1),
+                    Text(kStressLevelWords[i].toUpperCase(),
+                        style: F.over.copyWith(color: p.ink2, letterSpacing: 1.2)),
+                  ]),
                 ]),
-              ]),
               ),
             ),
         ]),
         const SizedBox(height: S.x3),
-        Text(blurb, style: F.cap.copyWith(color: p.ink3)),
+        Text(blurb, style: F.body.copyWith(color: p.ink3)),
+        if (onTrends != null) ...[
+          const SizedBox(height: S.x3),
+          Pressable(
+            onTap: onTrends,
+            semanticLabel: 'See $title trends',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: S.x2),
+              child: Row(children: [
+                Text('SEE TRENDS',
+                    style: F.over.copyWith(
+                        color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+                const SizedBox(width: S.x2),
+                Icon(LucideIcons.arrowRight, size: 18, color: p.ink),
+              ]),
+            ),
+          ),
+        ],
       ]),
     );
   }

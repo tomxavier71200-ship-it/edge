@@ -22,6 +22,8 @@ import 'package:openstrap_edge/ui2/screens/more_screen.dart';
 import 'package:openstrap_edge/ui2/screens/sleep_whoop.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
+import 'package:openstrap_edge/ui2/screens/stress_monitor.dart';
+import 'package:openstrap_edge/ui2/screens/health_monitor.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
@@ -175,6 +177,45 @@ Widget _frame(Widget child) => MaterialApp(
       ),
     );
 
+/// A past day of stress readings for the Stress Monitor renders: [n]
+/// readings from 01:00, a night's sleep and one workout.
+StressDay _stressDay(int n) {
+  final day = DateTime(2026, 10, 3);
+  final r = [
+    for (var i = 0; i < n; i++)
+      (
+        at: DateTime(2026, 10, 3, 1, 15 * i),
+        v: (1.2 + 0.9 * ((i * 13 % 17) / 17 - .4) + (i > 40 && i < 50 ? .9 : 0))
+            .clamp(0.1, 2.9)
+            .toDouble(),
+      ),
+  ];
+  final sleep = [
+    (
+      from: DateTime(2026, 10, 3, 1).millisecondsSinceEpoch ~/ 1000,
+      to: DateTime(2026, 10, 3, 7).millisecondsSinceEpoch ~/ 1000,
+    ),
+  ];
+  final work = [
+    (
+      from: DateTime(2026, 10, 3, 12, 9).millisecondsSinceEpoch ~/ 1000,
+      to: DateTime(2026, 10, 3, 12, 50).millisecondsSinceEpoch ~/ 1000,
+    ),
+  ];
+  return StressDay(
+    day: dayLabelOf(day),
+    readings: r,
+    window: r,
+    from: day,
+    to: DateTime(2026, 10, 4),
+    sleep: sleep,
+    work: work,
+    split: stressSplit(r, sleep: sleep, work: work),
+    usual: const StressSplit([370, 900, 140], [120, 500, 60], [300, 60, 0]),
+    lastNight: const {'score': 38, 'level': 'moderate'},
+  );
+}
+
 void main() {
   setUpAll(() async {
     await loadAppFonts();
@@ -235,6 +276,25 @@ void main() {
       ]),
     ),
     'health_overview': HealthScreen(data: _health, tab: 0),
+    'health_monitor': HealthMonitorScreen(tiles: [
+      RangeTile(icon: LucideIcons.wind, name: 'Respiratory rate', value: 12.8,
+          unit: 'br/min', range: const NormalRange(12.5, 12.8, 14),
+          fmt: (x) => x.toStringAsFixed(1), onTap: () {}),
+      RangeTile(icon: LucideIcons.heart, name: 'Resting heart rate', value: 59,
+          unit: 'bpm', range: const NormalRange(55, 58, 14), fmt: (x) => x.round().toString(),
+          onTap: () {}),
+      RangeTile(icon: LucideIcons.activity, name: 'HRV', value: 58, unit: 'ms',
+          range: const NormalRange(58, 65, 14), fmt: (x) => x.round().toString(), onTap: () {}),
+      RangeTile(icon: LucideIcons.thermometer, name: 'Skin temperature', value: .4,
+          unit: 'SD', range: null, note: 'usual range in 3 more nights',
+          fmt: (x) => '+${x.toStringAsFixed(1)}', onTap: () {}),
+    ]),
+    'live_hr_panel': ListView(padding: const EdgeInsets.all(16), children: const [
+      LiveHrPanel.preview(hr: 76, trace: [74, 75, 75, 76, 77, 76, 75, 76, 76, 77, 76, 76]),
+    ]),
+    'stress_monitor': StressMonitorScreen(preview: _stressDay(30)),
+    'stress_monitor_thin': StressMonitorScreen(preview: _stressDay(2)),
+
     'tab_workout': const WorkoutScreen(),
     'tab_more': const MoreScreen(),
     'tab_health1': HealthScreen(data: _health, tab: 1),
@@ -508,7 +568,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('tab_') ? 2400 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

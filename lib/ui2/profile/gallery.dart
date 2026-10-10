@@ -44,7 +44,8 @@ import '../../ai/nightly_sweep.dart' show SweepFinding;
 import '../../compute/findings.dart';
 import '../../models/metric.dart';
 import '../activity/catalogue.dart';
-import '../screens/health_monitor.dart' show HealthMonitorCard, StressMonitorCard, VitalStatus;
+import '../screens/health_monitor.dart'
+    show HealthMonitorCard, LiveHrPanel, StressMonitorCard, VitalStatus;
 import '../activity/live.dart';
 import '../activity/picker.dart' show ActivityPicker, ActivityRow;
 import '../activity/poster.dart'
@@ -692,6 +693,9 @@ Map<String, Widget> _nutritionAndWellnessCases() {
     'live_hr_card': const LiveHrCard.preview(hr: 68, trace: [
       64, 65, 65, 66, 67, 66, 65, 66, 68, 69, 70, 69, 68, 67, 66, 66, 67, 68,
       69, 68, 67, 67, 68, 69, 70, 71, 70, 69, 68, 68,
+    ]),
+    'live_hr_panel': const LiveHrPanel.preview(hr: 76, zone: null, trace: [
+      74, 75, 75, 76, 76, 75, 76, 77, 76, 76, 75, 76,
     ]),
     'mood_picker': MoodPicker(value: 4, onChanged: (_) {}),
     'mood_picker_blank': MoodPicker(onChanged: (_) {}),

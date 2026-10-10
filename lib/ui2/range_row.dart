@@ -178,7 +178,11 @@ class RangeTile extends StatelessWidget {
   final IconData icon;
   final String name, unit;
   final double value;
-  final NormalRange range;
+
+  /// The person's usual range; null while it is still building, when the
+  /// chip says so with [note] instead of judging the value.
+  final NormalRange? range;
+  final String? note;
   final String Function(double) fmt;
   final VoidCallback? onTap;
 
@@ -190,19 +194,30 @@ class RangeTile extends StatelessWidget {
     required this.unit,
     required this.range,
     required this.fmt,
+    this.note,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final inside = range.contains(value);
-    final word = inside ? 'within' : (value > range.hi ? 'above' : 'below');
-    final col = inside ? p.on(C.green) : p.on(C.orange);
+    final r = range;
+    final inside = r?.contains(value) ?? false;
+    final word = r == null
+        ? null
+        : inside
+            ? 'within'
+            : (value > r.hi ? 'above' : 'below');
+    final col = r == null ? p.ink3 : (inside ? p.on(C.green) : p.on(C.orange));
+    final chip = r == null
+        ? (note ?? 'usual range building')
+        : '$word ${fmt(r.lo)}–${fmt(r.hi)}';
     return Surface(
       onTap: onTap,
-      semanticLabel: '$name, ${fmt(value)} $unit, $word your usual '
-          '${fmt(range.lo)} to ${fmt(range.hi)}',
+      semanticLabel: r == null
+          ? '$name, ${fmt(value)} $unit, $chip'
+          : '$name, ${fmt(value)} $unit, $word your usual '
+              '${fmt(r.lo)} to ${fmt(r.hi)}',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon, size: 18, color: p.ink3),
@@ -232,13 +247,21 @@ class RangeTile extends StatelessWidget {
         const SizedBox(height: S.x3),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: S.x1),
-          decoration: BoxDecoration(color: col.withValues(alpha: .16), borderRadius: R.rSm),
+          decoration: BoxDecoration(
+              color: r == null ? p.card2 : col.withValues(alpha: .16),
+              borderRadius: R.rSm),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(inside ? LucideIcons.check : LucideIcons.triangleAlert,
-                size: 13, color: col),
+            Icon(
+                r == null
+                    ? LucideIcons.hourglass
+                    : inside
+                        ? LucideIcons.check
+                        : LucideIcons.triangleAlert,
+                size: 13,
+                color: col),
             const SizedBox(width: S.x1),
             Flexible(
-              child: Text('$word ${fmt(range.lo)}–${fmt(range.hi)}',
+              child: Text(chip,
                   maxLines: 2,
                   style: F.cap.copyWith(color: col, fontWeight: FontWeight.w600)),
             ),
