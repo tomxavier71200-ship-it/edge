@@ -13,12 +13,14 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../../cloud/cloud_sync.dart';
 import '../../health/health_import_state.dart' show storeName;
 import '../../l10n/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../state/locale_controller.dart';
 import '../ui2.dart';
 import '../screens/coach.dart' show CoachSetup, coachSubtitle;
+import 'data.dart' show DataScreen;
 import 'devices.dart';
 import 'settings.dart';
 
@@ -268,6 +270,7 @@ class _ProfileHomeState extends State<ProfileHome> {
           onSettings: () => _open(c, const MoreSettings()),
           onEdit: () => _open(c, const EditProfile()),
           onCoach: () => _open(c, const CoachSetup()),
+          onCloud: () => _open(c, const DataScreen()),
         ),
       );
 }
@@ -276,13 +279,14 @@ class ProfileHomeView extends StatelessWidget {
   /// Null while the counts are still being read — the numbers are absent, not
   /// zero, and a zero rendered during a load is a wrong number on screen.
   final ProfileStats? stats;
-  final VoidCallback? onDevices, onSettings, onEdit, onCoach;
+  final VoidCallback? onDevices, onSettings, onEdit, onCoach, onCloud;
 
   const ProfileHomeView(
       {super.key,
       this.stats,
       this.onDevices,
       this.onCoach,
+      this.onCloud,
       this.onSettings,
       this.onEdit,
       });
@@ -341,6 +345,24 @@ class ProfileHomeView extends StatelessWidget {
                       onTap: () => _pickLanguage(c))),
                 ]),
                 settingsGroup(c, l?.profileYourDataGroup ?? 'Your data', [
+                  // Koop Cloud: signed in or not, and how fresh — the same
+                  // line More shows, opening the same screen.
+                  ListenableBuilder(
+                    listenable: CloudSync.instance,
+                    builder: (c, _) {
+                      final cs = CloudSync.instance;
+                      return SetRow(LucideIcons.cloud, C.teal, 'Koop Cloud',
+                          sub: !cs.on
+                              ? 'Sign in with Google to use Koop on more phones'
+                              : cs.busy
+                                  ? 'Syncing…'
+                                  : cs.lastError ??
+                                      cloudAgo(cs.role == CloudRole.send
+                                          ? cs.lastUp
+                                          : cs.remoteSeen),
+                          onTap: onCloud);
+                    },
+                  ),
                   SetRow(LucideIcons.database, C.green,
                       l?.profileStorage ?? 'Storage',
                       value: s?.storageBytes == null
@@ -361,31 +383,14 @@ class ProfileHomeView extends StatelessWidget {
                               'privacy, reset',
                       onTap: onSettings),
                 ]),
-                settingsGroup(c, l?.profileCommunityGroup ?? 'Community', [
+                // Koop's own source, and the project it is built on — named
+                // because the MIT licence asks for it, not as a community door.
+                settingsGroup(c, 'About Koop', [
                   SetRow.brand(brandGlyph('assets/icons/github.svg'), C.n500,
-                      l?.profileGithubTitle ?? 'GitHub',
-                      sub: l?.profileGithubSub ??
-                          'Please star and show your support — it helps '
-                              'the project grow',
+                      'Source code',
+                      sub: 'Koop is open source, built on OpenStrap edge '
+                          '(MIT licence)',
                       onTap: () => open3rdPartyLink(kGithubUrl)),
-                  SetRow.brand(brandGlyph('assets/icons/reddit.svg'), C.orange,
-                      l?.profileRedditTitle ?? 'Reddit',
-                      sub: l?.profileRedditSub ??
-                          'Join r/OpenStrap — post your achievements, '
-                              'questions, anything',
-                      onTap: () => open3rdPartyLink(kRedditUrl)),
-                  SetRow.brand(brandGlyph('assets/icons/discord.svg'),
-                      C.indigo, l?.profileDiscordTitle ?? 'Discord',
-                      sub: l?.profileDiscordSub ??
-                          'Hang out with other users and the people '
-                              'building this',
-                      onTap: () => open3rdPartyLink(kDiscordUrl)),
-                  SetRow(LucideIcons.heartHandshake, C.pink,
-                      l?.profileSponsorTitle ?? 'Sponsor',
-                      sub: l?.profileSponsorSub ??
-                          'This is a free, open-source project — '
-                              'sponsoring keeps it going',
-                      onTap: () => open3rdPartyLink(kSponsorUrl)),
                 ]),
               ],
             ),

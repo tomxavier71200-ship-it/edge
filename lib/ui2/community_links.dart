@@ -6,7 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const kGithubUrl = 'https://github.com/OpenStrap/edge';
+/// Koop's own repository (a fork of github.com/OpenStrap/edge).
+const kGithubUrl = 'https://github.com/tomxavier71200-ship-it/edge';
 const kRedditUrl = 'https://www.reddit.com/r/OpenStrap/';
 const kDiscordUrl = 'https://discord.gg/dUXds5MWkd';
 const kSponsorUrl = 'https://github.com/sponsors/abdulsaheel';

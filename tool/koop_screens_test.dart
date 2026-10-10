@@ -297,6 +297,14 @@ void main() {
 
     'tab_workout': const WorkoutScreen(),
     'tab_more': const MoreScreen(),
+    'coach_bubble': ListView(padding: const EdgeInsets.all(16), children: [
+      CoachBubble(
+          oneLiner: 'Hey Tom, your stress peaked at 1.4 around 6:54, shortly '
+              'after you woke.',
+          onTap: () {}),
+      const SizedBox(height: 12),
+      CoachBubble(oneLiner: null, onTap: () {}),
+    ]),
     'tab_health1': HealthScreen(data: _health, tab: 1),
     'tab_health2': HealthScreen(data: _health, tab: 2),
     'sleep_cards': ListView(padding: const EdgeInsets.all(16), children: [

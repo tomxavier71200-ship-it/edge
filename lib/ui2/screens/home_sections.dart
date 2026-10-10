@@ -29,6 +29,7 @@ import '../activity/day_strain.dart' show DayStrainDetail;
 import '../ui2.dart';
 import 'home_screen.dart';
 import 'health_screen.dart' show kStressLevelColors, kStressLevelWords, stressLevelOf;
+import 'coach.dart' show kCoachAccent;
 import 'journal_compose.dart';
 import 'log_workout.dart'
     show LogWorkout, Suggestion, WorkoutSuggestionScreen, activeSuggestions;
@@ -688,6 +689,60 @@ class _MonitorTilesState extends State<MonitorTiles> {
                     ? 'Not yet today'
                     : '${r.length} of $kStressMinWindows readings',
           ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// WHOOP's floating coach line, at the foot of Home: the coach's mark and
+/// one sentence — today's briefing when one was written, otherwise an
+/// invitation to ask. Home shows it only when a coach is set up; with none,
+/// there is nothing behind it to open.
+class CoachBubble extends StatelessWidget {
+  /// Today's one-line briefing, or null when none has been written yet.
+  final String? oneLiner;
+  final VoidCallback onTap;
+  const CoachBubble({super.key, required this.oneLiner, required this.onTap});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final text = oneLiner ?? 'Ask the coach about your day';
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: oneLiner == null ? text : 'Coach: $text',
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(S.x2, S.x2, S.x4, S.x2),
+        decoration: BoxDecoration(
+          color: p.card2,
+          borderRadius: R.rPill,
+          border: Border.all(color: p.line),
+          boxShadow: [
+            BoxShadow(color: p.bg.withValues(alpha: .6), blurRadius: 16),
+          ],
+        ),
+        child: Row(children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: p.on(kCoachAccent), width: 2),
+            ),
+            child: Icon(LucideIcons.sparkles, size: 20, color: p.on(kCoachAccent)),
+          ),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Text(text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: F.body.copyWith(
+                    color: oneLiner == null ? p.ink2 : p.ink,
+                    fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: S.x2),
+          Icon(LucideIcons.chevronUp, size: 20, color: p.ink2),
         ]),
       ),
     );

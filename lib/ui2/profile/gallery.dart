@@ -58,7 +58,7 @@ import '../activity/summary.dart';
 import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
-import '../screens/home_sections.dart' show MonitorTiles;
+import '../screens/home_sections.dart' show CoachBubble, MonitorTiles;
 import '../screens/more_screen.dart' show DoorRow, DoorTile, FeatureCard;
 import '../screens/sleep_whoop.dart';
 import '../screens/stress_detail.dart';
@@ -704,6 +704,10 @@ Map<String, Widget> _nutritionAndWellnessCases() {
           (at: DateTime(2026, 10, 3, 8, 15 * i), v: .6 + (i % 4) * .4),
       ]),
     ),
+    'coach_bubble': CoachBubble(
+        oneLiner: 'Your long sleep last night cleared the debt from the week.',
+        onTap: () {}),
+    'coach_bubble_empty': CoachBubble(oneLiner: null, onTap: () {}),
     'mood_picker': MoodPicker(value: 4, onChanged: (_) {}),
     'mood_picker_blank': MoodPicker(onChanged: (_) {}),
     'field_stepper': Surface(

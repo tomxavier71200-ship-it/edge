@@ -2467,6 +2467,27 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     final rebuilt = dbRebuiltCard(dbRebuildOf(c), l);
     // The streak, worked out once per load (see [_streakOf]), not per build.
     final streak = _streakOf(d);
+    // WHOOP's floating coach line: only for today, and only with a coach set
+    // up — without one there is nothing behind it to open.
+    final Widget? bubble = isToday && coachReady(c)
+        ? Positioned(
+            left: S.x4,
+            right: S.x4,
+            bottom: S.x3,
+            child: Builder(builder: (c) {
+              final period = currentBriefingPeriod(DateTime.now());
+              final b = BriefingStore.read(period);
+              return CoachBubble(
+                oneLiner: b?.oneLiner,
+                onTap: () => go(
+                    c,
+                    b == null
+                        ? const CoachScreen()
+                        : AiBriefingScreen(period: period)),
+              );
+            }),
+          )
+        : null;
 
     final list = _refreshable(
       ListView(
@@ -2585,18 +2606,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                     ),
                   ),
                 ),
-                // ONLY WHEN THERE IS A COACH — an unconfigured coach is a setting,
-                // and it lives in Profile.
-                if (coachReady(c)) ...[
-                  _circle(
-                    c,
-                    LucideIcons.sparkles,
-                    l?.homeAskCoach ?? 'Ask the coach',
-                    () => go(c, const CoachScreen()),
-                    tint: kCoachAccent,
-                  ),
-                  const SizedBox(width: S.x2),
-                ],
+                // The coach is the floating line at the foot of Home (WHOOP's
+                // bubble), shown only when one is set up — not a second button
+                // up here.
                 // No Edit pill here: a coloured button before any data was one
                 // control too many. Customize lives in More, and the Dashboard
                 // section carries its own Edit.
@@ -2747,15 +2759,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   _ => const <Widget>[],
                 },
 
-            // The community and sponsor cards, last: they are about the project,
-            // not about today, and above My Day they pushed the day off screen.
-            const SizedBox(height: S.x5),
-            const CommunityNudge(),
           ],
+          // Room for the coach line, so it never covers the last card.
+          if (bubble != null) const SizedBox(height: 88),
         ],
       ),
     );
-    if (bare || !RingTrio.has(d)) return list;
+    if (bare || !RingTrio.has(d)) {
+      return bubble == null ? list : Stack(children: [list, bubble]);
+    }
     // Scrolled past the big dials, small ones pin to the top, WHOOP-style,
     // so the day's three numbers stay in view.
     return Stack(
@@ -2792,6 +2804,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 : const SizedBox.shrink(),
           ),
         ),
+        ?bubble,
       ],
     );
   }
