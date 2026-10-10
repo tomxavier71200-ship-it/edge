@@ -8,7 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../data/day_label.dart';
 import '../../data/local_repository.dart';
 import '../ui2.dart';
-import 'home_screen.dart' show ChartPoint, go, pointsOf, readinessBand;
+import 'home_screen.dart' show ChartPoint, go, pointsOf, readinessBand, thousands;
 import 'home_sections.dart' show kBaselineMin;
 import 'metric_detail.dart' show MetricDetail, specOf;
 
@@ -64,6 +64,7 @@ String trendFormat(String key, double v) => switch (key) {
       'resp_rate' || 'strain' => v.toStringAsFixed(1),
       'sleep' => hmOfMin(v),
       'readiness' || 'efficiency' || 'sleep_perf' => '${v.round()}%',
+      'steps' || 'calories' => thousands(v),
       _ => '${v.round()}',
     };
 
@@ -108,7 +109,7 @@ List<Widget> weeklyTrendCards(
   Color line(String k) => p.on(switch (k) {
         'sleep' || 'efficiency' || 'sleep_perf' => C.sleep,
         'strain' => C.strain,
-        'steps' || 'calories' => C.orange,
+        'steps' || 'calories' => C.strain,
         _ => C.blue,
       });
   return [
@@ -122,14 +123,16 @@ List<Widget> weeklyTrendCards(
           'sleep' => 'Hours of sleep',
           'efficiency' => 'Sleep efficiency',
           'sleep_perf' => 'Sleep performance',
-          'strain' => 'Day strain',
+          'strain' => 'Strain',
           'steps' => 'Steps',
           'calories' => 'Calories',
           _ => specOf(k).title,
         },
         days: days,
         values: weekValues(series[k] ?? const [], days),
-        kind: const {'readiness', 'sleep', 'strain', 'steps', 'sleep_perf'}
+        kind: const {
+                  'readiness', 'sleep', 'strain', 'steps', 'calories', 'sleep_perf'
+                }
                 .contains(k)
             ? TrendKind.bars
             : TrendKind.line,

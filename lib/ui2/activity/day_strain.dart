@@ -28,6 +28,7 @@ import '../../models/metric.dart' show whyFromNote;
 import '../screens/home_screen.dart'
     show ChartPoint, repoOf, denseDays, pointsOf;
 import '../screens/detail_trends.dart';
+import '../screens/home_sections.dart' show kBaselineMin;
 import '../screens/metric_detail.dart' show dayCenter, detailScaffold;
 import '../ui2.dart';
 import 'catalogue.dart' show zonesWhy;
@@ -84,7 +85,15 @@ class DayStrainData {
   /// Stored series for the contributors and the weekly trends.
   final Map<String, List<ChartPoint>> trends;
 
+  /// The last 31 days' heart-rate zone minutes (date → [z1..z5]) and
+  /// strength-workout minutes (date → minutes; a day with none is absent),
+  /// for WHOOP's zone and strength rows and weekly charts.
+  final Map<String, List<double?>> zoneHistory;
+  final Map<String, double> strengthMin;
+
   const DayStrainData({
+    this.zoneHistory = const {},
+    this.strengthMin = const {},
     this.target,
     this.history = const [],
     this.trends = const {},
@@ -169,7 +178,26 @@ class DayStrainData {
       history = denseDays(pointsOf(await repo.getChart('strain')), 7);
     } catch (_) {}
 
+    Map<String, dynamic> hist = const {};
+    try {
+      hist = await repo.getStrainHistory(31);
+    } catch (_) {}
+    final zh = hist['zones'], sm = hist['strength_min'];
     return DayStrainData(
+      zoneHistory: zh is Map
+          ? {
+              for (final e in zh.entries)
+                e.key as String: [
+                  for (final v in (e.value as List)) (v as num?)?.toDouble(),
+                ],
+            }
+          : const {},
+      strengthMin: sm is Map
+          ? {
+              for (final e in sm.entries)
+                e.key as String: (e.value as num).toDouble(),
+            }
+          : const {},
       target: target,
       history: history,
       trends: await loadTrendSeries(
@@ -253,29 +281,16 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
           const Center(child: CircularProgressIndicator()),
         ] else ...[
           if (d.strain != null) _hero(c, p, d),
-          // What the day was made of, against your own last 30 days.
-          if ([
-            ?contributorFor(c, 'steps', 'Steps', LucideIcons.footprints, true,
-                d.trends['steps'] ?? const []),
-            ?contributorFor(c, 'active_min', 'Active minutes',
-                LucideIcons.timer, true, d.trends['active_min'] ?? const []),
-            ?contributorFor(c, 'calories', 'Calories', LucideIcons.flame,
-                null, d.trends['calories'] ?? const []),
-          ] case final rows when rows.isNotEmpty) ...[
+          // WHOOP's four rows, each against your own last 30 days.
+          if (_rows(c, d) case final rows when rows.isNotEmpty) ...[
             ContributorsCard(rows: rows, footer: 'Today vs. last 30 days'),
-            const SizedBox(height: S.x4),
+            const SizedBox(height: S.x3),
           ],
+          ?_targetCard(p, d),
+          ..._weekly(c, p, d),
+          // ── Koop's own, below WHOOP's ──
           ..._trace(p, l, d),
           ..._zones(p, l, d),
-          if (d.trends.values.any((s) => s.isNotEmpty))
-            Section(
-              'Weekly trends',
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: weeklyTrendCards(
-                    c, d.trends, const ['strain', 'steps', 'calories']),
-              ),
-            ),
           Section(l?.dayStrainInputsSection ?? 'What this is made of',
               _inputs(p, l, d)),
         ],
@@ -290,7 +305,6 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
   Widget _hero(BuildContext c, P p, DayStrainData d) {
     final s = d.strain!;
     final tg = d.target;
-    final togo = tg == null ? null : tg.$1 - s;
     return Padding(
       padding: const EdgeInsets.only(top: S.x4, bottom: S.x5),
       child: Column(children: [
@@ -300,25 +314,164 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
           value: s / 21,
           color: C.strain,
           number: (t) => (s * t).toStringAsFixed(1),
-          label: 'Strain of 21',
+          label: 'Strain',
           band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21),
-        ),
-        const SizedBox(height: S.x3),
-        Text(
-          tg == null
-              ? 'No target today'
-              : togo! > 0
-                  ? 'Target ${tg.$1.toStringAsFixed(1)}–${tg.$2.toStringAsFixed(1)} · '
-                      '${togo.toStringAsFixed(1)} to go'
-                  : s > tg.$2
-                      ? 'Above today\'s target of ${tg.$1.toStringAsFixed(1)}–'
-                          '${tg.$2.toStringAsFixed(1)}'
-                      : 'In today\'s target range',
-          textAlign: TextAlign.center,
-          style: F.head.copyWith(color: tg == null ? p.ink3 : p.ink2),
         ),
       ]),
     );
+  }
+
+  /// WHOOP's four strain rows: heart-rate zones 1–3, zones 4–5, strength
+  /// activity time and steps, each today against the person's own 30 days
+  /// before it. Zone and strength rows need the day's zone split (the band
+  /// saw the day); a day without one has no zone rows rather than zeros.
+  List<Contributor> _rows(BuildContext c, DayStrainData d) {
+    final dayL = d.day == null ? todayLabel() : dayLabelOf(d.day!);
+    final dd = DateTime.parse(dayL);
+    final fromL = dayLabelOf(DateTime(dd.year, dd.month, dd.day - 30));
+    double? part(List<double?>? z, int a, int b) {
+      if (z == null) return null;
+      double? s;
+      for (var i = a; i <= b && i < z.length; i++) {
+        if (z[i] != null) s = (s ?? 0) + z[i]!;
+      }
+      return s;
+    }
+
+    final prior = [
+      for (final e in d.zoneHistory.entries)
+        if (e.key.compareTo(fromL) >= 0 && e.key.compareTo(dayL) < 0) e,
+    ];
+    double? avg(Iterable<double?> xs) {
+      final l = [for (final x in xs) ?x];
+      return l.length < kBaselineMin ? null : l.reduce((a, b) => a + b) / l.length;
+    }
+
+    Contributor row(IconData icon, String label, double v, double? a) {
+      final dir = a == null || (v - a).abs() < .5 ? 0 : (v > a ? 1 : -1);
+      return Contributor(icon, label, hmOfMin(v),
+          average: a == null ? null : hmOfMin(a),
+          direction: dir,
+          good: dir == 0 ? null : dir > 0);
+    }
+
+    final today = d.zoneHistory[dayL];
+    final z13 = part(today, 0, 2), z45 = part(today, 3, 4);
+    return [
+      if (z13 != null)
+        row(LucideIcons.heartPulse, 'Heart rate zones 1–3', z13,
+            avg([for (final e in prior) part(e.value, 0, 2)])),
+      if (z45 != null)
+        row(LucideIcons.heart, 'Heart rate zones 4–5', z45,
+            avg([for (final e in prior) part(e.value, 3, 4)])),
+      // Strength time is logged workouts: a worn day with none logged is a
+      // real 0:00, the way WHOOP shows it. No zone split, no row.
+      if (today != null)
+        row(LucideIcons.dumbbell, 'Strength activity time',
+            d.strengthMin[dayL] ?? 0,
+            avg([
+              for (final e in prior) d.strengthMin[e.key] ?? 0,
+            ])),
+      ?contributorFor(c, 'steps', 'Steps', LucideIcons.footprints, true,
+          d.trends['steps'] ?? const []),
+    ];
+  }
+
+  /// Today's strain target as WHOOP's coaching card under the rows. Null
+  /// without a target (only ever today's, and only when the coach made one).
+  Widget? _targetCard(P p, DayStrainData d) {
+    final tg = d.target, s = d.strain;
+    if (tg == null || s == null) return null;
+    final lo = tg.$1.toStringAsFixed(1), hi = tg.$2.toStringAsFixed(1);
+    final line = s < tg.$1
+        ? 'Aim for a strain of $lo–$hi today. You are at '
+            '${s.toStringAsFixed(1)}, ${(tg.$1 - s).toStringAsFixed(1)} to go.'
+        : s > tg.$2
+            ? 'You are above today\'s target of $lo–$hi. Take it easier for '
+                'the rest of the day.'
+            : 'You are in today\'s target range of $lo–$hi.';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: S.x3),
+      child: Surface(
+        child: Text(line, style: F.head.copyWith(color: p.ink)),
+      ),
+    );
+  }
+
+  /// WHOOP's weekly strain charts: strain, zones 1–3 and 4–5 stacked by
+  /// zone, steps, calories and strength time. A day with no value draws
+  /// nothing.
+  List<Widget> _weekly(BuildContext c, P p, DayStrainData d) {
+    final days = lastWeekDays();
+    List<double?> zone(int i) => [
+          for (final dd in days) () {
+            final z = d.zoneHistory[dayLabelOf(dd)];
+            return z == null || i >= z.length ? null : z[i];
+          }(),
+        ];
+    final blue = p.on(C.strain);
+    final strengthWeek = [
+      for (final dd in days)
+        d.zoneHistory.containsKey(dayLabelOf(dd))
+            ? (d.strengthMin[dayLabelOf(dd)] ?? 0)
+            : null,
+    ];
+    final cards = <Widget>[
+      ...weeklyTrendCards(c, d.trends, const ['strain']),
+      if (d.zoneHistory.isNotEmpty) ...[
+        WeekTrendCard(
+          title: 'HR zones 1–3',
+          days: days,
+          kind: TrendKind.stacked,
+          values: zone(0),
+          values2: zone(1),
+          values3: zone(2),
+          colorOf: (_) => C.n300,
+          color2: C.blue,
+          color3: C.teal,
+          format: hmOfMin,
+          legend: const [
+            ('Zone 1', C.n300),
+            ('Zone 2', C.blue),
+            ('Zone 3', C.teal),
+          ],
+        ),
+        const SizedBox(height: S.x3),
+        WeekTrendCard(
+          title: 'HR zones 4–5',
+          days: days,
+          kind: TrendKind.stacked,
+          values: zone(3),
+          values2: zone(4),
+          colorOf: (_) => C.yellow,
+          color2: C.orange,
+          format: hmOfMin,
+          legend: const [('Zone 4', C.yellow), ('Zone 5', C.orange)],
+        ),
+        const SizedBox(height: S.x3),
+      ],
+      ...weeklyTrendCards(c, d.trends, const ['steps', 'calories']),
+      if (strengthWeek.any((v) => v != null)) ...[
+        WeekTrendCard(
+          title: 'Strength activity time',
+          days: days,
+          values: strengthWeek,
+          format: hmOfMin,
+          colorOf: (_) => blue,
+        ),
+        const SizedBox(height: S.x3),
+      ],
+    ];
+    if (!d.trends.values.any((s) => s.isNotEmpty) && d.zoneHistory.isEmpty) {
+      return const [];
+    }
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: S.x6, bottom: S.x3),
+        child: Text('Weekly Trends', style: F.t2.copyWith(color: p.ink)),
+      ),
+      ...cards,
+    ];
   }
 
   // ── the curve, and only then the number ────────────────────────────────────

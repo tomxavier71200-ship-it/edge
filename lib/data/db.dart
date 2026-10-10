@@ -9359,6 +9359,51 @@ class LocalDb {
     };
   }
 
+  /// Heart-rate zone minutes per day in [fromDay]..[toDay] (inclusive), from
+  /// each day's served analysis: date → [z1..z5], a zone the day did not
+  /// report stays null. One query with SQLite's JSON functions rather than one
+  /// full payload decode per day — the Strain screen asks for 30 days.
+  static Future<Map<String, List<double?>>> dayZoneMinutes(
+      String fromDay, String toDay) async {
+    final db = await instance;
+    final rows = await db.rawQuery(
+      'SELECT r.day_id AS d, '
+      "json_extract(r.payload_json,'\$.zones.z1') AS z1, "
+      "json_extract(r.payload_json,'\$.zones.z2') AS z2, "
+      "json_extract(r.payload_json,'\$.zones.z3') AS z3, "
+      "json_extract(r.payload_json,'\$.zones.z4') AS z4, "
+      "json_extract(r.payload_json,'\$.zones.z5') AS z5 "
+      'FROM day_result r $_servedDayJoin '
+      'WHERE r.day_id >= ? AND r.day_id <= ? AND json_valid(r.payload_json)',
+      [fromDay, toDay],
+    );
+    return {
+      for (final r in rows)
+        r['d'] as String: [
+          for (final k in const ['z1', 'z2', 'z3', 'z4', 'z5'])
+            (r[k] as num?)?.toDouble(),
+        ],
+    };
+  }
+
+  /// Strength workouts started at or after [fromSec] (epoch seconds; rows
+  /// stored in ms are tolerated), not discarded: start, end and duration. A
+  /// strength workout is one typed strength / weights / lifting — the app's
+  /// own names and WHOOP's imported "weightlifting".
+  static Future<List<Map<String, Object?>>> strengthSessionsSince(
+      int fromSec) async {
+    final db = await instance;
+    return db.rawQuery(
+      'SELECT start_ts, end_ts, duration_min FROM sessions '
+      'WHERE (CASE WHEN start_ts > 1000000000000 THEN start_ts / 1000 '
+      'ELSE start_ts END) >= ? '
+      "AND status NOT IN ('discarded','deleted','rejected') "
+      "AND (lower(type) LIKE '%strength%' OR lower(type) LIKE '%weight%' "
+      "OR lower(type) LIKE '%lift%')",
+      [fromSec],
+    );
+  }
+
   /// Koop Cloud's "is there new data" mark: the newest 1 Hz row's rowid
   /// (INSERT OR REPLACE gives every insert, backfill included, a new one) —
   /// O(1), and it moves only when a drain or import actually stored rows.

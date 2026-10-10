@@ -14,6 +14,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/data/day_label.dart';
+import 'package:openstrap_edge/ui2/activity/day_strain.dart';
 import 'package:openstrap_edge/models/metric.dart';
 import 'package:openstrap_edge/ui2/screens/home_sections.dart';
 import 'package:openstrap_edge/ui2/screens/streak_screen.dart';
@@ -380,6 +381,52 @@ void main() {
         ),
       );
     }),
+    'strain_detail': Builder(builder: (c) {
+      final now = DateTime.now();
+      List<({int t, double v})> s(double base, double amp) => [
+            for (var i = 30; i >= 0; i--)
+              (
+                t: DateTime(now.year, now.month, now.day - i, 12)
+                        .millisecondsSinceEpoch ~/
+                    1000,
+                v: base + amp * math.sin(i * 1.1),
+              ),
+          ];
+      return DayStrainDetail(
+        data: DayStrainData(
+          day: DateTime(now.year, now.month, now.day),
+          strain: 9.4,
+          target: (11.0, 13.5),
+          curve: [
+            for (var m = 0; m < 1440; m++)
+              m < 420 ? null : math.min(9.4, (m - 420) / 1020 * 10.5),
+          ],
+          zoneMin: const [42, 18, 6, 2, 0],
+          wornMin: 980,
+          coveragePct: 92,
+          peakHr: 158,
+          trends: {
+            'strain': s(12, 4),
+            'steps': s(6000, 1500),
+            'calories': s(2500, 450),
+          },
+          zoneHistory: {
+            for (var i = 30; i >= 0; i--)
+              dayLabelOf(DateTime(now.year, now.month, now.day - i)): [
+                30.0 + (i * 7 % 40),
+                10.0 + (i * 5 % 25),
+                (i * 3 % 12).toDouble(),
+                (i % 4 == 0 ? 6 : 0).toDouble(),
+                (i % 9 == 0 ? 2 : 0).toDouble(),
+              ],
+          },
+          strengthMin: {
+            dayLabelOf(DateTime(now.year, now.month, now.day - 2)): 45,
+            dayLabelOf(DateTime(now.year, now.month, now.day - 5)): 38,
+          },
+        ),
+      );
+    }),
     'recovery_detail': Builder(builder: (c) {
       final now = DateTime.now();
       List<({int t, double v})> s(double base, double amp, [int skip = -1]) => [
@@ -461,7 +508,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('tab_') ? 2400 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('tab_') ? 2400 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

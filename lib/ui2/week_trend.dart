@@ -52,6 +52,11 @@ class WeekTrendCard extends StatelessWidget {
   /// Coloured keys under the title, e.g. ("DEEP SLEEP", pink).
   final List<(String, Color)> legend;
 
+  /// An optional third part on top of a [TrendKind.stacked] bar (WHOOP's
+  /// zone 3 over zones 1 and 2); empty for a two-part stack.
+  final List<double?> values3;
+  final Color? color3;
+
   const WeekTrendCard({
     super.key,
     required this.title,
@@ -65,6 +70,8 @@ class WeekTrendCard extends StatelessWidget {
     this.color2,
     this.format2,
     this.legend = const [],
+    this.values3 = const [],
+    this.color3,
   });
 
   @override
@@ -72,6 +79,7 @@ class WeekTrendCard extends StatelessWidget {
     final p = P.of(c);
     final two = kind == TrendKind.stacked || kind == TrendKind.span;
     double? second(int i) => i < values2.length ? values2[i] : null;
+    double third(int i) => i < values3.length ? values3[i] ?? 0 : 0;
     final present = [
       for (var i = 0; i < values.length; i++)
         if (values[i] != null && (!two || second(i) != null)) values[i]!,
@@ -140,7 +148,10 @@ class WeekTrendCard extends StatelessWidget {
                       two && second(i) == null ? null : values[i],
                   ],
                   values2: [for (var i = 0; i < values.length; i++) second(i)],
+                  values3: [for (var i = 0; i < values.length; i++) third(i)],
                   color2: color2 ?? p.ink3,
+                  color3: color3 ?? p.ink2,
+                  ink: p.ink,
                   labels2: [
                     for (var i = 0; i < values.length; i++)
                       second(i) == null ? '' : (format2 ?? format)(second(i)!),
@@ -153,7 +164,7 @@ class WeekTrendCard extends StatelessWidget {
                       values[i] == null || (two && second(i) == null)
                           ? ''
                           : kind == TrendKind.stacked
-                              ? format(values[i]! + second(i)!)
+                              ? format(values[i]! + second(i)! + third(i))
                               : format(values[i]!),
                   ],
                   label: F.cap.copyWith(fontWeight: FontWeight.w700),
@@ -185,9 +196,10 @@ class WeekTrendCard extends StatelessWidget {
 
 class _WeekPainter extends CustomPainter {
   final List<double?> values, values2;
+  final List<double> values3;
   final List<Color> colors;
   final List<String> labels, labels2;
-  final Color color2;
+  final Color color2, color3, ink;
   final TrendKind kind;
   final double t;
   final TextStyle label;
@@ -196,10 +208,13 @@ class _WeekPainter extends CustomPainter {
   _WeekPainter({
     required this.values,
     required this.values2,
+    required this.values3,
     required this.colors,
     required this.labels,
     required this.labels2,
     required this.color2,
+    required this.color3,
+    required this.ink,
     required this.kind,
     required this.t,
     required this.label,
@@ -221,7 +236,7 @@ class _WeekPainter extends CustomPainter {
       for (var i = 0; i < n; i++)
         if (values[i] != null)
           ...switch (kind) {
-            TrendKind.stacked => [values[i]! + values2[i]!],
+            TrendKind.stacked => [values[i]! + values2[i]! + values3[i]],
             TrendKind.span => [values[i]!, values2[i]!],
             _ => [values[i]!],
           },
@@ -288,16 +303,28 @@ class _WeekPainter extends CustomPainter {
       for (var i = 0; i < n; i++) {
         final a = values[i], b = values2[i];
         if (a == null || b == null) continue;
+        final c3 = values3[i];
         final x = i * slot + (slot - w) / 2;
-        final ya = y(a), yb = y(a + b);
+        final ya = y(a), yb = y(a + b), yc = y(a + b + c3);
+        const r = Radius.circular(3);
+        // Bottom to top; only the topmost part gets rounded corners.
         cv.drawRect(Rect.fromLTRB(x, ya, x + w, top + h),
             Paint()..color = colors[i]);
-        cv.drawRRect(
-            RRect.fromRectAndCorners(Rect.fromLTRB(x, yb, x + w, ya - 1.5),
-                topLeft: const Radius.circular(3),
-                topRight: const Radius.circular(3)),
-            Paint()..color = color2);
-        text(labels[i], color2, Offset(x + w / 2, yb));
+        final midRect = Rect.fromLTRB(x, yb, x + w, ya - 1.5);
+        if (c3 > 0) {
+          cv.drawRect(midRect, Paint()..color = color2);
+          cv.drawRRect(
+              RRect.fromRectAndCorners(Rect.fromLTRB(x, yc, x + w, yb - 1.5),
+                  topLeft: r, topRight: r),
+              Paint()..color = color3);
+        } else {
+          cv.drawRRect(
+              RRect.fromRectAndCorners(midRect, topLeft: r, topRight: r),
+              Paint()..color = color2);
+        }
+        // The total in ink, as WHOOP labels its stacked bars.
+        text(labels[i], ink,
+            Offset(x + w / 2, c3 > 0 ? yc : yb));
       }
     } else if (span) {
       final w = slot * .34;

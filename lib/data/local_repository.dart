@@ -87,6 +87,12 @@ abstract class LocalRepository {
   Future<Map<String, dynamic>> getDayStrain(String date) =>
       throw UnimplementedError('re-layer: getDayStrain');
 
+  /// The Strain screen's per-day history for the last [days] days: heart-rate
+  /// zone minutes (`zones`: date → [z1..z5], a zone the day did not report is
+  /// null) and strength-workout minutes (`strength_min`: date → minutes, days
+  /// with none absent). An implementation without it serves nothing.
+  Future<Map<String, dynamic>> getStrainHistory(int days) async => const {};
+
   /// The two headline figures Home reads that no other day getter carries:
   /// bare `readiness` and `resting_hr` (bpm, rounded) off [date]'s bundle, or
   /// an empty map when nothing derived for that day. Backs the Home day

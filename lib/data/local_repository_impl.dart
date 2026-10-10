@@ -1503,6 +1503,28 @@ class LocalRepositoryImpl extends LocalRepository {
   }
 
   @override
+  Future<Map<String, dynamic>> getStrainHistory(int days) async {
+    final now = DateTime.now();
+    final from = DateTime(now.year, now.month, now.day - (days - 1));
+    final zones = await LocalDb.dayZoneMinutes(dayLabelOf(from), todayLabel());
+    final strength = <String, double>{};
+    for (final r in await LocalDb.strengthSessionsSince(
+        from.millisecondsSinceEpoch ~/ 1000)) {
+      final st = (r['start_ts'] as num).toInt();
+      final sec = st > 1000000000000 ? st ~/ 1000 : st; // tolerate ms
+      final end = (r['end_ts'] as num?)?.toInt();
+      final endSec =
+          end == null ? null : (end > 1000000000000 ? end ~/ 1000 : end);
+      final min = (r['duration_min'] as num?)?.toDouble() ??
+          (endSec == null ? null : (endSec - sec) / 60);
+      if (min == null || min <= 0) continue;
+      final day = dayLabelOf(DateTime.fromMillisecondsSinceEpoch(sec * 1000));
+      strength[day] = (strength[day] ?? 0) + min;
+    }
+    return {'zones': zones, 'strength_min': strength};
+  }
+
+  @override
   Future<Map<String, dynamic>> getDayStrain(String date) async {
     final b = await _bundleForDate(date);
     if (b == null) return const {};
