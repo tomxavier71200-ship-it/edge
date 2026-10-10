@@ -129,7 +129,7 @@ class ReadinessData {
       heldOverNight: heldOverNightOf(today),
       series: denseDays(pointsOf(chart), 90),
       trends: await loadTrendSeries(
-          repo, const ['readiness', 'hrv', 'resting_hr', 'resp_rate', 'sleep']),
+          repo, const ['readiness', 'hrv', 'resting_hr', 'resp_rate', 'sleep_perf']),
       // Only read when there is nothing to explain away — a scored day has no
       // diag in its bundle anyway, and this is one more day_result decode.
       //
@@ -321,15 +321,19 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
           ),
 
         // Weekly trends, WHOOP's order: the score, then what drives it.
-        if (d.trends.values.any((s) => s.isNotEmpty))
-          Section(
-            'Weekly trends',
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: weeklyTrendCards(c, d.trends,
-                  const ['readiness', 'hrv', 'resting_hr', 'resp_rate', 'sleep']),
-            ),
+        if (d.trends.values.any((s) => s.isNotEmpty)) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: S.x6, bottom: S.x3),
+            child: Text('Weekly Trends', style: F.t2.copyWith(color: p.ink)),
           ),
+          ...weeklyTrendCards(c, d.trends, const [
+            'readiness',
+            'hrv',
+            'resting_hr',
+            'resp_rate',
+            'sleep_perf',
+          ]),
+        ],
 
         // The header used to say "Last 90 days" over a chart of five points.
         // It says what is drawn.

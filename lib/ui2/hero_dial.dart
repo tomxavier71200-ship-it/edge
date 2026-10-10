@@ -67,10 +67,23 @@ class HeroDial extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  // The thin, wide-spaced wordmark above the number, where
+                  // WHOOP prints its own name.
+                  ExcludeSemantics(
+                    child: Text('KOOP',
+                        style: F.head.copyWith(
+                            color: p.ink3,
+                            fontWeight: FontWeight.w300,
+                            letterSpacing: 6)),
+                  ),
                   Text(number(t), style: F.hero.copyWith(color: p.ink)),
                   const SizedBox(height: S.x1),
                   Text(label.toUpperCase(),
-                      style: F.over.copyWith(color: p.ink3)),
+                      textAlign: TextAlign.center,
+                      style: F.over.copyWith(
+                          color: p.ink,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w700)),
                 ]),
               ),
             ),

@@ -401,6 +401,7 @@ void main() {
             'resting_hr': s(56.5, 1.5),
             'resp_rate': s(12.7, .3),
             'sleep': s(330, 50, 3),
+            'sleep_perf': s(62, 14, 3),
           },
         ),
       );

@@ -390,8 +390,9 @@ class ContributorsCard extends StatelessWidget {
             decoration:
                 BoxDecoration(color: p.bg, borderRadius: R.rMd),
             child: Row(children: [
-              Icon(LucideIcons.chevronUp, size: 14, color: p.on(C.green)),
-              Icon(LucideIcons.chevronDown, size: 14, color: p.on(C.orange)),
+              // WHOOP's key: a green up and an orange down triangle.
+              Text('▲', style: F.cap.copyWith(color: p.on(C.green))),
+              Text('▼', style: F.cap.copyWith(color: p.on(C.orange))),
               const SizedBox(width: S.x2),
               Expanded(
                 child: Text(footer!, style: F.cap.copyWith(color: p.ink2)),
@@ -432,12 +433,10 @@ class _ContributorRow extends StatelessWidget {
               width: 18,
               child: r.direction == null || r.direction == 0
                   ? null
-                  : Icon(
-                      r.direction! > 0
-                          ? LucideIcons.chevronUp
-                          : LucideIcons.chevronDown,
-                      size: 16,
-                      color: arrowCol),
+                  // WHOOP's small solid triangle, like the sleep cards.
+                  : Text(r.direction! > 0 ? '▲' : '▼',
+                      textAlign: TextAlign.right,
+                      style: F.body.copyWith(color: arrowCol)),
             ),
           ]),
           if (r.average != null)

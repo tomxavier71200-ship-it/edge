@@ -57,7 +57,7 @@ const kRecoveryInputs = [
   ('hrv', 'Heart rate variability', LucideIcons.activity, true),
   ('resting_hr', 'Resting heart rate', LucideIcons.heart, false),
   ('resp_rate', 'Respiratory rate', LucideIcons.wind, null),
-  ('sleep', 'Hours of sleep', LucideIcons.moon, true),
+  ('sleep_perf', 'Sleep performance', LucideIcons.moon, true),
 ];
 
 String trendFormat(String key, double v) => switch (key) {
@@ -107,7 +107,6 @@ List<Widget> weeklyTrendCards(
   final days = lastWeekDays();
   Color line(String k) => p.on(switch (k) {
         'sleep' || 'efficiency' || 'sleep_perf' => C.sleep,
-        'resting_hr' => C.red,
         'strain' => C.strain,
         'steps' || 'calories' => C.orange,
         _ => C.blue,
