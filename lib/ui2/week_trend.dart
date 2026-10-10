@@ -20,7 +20,11 @@ import 'theme.dart';
 
 const _wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-enum TrendKind { bars, line }
+/// [stacked]: [WeekTrendCard.values] is the lower part of each bar and
+/// [WeekTrendCard.values2] the upper one (WHOOP's deep + REM), labelled with
+/// the total. [span]: each day is a floating bar from values to values2 on a
+/// downward axis, labelled at both ends (WHOOP's time in bed).
+enum TrendKind { bars, line, stacked, span }
 
 class WeekTrendCard extends StatelessWidget {
   final String title;
@@ -35,6 +39,19 @@ class WeekTrendCard extends StatelessWidget {
   final Color Function(double) colorOf;
   final VoidCallback? onTap;
 
+  /// The second value per day, for [TrendKind.stacked] and [TrendKind.span];
+  /// a day missing either draws nothing.
+  final List<double?> values2;
+
+  /// The upper part's colour, for [TrendKind.stacked].
+  final Color? color2;
+
+  /// The end labels of a [TrendKind.span] bar (top, then bottom).
+  final String Function(double)? format2;
+
+  /// Coloured keys under the title, e.g. ("DEEP SLEEP", pink).
+  final List<(String, Color)> legend;
+
   const WeekTrendCard({
     super.key,
     required this.title,
@@ -44,12 +61,21 @@ class WeekTrendCard extends StatelessWidget {
     required this.colorOf,
     this.kind = TrendKind.bars,
     this.onTap,
+    this.values2 = const [],
+    this.color2,
+    this.format2,
+    this.legend = const [],
   });
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final present = [for (final v in values) ?v];
+    final two = kind == TrendKind.stacked || kind == TrendKind.span;
+    double? second(int i) => i < values2.length ? values2[i] : null;
+    final present = [
+      for (var i = 0; i < values.length; i++)
+        if (values[i] != null && (!two || second(i) != null)) values[i]!,
+    ];
     return Surface(
       onTap: onTap,
       semanticLabel: '$title, last ${days.length} days',
@@ -65,6 +91,31 @@ class WeekTrendCard extends StatelessWidget {
           if (onTap != null)
             Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
         ]),
+        if (legend.isNotEmpty) ...[
+          const SizedBox(height: S.x3),
+          // Full width, so the keys sit at the right like WHOOP's.
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: S.x4,
+              runSpacing: S.x1,
+              children: [
+                for (final (name, col) in legend)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(width: 10, height: 10, color: col),
+                    const SizedBox(width: S.x2),
+                    Text(name.toUpperCase(),
+                        style: F.over.copyWith(
+                            color: p.ink,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w700)),
+                  ]),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: S.x4),
         if (present.isEmpty)
           SizedBox(
@@ -84,11 +135,27 @@ class WeekTrendCard extends StatelessWidget {
               child: CustomPaint(
                 size: Size.infinite,
                 painter: _WeekPainter(
-                  values: values,
+                  values: [
+                    for (var i = 0; i < values.length; i++)
+                      two && second(i) == null ? null : values[i],
+                  ],
+                  values2: [for (var i = 0; i < values.length; i++) second(i)],
+                  color2: color2 ?? p.ink3,
+                  labels2: [
+                    for (var i = 0; i < values.length; i++)
+                      second(i) == null ? '' : (format2 ?? format)(second(i)!),
+                  ],
                   kind: kind,
                   t: t,
                   colors: [for (final v in values) v == null ? p.track : colorOf(v)],
-                  labels: [for (final v in values) v == null ? '' : format(v)],
+                  labels: [
+                    for (var i = 0; i < values.length; i++)
+                      values[i] == null || (two && second(i) == null)
+                          ? ''
+                          : kind == TrendKind.stacked
+                              ? format(values[i]! + second(i)!)
+                              : format(values[i]!),
+                  ],
                   label: F.cap.copyWith(fontWeight: FontWeight.w700),
                   grid: p.line,
                   highlight: p.card2,
@@ -117,9 +184,10 @@ class WeekTrendCard extends StatelessWidget {
 }
 
 class _WeekPainter extends CustomPainter {
-  final List<double?> values;
+  final List<double?> values, values2;
   final List<Color> colors;
-  final List<String> labels;
+  final List<String> labels, labels2;
+  final Color color2;
   final TrendKind kind;
   final double t;
   final TextStyle label;
@@ -127,8 +195,11 @@ class _WeekPainter extends CustomPainter {
 
   _WeekPainter({
     required this.values,
+    required this.values2,
     required this.colors,
     required this.labels,
+    required this.labels2,
+    required this.color2,
     required this.kind,
     required this.t,
     required this.label,
@@ -141,23 +212,40 @@ class _WeekPainter extends CustomPainter {
   void paint(Canvas cv, Size s) {
     final n = values.length;
     final slot = s.width / n;
-    const top = 26.0; // room for the value labels
-    final h = s.height - top;
-    final present = [for (final v in values) ?v];
+    final span = kind == TrendKind.span;
+    // Room for the value labels: above every bar, and below a span bar too.
+    const top = 26.0;
+    final bottom = span ? 24.0 : 0.0;
+    final h = s.height - top - bottom;
+    final present = [
+      for (var i = 0; i < n; i++)
+        if (values[i] != null)
+          ...switch (kind) {
+            TrendKind.stacked => [values[i]! + values2[i]!],
+            TrendKind.span => [values[i]!, values2[i]!],
+            _ => [values[i]!],
+          },
+    ];
     if (present.isEmpty) return;
     var lo = present.reduce((a, b) => a < b ? a : b);
     var hi = present.reduce((a, b) => a > b ? a : b);
     // Bars stand on zero; a line is scaled to its own range with breathing
     // room so a flat week does not hug an edge.
-    if (kind == TrendKind.bars) {
+    if (kind == TrendKind.bars || kind == TrendKind.stacked) {
       lo = 0;
       if (hi <= 0) hi = 1;
+    } else if (span) {
+      final pad = (hi - lo) * .08 + 1;
+      lo -= pad;
+      hi += pad;
     } else {
       final pad = (hi - lo) == 0 ? (hi.abs() * .1 + 1) : (hi - lo) * .6;
       lo -= pad;
       hi += pad;
     }
     double y(double v) => top + h - h * ((v - lo) / (hi - lo)).clamp(0, 1) * t;
+    // A span's axis runs DOWN (earlier times at the top), like a clock column.
+    double ySpan(double v) => top + h * ((v - lo) / (hi - lo)).clamp(0, 1);
 
     // Today's column.
     cv.drawRRect(
@@ -195,6 +283,41 @@ class _WeekPainter extends CustomPainter {
             Paint()..color = colors[i]);
         text(labels[i], colors[i], Offset(x + w / 2, yy));
       }
+    } else if (kind == TrendKind.stacked) {
+      final w = slot * .34;
+      for (var i = 0; i < n; i++) {
+        final a = values[i], b = values2[i];
+        if (a == null || b == null) continue;
+        final x = i * slot + (slot - w) / 2;
+        final ya = y(a), yb = y(a + b);
+        cv.drawRect(Rect.fromLTRB(x, ya, x + w, top + h),
+            Paint()..color = colors[i]);
+        cv.drawRRect(
+            RRect.fromRectAndCorners(Rect.fromLTRB(x, yb, x + w, ya - 1.5),
+                topLeft: const Radius.circular(3),
+                topRight: const Radius.circular(3)),
+            Paint()..color = color2);
+        text(labels[i], color2, Offset(x + w / 2, yb));
+      }
+    } else if (span) {
+      final w = slot * .34;
+      for (var i = 0; i < n; i++) {
+        final a = values[i], b = values2[i];
+        if (a == null || b == null) continue;
+        final x = i * slot + (slot - w) / 2;
+        final ya = ySpan(a), yb = ySpan(a + (b - a) * t);
+        cv.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTRB(x, ya, x + w, yb), const Radius.circular(3)),
+            Paint()..color = colors[i]);
+        text(labels[i], colors[i], Offset(x + w / 2, ya));
+        final tp = TextPainter(
+            text: TextSpan(
+                text: labels2[i], style: label.copyWith(color: colors[i])),
+            textDirection: TextDirection.ltr)
+          ..layout();
+        tp.paint(cv, Offset(x + w / 2 - tp.width / 2, yb + 4));
+      }
     } else {
       final pts = <int, Offset>{
         for (var i = 0; i < n; i++)
@@ -219,7 +342,8 @@ class _WeekPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WeekPainter o) => o.t != t || o.values != values;
+  bool shouldRepaint(_WeekPainter o) =>
+      o.t != t || o.values != values || o.values2 != values2;
 }
 
 /// One contributor: today's value, the person's average beneath it, and an

@@ -294,6 +294,92 @@ void main() {
         ],
       ),
     ]),
+    'sleep_detail': Builder(builder: (c) {
+      final now = DateTime.now();
+      int at(int dBack, int h, int m) =>
+          DateTime(now.year, now.month, now.day - dBack, h, m)
+                  .millisecondsSinceEpoch ~/
+              1000;
+      final on = at(1, 23, 40), off = at(0, 7, 5);
+      List<({int t, double v})> s(double base, double amp) => [
+            for (var i = 30; i >= 0; i--)
+              (
+                t: DateTime(now.year, now.month, now.day - i, 12)
+                        .millisecondsSinceEpoch ~/
+                    1000,
+                v: base + amp * math.sin(i * 1.3),
+              ),
+          ];
+      final stages = ['light', 'deep', 'light', 'rem', 'awake', 'light', 'deep',
+          'rem', 'light', 'awake', 'light', 'rem', 'light', 'rem', 'awake'];
+      return SleepDetail(
+        data: SleepData(
+          day: todayIso(),
+          days: [todayIso()],
+          night: {
+            'duration_min': 402,
+            'in_bed_min': 445,
+            'awake_min': 43,
+            'light_min': 210,
+            'deep_min': 92,
+            'rem_min': 100,
+            'efficiency': .90,
+            'onset_ts': on,
+            'wake_ts': off,
+            'hypnogram': [
+              for (var i = 0; i < stages.length; i++)
+                {'t': on + (off - on) * i ~/ stages.length, 'stage': stages[i]},
+            ],
+          },
+          timeline: {
+            'hr': [
+              for (var t = on - 1800; t < off + 1800; t += 60)
+                {'t': t, 'v': 56 + 6 * math.sin(t / 900) + (t % 4000 < 60 ? 14 : 0)},
+            ],
+          },
+          need: const Metric(value: 510, confidence: .7, tier: MetricTier.estimate),
+          debt: const Metric(value: 127, confidence: .7, tier: MetricTier.estimate),
+          bedtime: const Metric(value: 1350, confidence: .7, tier: MetricTier.estimate),
+          strainBonusMin: 30,
+          sri: 56,
+          effHistory: [for (var i = 0; i < 20; i++) 88 + (i % 5).toDouble()],
+          tstHistory: [for (var i = 0; i < 20; i++) 340 + 10.0 * (i % 6)],
+          stageHistory: [
+            for (var i = 0; i < 20; i++)
+              (
+                tst: 340 + 10.0 * (i % 6),
+                eff: 88 + (i % 5).toDouble(),
+                light: 180 + 8.0 * (i % 4),
+                deep: 60 + 6.0 * (i % 3),
+                rem: 80 + 7.0 * (i % 5),
+              ),
+          ],
+          windows: [
+            for (var i = 6; i >= 0; i--)
+              (
+                day: DateTime(now.year, now.month, now.day - i),
+                onset: at(i + 1, 23, 10 + 7 * (i % 4)),
+                wake: at(i, 5 + i % 3, 10),
+              ),
+          ],
+          stress: [
+            for (var i = 0; i < 30; i++)
+              (
+                at: DateTime.fromMillisecondsSinceEpoch((on + i * 900) * 1000),
+                v: i == 27 ? 2.3 : (i % 7 == 0 ? 1.2 : .4) + (i % 3) * .1,
+              ),
+          ],
+          sleepSpans: [(from: on, to: off)],
+          trends: {
+            'sleep_perf': s(60, 18),
+            'sleep': s(330, 50),
+            'efficiency': s(92, 3),
+            'deep': s(70, 12),
+            'rem': s(90, 15),
+          },
+        ),
+      );
+    }),
     'recovery_detail': Builder(builder: (c) {
       final now = DateTime.now();
       List<({int t, double v})> s(double base, double amp, [int skip = -1]) => [
@@ -374,7 +460,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('tab_') ? 2400 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('tab_') ? 2400 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

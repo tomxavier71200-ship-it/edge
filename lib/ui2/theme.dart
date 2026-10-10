@@ -129,12 +129,21 @@ class C {
   static const strain = Color(0xFF1E9BFF);
   static const sleep = Color(0xFF7BA1BB);
 
+  /// WHOOP's four sleep-stage hues, for the stage bars and the restorative
+  /// (deep + REM) charts: awake a pale grey, light a soft lavender, deep a
+  /// pink, REM a violet.
+  static const stageAwake = Color(0xFFCFD3D8);
+  static const stageLight = Color(0xFFA3A6F2);
+  static const stageDeep = Color(0xFFF48CF2);
+  static const stageRem = Color(0xFFA75BEA);
+
   /// Every accent the contrast test sweeps. Adding a colour above without
   /// adding it here means it ships unverified.
   static const all = <Color>[
     green, greenD, blue, purple, orange, red, teal, yellow, pink, indigo,
     sky, blueSoft,
     domHome, domHealth, domFood, domMove, domMind, strain, sleep,
+    stageAwake, stageLight, stageDeep, stageRem,
   ];
 }
 

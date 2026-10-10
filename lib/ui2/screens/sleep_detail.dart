@@ -32,7 +32,14 @@ import 'investigate.dart';
 import 'detail_trends.dart';
 import 'home_sections.dart' show kBaselineMin;
 import 'sleep_whoop.dart';
-import 'stress_detail.dart' show Span, StressReading, stressReadings, timelineSpans;
+import 'stress_detail.dart'
+    show
+        Span,
+        StressReading,
+        kStressMinWindows,
+        stressReadings,
+        stressSplit,
+        timelineSpans;
 import 'metric_detail.dart';
 import 'naps.dart';
 import 'rough_night.dart';
@@ -185,7 +192,15 @@ class SleepData {
   final List<Span> sleepSpans;
   final double? strainBonusMin, napCreditMin;
 
+  /// Earlier nights (LAST NIGHT EXCLUDED, up to [_window]) with what the stage
+  /// card's typical ranges are computed from: minutes asleep, efficiency %,
+  /// and the three staged minute counts. One row per night that stored all of
+  /// time asleep and efficiency; a stage missing on a night is null there.
+  final List<({double tst, double eff, double? light, double? deep, double? rem})>
+      stageHistory;
+
   const SleepData({
+    this.stageHistory = const [],
     this.week = const [],
     this.sri,
     this.trends = const {},
@@ -296,10 +311,33 @@ class SleepData {
     // decodes.
     final cut = _noonOf(day);
     final sleepChart = await repo.getChart('sleep');
+    final deepChart = await repo.getChart('deep');
+    final effChart = await repo.getChart('efficiency');
     final tst = _trailing(sleepChart, cut);
-    final deep = _trailing(await repo.getChart('deep'), cut);
+    final deep = _trailing(deepChart, cut);
     // Stored as whole percent; the night's own `efficiency` is 0…1.
-    final eff = _trailing(await repo.getChart('efficiency'), cut);
+    final eff = _trailing(effChart, cut);
+    // The stage card's history: the same nights, joined on their noon stamp.
+    final stageHistory = await () async {
+      Map<int, double> byT(Object? chart) => {
+            for (final p in pointsOf(chart))
+              if (cut == null || p.t < cut) p.t: p.v,
+          };
+      final t = byT(sleepChart), e = byT(effChart), dp = byT(deepChart);
+      Map<int, double> lt = const {}, rm = const {};
+      try {
+        lt = byT(await repo.getChart('light'));
+        rm = byT(await repo.getChart('rem'));
+      } catch (_) {}
+      final keys = [for (final k in t.keys) if (e[k] != null) k]..sort();
+      final recent = keys.length <= _window
+          ? keys
+          : keys.sublist(keys.length - _window);
+      return [
+        for (final k in recent)
+          (tst: t[k]!, eff: e[k]!, light: lt[k], deep: dp[k], rem: rm[k]),
+      ];
+    }();
     // The shape of THIS night. Four scalar series, read for one day each — the
     // day bundle's `accounting` carries the same figures but `_daySleep` does
     // not re-export them, and metric_series is one row per day per key.
@@ -326,7 +364,7 @@ class SleepData {
       sri: (envValue((await repo.getInsights())['regularity'])?['sri'] as num?)
           ?.toDouble(),
       trends: await loadTrendSeries(
-          repo, const ['sleep_perf', 'sleep', 'efficiency']),
+          repo, const ['sleep_perf', 'sleep', 'efficiency', 'deep', 'rem']),
       windows: () {
         final out = <NightWindow>[];
         for (final w in wins) {
@@ -355,6 +393,7 @@ class SleepData {
       tstHistory: tst,
       deepHistory: deep,
       effHistory: eff,
+      stageHistory: stageHistory,
       onsetHistory: onsets,
       unobservedMin: unobserved,
       awakenings: wakeups,
@@ -540,34 +579,37 @@ class _SleepDetailState extends State<SleepDetail> {
     return detailScaffold(c, title, info: kInfoSleep,
         center: dayCenter(_day ?? d.day, d.days, _goDay), [
 
-      // ── 0 · WHOOP'S HEADLINE: performance, and what made it ──
+      // ── WHOOP'S SCREEN, in WHOOP's order ──
+      // 0 · performance, and the four things that made it
       ..._performance(c, p, d, n),
 
-      // ── 0b · LAST NIGHT: hours of sleep and the night's heart rate ──
-      if (_overnightHr(d, n) case final card?) ...[
-        Section("Last night's sleep", card),
-        const SizedBox(height: S.x2),
+      // 1 · LAST NIGHT'S SLEEP: hours with the night's heart rate, then the
+      //     stages against the person's typical range
+      _lastNightHeader(c, p, d),
+      ?_overnightHr(d, n),
+      if (_stageCard(c, d, n) case final card?) ...[
+        const SizedBox(height: S.x3),
+        card,
       ],
 
-      // ── 1 · THE ANSWER ──
-      _answer(c, p, d, n),
+      // 2 · need, consistency, efficiency, stress
+      ..._whoopCards(c, d, n),
 
-      // ── 2 · THE NIGHT ITSELF ──
+      // 3 · the week
+      ..._weekly(c, p, d),
+
+      // ── KOOP'S OWN, below WHOOP's ──
+      // The night itself: when it ran, in bed and watched, the hypnogram.
+      Section('The night', _answer(c, p, d, n, dial: false)),
       const SizedBox(height: S.x3),
       _night(c, p, d, n),
       if (_scrub != null) _scrubCard(c, p, d),
 
-      // ── 2b · WHOSE WINDOW IS THIS ──
+      // Whose window this is, and naps.
       ...?_windowCard(c, p, d, n),
       ..._napsButton(c, l, d.day),
 
-      // ── 3 · WHAT IT WAS MADE OF ──
-      Section(l?.sleepDetailStagesSection ?? 'Stages', _stages(c, p, n)),
-
-      // ── 3b · WHOOP'S CARDS: need, consistency, efficiency, stress ──
-      ..._whoopCards(c, d, n),
-
-      // ── 4 · AGAINST THE USER'S OWN NIGHTS ──
+      // ── AGAINST THE USER'S OWN NIGHTS ──
       if (_versusUsual(c, p, d, n) case final versus?)
         Section(l?.sleepDetailVersusUsualSection ?? 'Against your usual', versus),
 
@@ -586,17 +628,6 @@ class _SleepDetailState extends State<SleepDetail> {
       // ── 6 · THE SIGNALS UNDERNEATH ──
       Section(l?.sleepDetailOvernightSection ?? 'Overnight signals',
           _overnight(c, p, d)),
-
-      // ── 6b · THE WEEK ──
-      if (d.trends.values.any((s) => s.isNotEmpty))
-        Section(
-          'Weekly trends',
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: weeklyTrendCards(
-                c, d.trends, const ['sleep_perf', 'sleep', 'efficiency']),
-          ),
-        ),
 
       // ── 7 · ONE TAKEAWAY ──
       Section(l?.sleepDetailTonightSection ?? 'Tonight', _tonight(c, p, d)),
@@ -619,21 +650,18 @@ class _SleepDetailState extends State<SleepDetail> {
   /// The bands are display bands, stated in the legend, not a clinical scale.
   List<Widget> _performance(
       BuildContext c, P p, SleepData d, Map<String, dynamic> n) {
-    final tst = (n['duration_min'] as num?)?.toDouble();
-    final need = d.need.value?.toDouble();
-    final eff = (n['efficiency'] as num?)?.toDouble();
-    final deep = (n['deep_min'] as num?)?.toDouble();
-    final rem = (n['rem_min'] as num?)?.toDouble();
-    final perf =
-        tst != null && need != null && need > 0 ? tst / need * 100 : null;
+    final perf = _perfOf(d, n);
     final sri = d.sri;
-    final restorative = tst != null && tst > 0 && deep != null && rem != null
-        ? (deep + rem) / tst * 100
-        : null;
+    // `efficiency` is 0…1 on the night; the rows print whole percent.
+    final effRaw = (n['efficiency'] as num?)?.toDouble();
+    final eff = effRaw == null ? null : effRaw * 100;
+    final stress = _highStressPct(d);
     Band3 band(double v, double poor, double optimal) => v < poor
         ? Band3.poor
         : (v < optimal ? Band3.sufficient : Band3.optimal);
 
+    // WHOOP's four: hours vs needed, consistency, efficiency, high sleep
+    // stress (lower is better, so its bands run the other way).
     final rows = <Widget>[
       if (perf != null)
         BandRow(LucideIcons.clock, 'Hours vs. needed', '${perf.round()}%',
@@ -644,9 +672,11 @@ class _SleepDetailState extends State<SleepDetail> {
       if (eff != null)
         BandRow(LucideIcons.bedDouble, 'Sleep efficiency', '${eff.round()}%',
             band(eff, 80, 90)),
-      if (restorative != null)
-        BandRow(LucideIcons.sparkles, 'Restorative sleep',
-            '${restorative.round()}%', band(restorative, 30, 40)),
+      if (stress != null)
+        BandRow(LucideIcons.gauge, 'High sleep stress', '${stress.round()}%',
+            stress >= 10
+                ? Band3.poor
+                : (stress >= 1 ? Band3.sufficient : Band3.optimal)),
     ];
     if (perf == null && rows.isEmpty) return const [];
     return [
@@ -674,6 +704,218 @@ class _SleepDetailState extends State<SleepDetail> {
         ),
         const SizedBox(height: S.x4),
       ],
+    ];
+  }
+
+  /// Sleep performance for the night on screen: time asleep over TODAY's
+  /// computed need for the newest night only (the need moves with debt and
+  /// strain, so dividing an older night by it would score that night against
+  /// a need it never had). An older night uses the performance stored on its
+  /// own day. Null when neither exists.
+  double? _perfOf(SleepData d, Map<String, dynamic> n) {
+    final tst = (n['duration_min'] as num?)?.toDouble();
+    final need = d.need.value?.toDouble();
+    final newest = d.days.isEmpty || d.day == d.days.first;
+    if (newest) {
+      return tst != null && need != null && need > 0 ? tst / need * 100 : null;
+    }
+    final noon = _noonOf(d.day);
+    for (final pt in d.trends['sleep_perf'] ?? const <ChartPoint>[]) {
+      if (pt.t == noon) return pt.v;
+    }
+    return null;
+  }
+
+  /// The share of the night's stress readings at the high level, or null
+  /// with fewer than [kStressMinWindows] readings asleep — too few to state.
+  double? _highStressPct(SleepData d) {
+    final split = stressSplit(d.stress, sleep: d.sleepSpans).asleep;
+    final total = split.fold<int>(0, (a, b) => a + b);
+    if (total < kStressMinWindows * 15) return null;
+    return split[2] / total * 100;
+  }
+
+  /// "Last Night's Sleep · Today vs. prior 30 days", WHOOP's section header.
+  /// An older night names its day instead of "last night".
+  Widget _lastNightHeader(BuildContext c, P p, SleepData d) {
+    final newest = d.days.isEmpty || d.day == d.days.first;
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x6, bottom: S.x3),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(newest ? "Last Night's Sleep" : prettyDay(d.day),
+            style: F.t2.copyWith(color: p.ink)),
+        const SizedBox(height: S.x1),
+        Text.rich(TextSpan(children: [
+          TextSpan(
+              text: newest ? 'Today' : 'This night',
+              style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+          TextSpan(
+              text: ' vs. prior 30 days',
+              style: F.body.copyWith(color: p.ink2)),
+        ])),
+      ]),
+    );
+  }
+
+  /// WHOOP's stage table: Awake / Light / Deep / REM as shares of the time in
+  /// bed with their durations, each against the middle half of the person's
+  /// own recent nights, then restorative sleep against its usual. Null when the
+  /// night published no stage split.
+  Widget? _stageCard(BuildContext c, SleepData d, Map<String, dynamic> n) {
+    final light = (n['light_min'] as num?)?.toDouble();
+    final deep = (n['deep_min'] as num?)?.toDouble();
+    final rem = (n['rem_min'] as num?)?.toDouble();
+    final awake = (n['awake_min'] as num?)?.toDouble();
+    final tst = (n['duration_min'] as num?)?.toDouble();
+    if (light == null || deep == null || rem == null || tst == null) {
+      return null;
+    }
+    final inBed = (n['in_bed_min'] as num?)?.toDouble() ?? tst + (awake ?? 0);
+    if (inBed <= 0) return null;
+
+    // Each earlier night's time in bed is its time asleep over its efficiency
+    // — both stored per night — so every share is out of the same denominator
+    // as tonight's.
+    (double, double)? typical(double? Function(
+            ({double tst, double eff, double? light, double? deep, double? rem}) r)
+        share) {
+      final xs = <double>[
+        for (final r in d.stageHistory)
+          if (r.eff > 0) ?share(r),
+      ];
+      final b = _band(xs);
+      return b == null ? null : (b.lo, b.hi);
+    }
+
+    double? of(double? m, double tstH, double effH) =>
+        m == null ? null : m / (tstH / (effH / 100));
+    final rows = <StageShare>[
+      if (awake != null)
+        (
+          name: 'Awake',
+          color: C.stageAwake,
+          minutes: awake,
+          typical: typical((r) => 1 - r.eff / 100),
+        ),
+      (
+        name: 'Light',
+        color: C.stageLight,
+        minutes: light,
+        typical: typical((r) => of(r.light, r.tst, r.eff)),
+      ),
+      (
+        name: 'SWS (Deep)',
+        color: C.stageDeep,
+        minutes: deep,
+        typical: typical((r) => of(r.deep, r.tst, r.eff)),
+      ),
+      (
+        name: 'REM',
+        color: C.stageRem,
+        minutes: rem,
+        typical: typical((r) => of(r.rem, r.tst, r.eff)),
+      ),
+    ];
+    final restHist = [
+      for (final r in d.stageHistory)
+        if (r.deep != null && r.rem != null) r.deep! + r.rem!,
+    ];
+    return StageRangesCard(
+      stages: rows,
+      inBedMin: inBed,
+      restorativeMin: deep + rem,
+      restorativeUsualMin: restHist.length < kBaselineMin
+          ? null
+          : restHist.reduce((a, b) => a + b) / restHist.length,
+      note: 'Stages are estimated from the wrist; Deep is the least certain. '
+          'The dashed box is the middle half of your own recent nights.',
+    );
+  }
+
+  /// WHOOP's weekly trends, for the series this app stores per night:
+  /// performance, hours, restorative (deep + REM), time in bed and
+  /// efficiency. A day with no value draws nothing.
+  List<Widget> _weekly(BuildContext c, P p, SleepData d) {
+    final days = lastWeekDays();
+    List<double?> week(String k) => weekValues(d.trends[k] ?? const [], days);
+    // Time in bed: each night's window on a 15:00-to-15:00 axis, in minutes.
+    double axisMin(int ts) {
+      final t = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+      return ((t.hour * 60 + t.minute - 900) % 1440).toDouble();
+    }
+    String clockOfAxis(double m) {
+      final t = ((m + 900) % 1440).round();
+      return '${(t ~/ 60).toString().padLeft(2, '0')}:'
+          '${(t % 60).toString().padLeft(2, '0')}';
+    }
+    final byDay = {for (final w in d.windows) dayLabelOf(w.day): w};
+    final bedOn = [
+      for (final dd in days)
+        byDay[dayLabelOf(dd)] == null ? null : axisMin(byDay[dayLabelOf(dd)]!.onset),
+    ];
+    final bedOff = [
+      for (final dd in days)
+        byDay[dayLabelOf(dd)] == null ? null : axisMin(byDay[dayLabelOf(dd)]!.wake),
+    ];
+    final sleepCol = p.on(C.sleep);
+    final cards = <Widget>[
+      WeekTrendCard(
+        title: 'Sleep performance',
+        days: days,
+        values: week('sleep_perf'),
+        format: (v) => '${v.round()}%',
+        colorOf: (_) => sleepCol,
+        onTap: () => go(c, const MetricDetail('sleep_perf')),
+      ),
+      WeekTrendCard(
+        title: 'Hours of sleep',
+        days: days,
+        values: week('sleep'),
+        format: hmOfMin,
+        colorOf: (_) => sleepCol,
+        onTap: () => go(c, const MetricDetail('sleep')),
+      ),
+      WeekTrendCard(
+        title: 'Restorative sleep (hours)',
+        days: days,
+        kind: TrendKind.stacked,
+        values: week('rem'),
+        values2: week('deep'),
+        color2: C.stageDeep,
+        format: hmOfMin,
+        colorOf: (_) => C.stageRem,
+        legend: const [('Deep sleep', C.stageDeep), ('REM sleep', C.stageRem)],
+        onTap: () => go(c, const MetricDetail('deep')),
+      ),
+      if (bedOn.any((v) => v != null))
+        WeekTrendCard(
+          title: 'Time in bed',
+          days: days,
+          kind: TrendKind.span,
+          values: bedOn,
+          values2: bedOff,
+          format: clockOfAxis,
+          colorOf: (_) => sleepCol,
+        ),
+      WeekTrendCard(
+        title: 'Sleep efficiency',
+        days: days,
+        kind: TrendKind.line,
+        values: week('efficiency'),
+        format: (v) => '${v.round()}%',
+        colorOf: (_) => sleepCol,
+        onTap: () => go(c, const MetricDetail('efficiency')),
+      ),
+    ];
+    if (!d.trends.values.any((s) => s.isNotEmpty) && d.windows.isEmpty) {
+      return const [];
+    }
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: S.x6, bottom: S.x3),
+        child: Text('Weekly Trends', style: F.t2.copyWith(color: p.ink)),
+      ),
+      for (final w in cards) ...[w, const SizedBox(height: S.x3)],
     ];
   }
 
@@ -706,22 +948,64 @@ class _SleepDetailState extends State<SleepDetail> {
     final need = d.need.value?.toDouble();
     final eff = (n['efficiency'] as num?)?.toDouble();
     final day = DateTime.tryParse(d.day ?? '');
+    final noon = _noonOf(d.day);
+    double? mean(Iterable<double> xs) {
+      final l = xs.toList();
+      return l.length < kBaselineMin ? null : l.reduce((a, b) => a + b) / l.length;
+    }
+
+    // The usual hours-vs-needed: stored performance of the 30 nights before.
+    final perfUsual = mean([
+      for (final pt in d.trends['sleep_perf'] ?? const <ChartPoint>[])
+        if (noon == null || (pt.t < noon && pt.t >= noon - 30 * 86400)) pt.v,
+    ]);
+    // Optimal bed/wake: the coach's bedtime, and that plus today's need. Only
+    // for the newest night — both are tonight's advice, not an older night's.
+    final newest = d.days.isEmpty || d.day == d.days.first;
+    final bed = d.bedtime.value?.toDouble();
+    final perf = _perfOf(d, n);
     final cards = <Widget>[
-      if (tst != null && need != null && need > 0)
+      if (tst != null && need != null && need > 0 && newest)
         HoursNeededCard(
           sleptMin: tst,
           needMin: need,
           strainMin: d.strainBonusMin,
           debtMin: d.debt.value?.toDouble(),
           napMin: d.napCreditMin,
+          usualPct: perfUsual,
         ),
-      if (d.windows.length >= 2) ConsistencyChart(nights: d.windows, sri: d.sri),
+      if (perf != null && !newest)
+        Surface(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('HOURS VS. NEEDED',
+                style: F.over.copyWith(
+                    color: P.of(c).ink,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: S.x2),
+            TrendHeadline('${perf.round()}%',
+                usual: perfUsual == null ? null : '${perfUsual.round()}%',
+                dir: trendDir(perf, perfUsual),
+                higherBetter: true),
+          ]),
+        ),
+      if (d.windows.length >= 2)
+        ConsistencyChart(
+          nights: d.windows,
+          sri: d.sri,
+          optimalBedMin: newest && bed != null && need != null ? bed : null,
+          optimalWakeMin: newest && bed != null && need != null
+              ? (bed + need) % 1440
+              : null,
+        ),
       if (tst != null && awake != null)
         AsleepAwakeCard(
           asleepMin: tst,
           awakeMin: awake,
           wakeEvents: d.awakenings?.round(),
-          efficiency: eff,
+          efficiency: eff == null ? null : eff * 100,
+          usualEfficiency: mean(d.effHistory),
+          awakeSpans: _awakeSpans(d, n),
         ),
       if (day != null && d.stress.length >= 8)
         SleepStressCard(readings: d.stress, sleep: d.sleepSpans, day: day),
@@ -731,9 +1015,38 @@ class _SleepDetailState extends State<SleepDetail> {
     ];
   }
 
+  /// The awake runs of the night as (start, end) fractions of its window,
+  /// from the hypnogram — what the efficiency card breaks its bar at.
+  List<(double, double)> _awakeSpans(SleepData d, Map<String, dynamic> n) {
+    final on = (n['onset_ts'] as num?)?.toDouble();
+    final off = (n['wake_ts'] as num?)?.toDouble();
+    final pts = n['hypnogram'];
+    if (on == null || off == null || off <= on || pts is! List) return const [];
+    final out = <(double, double)>[];
+    double? start;
+    for (var i = 0; i < pts.length; i++) {
+      final e = pts[i];
+      if (e is! Map || e['t'] is! num) continue;
+      final t = (e['t'] as num).toDouble();
+      final awake = _stageOf(e['stage']) == SleepStage.awake;
+      if (awake && start == null) start = t;
+      if (!awake && start != null) {
+        out.add((((start - on) / (off - on)).clamp(0.0, 1.0),
+            ((t - on) / (off - on)).clamp(0.0, 1.0)));
+        start = null;
+      }
+    }
+    if (start != null) {
+      out.add((((start - on) / (off - on)).clamp(0.0, 1.0), 1.0));
+    }
+    return out;
+  }
+
   /// Total sleep, when it ran, and the two ratios that qualify it. Everything
-  /// here is measured; nothing is a judgement.
-  Widget _answer(BuildContext c, P p, SleepData d, Map<String, dynamic> n) {
+  /// here is measured; nothing is a judgement. [dial]: show the performance
+  /// dial — off where WHOOP's headline above already shows it.
+  Widget _answer(BuildContext c, P p, SleepData d, Map<String, dynamic> n,
+      {bool dial = true}) {
     final l = AppLocalizations.of(c);
     final tst = n['duration_min'] as num?;
     final eff = n['efficiency'] as num?;
@@ -753,7 +1066,7 @@ class _SleepDetailState extends State<SleepDetail> {
     // never had.
     final need = d.need.value;
     final newest = d.days.isNotEmpty && d.day == d.days.first;
-    final perf = (tst == null || need == null || need <= 0 || !newest)
+    final perf = (!dial || tst == null || need == null || need <= 0 || !newest)
         ? null
         : (tst / need * 100).clamp(0, 999).round();
     return Surface(
@@ -1293,103 +1606,6 @@ class _SleepDetailState extends State<SleepDetail> {
       SleepStage.light => l?.sleepDetailStageLight ?? 'Light sleep',
       SleepStage.deep => l?.sleepDetailStageDeep ?? 'Deep sleep',
     };
-  }
-
-  /// One stage of the night: a name and what it came to. The value is one
-  /// string — the range for a staged figure, a plain duration for Awake — so
-  /// the column has ONE right edge down the whole table. It is `Flexible`
-  /// rather than fixed because "1h 15m–2h 30m" is twice the width the old
-  /// minutes column was sized for; above the big-text threshold the row
-  /// restacks rather than squeeze, exactly like [MetricRow].
-  Widget _stageRow(BuildContext c, P p, (String, String, Color) s) {
-    final dot = Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: s.$3, shape: BoxShape.circle));
-    final name = Text(s.$1, style: F.body.copyWith(color: p.ink));
-    final value = Text(s.$2,
-        textAlign: TextAlign.right,
-        style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600));
-    if (!bigText(c)) {
-      return Row(children: [
-        dot,
-        const SizedBox(width: S.x3),
-        Expanded(child: name),
-        const SizedBox(width: S.x3),
-        Flexible(child: value),
-      ]);
-    }
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      dot,
-      const SizedBox(width: S.x3),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          name,
-          const SizedBox(height: S.x1),
-          Text(s.$2, style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
-        ]),
-      ),
-    ]);
-  }
-
-  /// SLP-13 — the stage block, as ranges.
-  ///
-  /// The share column is GONE and that is the point. A percentage is computed
-  /// from the exact minute count, so printing "19%" beside "45m–1h 15m" would
-  /// have restored, on the same row, the precision the range exists to retire.
-  /// Nothing is lost that the range does not carry better.
-  ///
-  /// Awake keeps a single figure. It is not one of the three the overlay splits
-  /// — asleep-versus-awake is a different decision with a different weakness,
-  /// already stated where the awakening count is, and `stageIntervals` publishes
-  /// no interval for it. Inventing one here would be exactly the fabricated
-  /// precision this item removes.
-  Widget _stages(BuildContext c, P p, Map<String, dynamic> n) {
-    final l = AppLocalizations.of(c);
-    final r = _ranges(n);
-    final awake = n['awake_min'] as num?;
-    final rows = <(String, String, Color)>[
-      if (r != null) (l?.sleepDetailDeep ?? 'Deep', _rangeText(r.deep), C.blue),
-      if (r != null) (l?.sleepDetailStageRem ?? 'REM', _rangeText(r.rem), C.teal),
-      if (r != null) (l?.sleepDetailLight ?? 'Light', _rangeText(r.light), C.sky),
-      if (awake != null)
-        (l?.sleepDetailStageAwake ?? 'Awake', hm(awake), C.orange),
-    ];
-    if (rows.isEmpty) {
-      return StatusCard(
-        l?.sleepDetailNoStageSplitTitle ?? 'No stage split for this night',
-        l?.sleepDetailNoStageSplitBody ??
-            'No beat timing across the whole window.',
-        icon: LucideIcons.chartNoAxesColumn,
-      );
-    }
-    return Column(children: [
-      Surface(
-        pad: const EdgeInsets.symmetric(horizontal: S.x4),
-        child: Column(children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) Divider(color: p.line, height: 1),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: S.x3),
-              child: _stageRow(c, p, rows[i]),
-            ),
-          ],
-        ]),
-      ),
-      if (r != null) ...[
-        const SizedBox(height: S.x2),
-        // The range IS the reading, and the copy says so straight. A wrist
-        // infers stages from beat timing and movement; it does not count them.
-        // The width is this night's own — better coverage, narrower range —
-        // rather than one published figure applied to every night.
-        Text(
-            l?.sleepDetailStageRangeExplain ??
-                'Each stage is a range, not a count — the better we saw the night, '
-                    'the narrower it is. Deep is the widest. Awake stays one figure. '
-                    'Nerd stats has the exact counts.',
-            style: F.over.copyWith(color: p.ink3, height: 1.5)),
-      ],
-    ]);
   }
 
   // ── AGAINST YOUR USUAL ────────────────────────────────────────────────────

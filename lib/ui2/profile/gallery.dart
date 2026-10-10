@@ -362,7 +362,22 @@ Map<String, Widget> goldenCases() => {
         ],
       ),
       'hours_needed': const HoursNeededCard(
-          sleptMin: 289, needMin: 621, strainMin: 30, debtMin: 127, napMin: 0),
+          sleptMin: 289, needMin: 621, strainMin: 30, debtMin: 127, napMin: 0,
+          usualPct: 61),
+      'trend_headline': const TrendHeadline('6:42',
+          usual: '6:03', dir: 1, higherBetter: true),
+      'stage_ranges': const StageRangesCard(
+        inBedMin: 445,
+        restorativeMin: 192,
+        restorativeUsualMin: 160,
+        note: 'Stages are estimated from the wrist; Deep is the least certain.',
+        stages: [
+          (name: 'Awake', color: C.stageAwake, minutes: 43, typical: (.06, .11)),
+          (name: 'Light', color: C.stageLight, minutes: 210, typical: (.42, .5)),
+          (name: 'SWS (Deep)', color: C.stageDeep, minutes: 92, typical: (.14, .2)),
+          (name: 'REM', color: C.stageRem, minutes: 100, typical: (.18, .24)),
+        ],
+      ),
       'consistency_chart': ConsistencyChart(sri: 56, nights: [
         for (final (d, on, off) in [
           (29, 1, 9), (30, 4, 12), (1, 2, 8), (2, 3, 10), (3, 6, 12),

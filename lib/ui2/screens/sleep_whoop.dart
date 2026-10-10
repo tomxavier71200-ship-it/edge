@@ -15,7 +15,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../ui2.dart';
 import 'health_screen.dart' show kStressLevelColors;
@@ -31,11 +30,326 @@ String _title(String t) => t.toUpperCase();
 TextStyle _titleStyle(P p) => F.over.copyWith(
     color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700);
 
+/// -1 / 0 / +1: tonight against the usual, with [eps] as "no change".
+int trendDir(double v, double? usual, [double eps = .5]) =>
+    usual == null || (v - usual).abs() < eps ? 0 : (v > usual ? 1 : -1);
+
+/// WHOOP's card headline: the night's value, a small triangle against the
+/// person's own usual — green when the move is good for them, orange when
+/// not, grey when there is no better direction — and the usual beneath it.
+/// No usual, no triangle: nothing to compare against is not "no change".
+class TrendHeadline extends StatelessWidget {
+  final String value;
+  final String? usual;
+  final int dir;
+
+  /// Whether up is good; null when neither direction is.
+  final bool? higherBetter;
+  final TextStyle? style;
+
+  const TrendHeadline(this.value,
+      {super.key, this.usual, this.dir = 0, this.higherBetter, this.style});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final good = higherBetter == null || dir == 0 ? null : (dir > 0) == higherBetter;
+    final col = good == null ? p.ink3 : p.on(good ? C.green : C.orange);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(value, style: style ?? F.n34.copyWith(color: p.ink)),
+              if (usual != null && dir != 0) ...[
+                const SizedBox(width: S.x2),
+                Text(dir > 0 ? '▲' : '▼',
+                    style: F.cap.copyWith(color: col)),
+              ],
+            ]),
+      ),
+      if (usual != null)
+        Text(usual!,
+            style: F.n17.copyWith(color: p.ink3, fontWeight: FontWeight.w600)),
+    ]);
+  }
+}
+
+/// One stage on the stage card. [typical] is the middle half of the person's
+/// own recent nights, as fractions of time in bed; null until enough nights.
+typedef StageShare = ({
+  String name,
+  Color color,
+  double minutes,
+  (double, double)? typical,
+});
+
+/// WHOOP's stage table under "Hours of sleep": each stage's share of the time
+/// in bed and its duration, a bar on a hatched track, and the person's typical
+/// range as a dashed box on that bar. Then restorative sleep (deep + REM)
+/// against its usual. [note] says how certain wrist staging is; it is always
+/// shown, because the exact figures here are an estimate.
+class StageRangesCard extends StatelessWidget {
+  final List<StageShare> stages;
+  final double inBedMin;
+  final double? restorativeMin, restorativeUsualMin;
+  final String note;
+
+  const StageRangesCard({
+    super.key,
+    required this.stages,
+    required this.inBedMin,
+    required this.note,
+    this.restorativeMin,
+    this.restorativeUsualMin,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final hasTypical = stages.any((s) => s.typical != null);
+    // At large text sizes the label and the duration stack rather than
+    // squeeze into one line.
+    final big = bigText(c);
+    Widget stage(StageShare s) {
+      final frac = inBedMin <= 0 ? 0.0 : (s.minutes / inBedMin).clamp(0.0, 1.0);
+      final label = Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: S.x2,
+        children: [
+          Text(s.name.toUpperCase(),
+              style: F.over.copyWith(
+                  color: p.ink, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+          Text('${(frac * 100).round()}%',
+              style: F.cap.copyWith(color: s.color, fontWeight: FontWeight.w700)),
+        ],
+      );
+      final ring = Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+            shape: BoxShape.circle, border: Border.all(color: p.ink, width: 2)),
+      );
+      final dur = Text(_hm(s.minutes), style: F.n24.copyWith(color: p.ink));
+      return Padding(
+        padding: const EdgeInsets.only(top: S.x4),
+        child: Semantics(
+          label: '${s.name}, ${(frac * 100).round()} percent, ${_hm(s.minutes)}',
+          excludeSemantics: true,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (big) ...[
+              Row(children: [ring, const SizedBox(width: S.x3), Expanded(child: label)]),
+              const SizedBox(height: S.x1),
+              dur,
+            ] else
+              Row(children: [
+                ring,
+                const SizedBox(width: S.x3),
+                Expanded(child: label),
+                dur,
+              ]),
+            const SizedBox(height: S.x2),
+            SizedBox(
+              height: 26,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: frac),
+                duration: motion(c, Motion.sweep),
+                curve: Curves.easeOutCubic,
+                builder: (c, f, _) => CustomPaint(
+                  size: Size.infinite,
+                  painter: _ShareBarPainter(f, s.typical, s.color, p),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      );
+    }
+
+    final rest = restorativeMin;
+    final ru = restorativeUsualMin;
+    return Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Typical-range key on the left, the night's duration on the right;
+        // a Wrap so at large text the duration drops below instead of
+        // overflowing.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: S.x2,
+          spacing: S.x3,
+          children: [
+            if (hasTypical)
+              Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: S.x2, children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CustomPaint(painter: _TypicalKeyPainter(p)),
+                ),
+                const SizedBox(width: S.x2),
+                Text('TYPICAL RANGE',
+                    style: F.over.copyWith(
+                        color: p.ink2,
+                        letterSpacing: 1.4,
+                        fontWeight: FontWeight.w700)),
+              ]),
+            Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: S.x3, children: [
+              Text('DURATION',
+                  style: F.over.copyWith(
+                      color: p.ink2,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(width: S.x3),
+              Text(_hm(inBedMin), style: F.n24.copyWith(color: p.ink)),
+            ]),
+          ],
+        ),
+        for (final s in stages) stage(s),
+        if (rest != null) ...[
+          const SizedBox(height: S.x4),
+          Divider(color: p.line, height: 1),
+          const SizedBox(height: S.x4),
+          () {
+            final key = Container(
+              width: 18,
+              height: 18,
+              margin: const EdgeInsets.only(top: 4),
+              decoration: BoxDecoration(
+                borderRadius: R.rSm,
+                gradient: const LinearGradient(
+                    colors: [C.stageDeep, C.stageRem],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft),
+              ),
+            );
+            final name = Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('RESTORATIVE SLEEP',
+                  style: F.over.copyWith(
+                      color: p.ink,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w700)),
+            );
+            final value = TrendHeadline(_hm(rest),
+                usual: ru == null ? null : _hm(ru),
+                dir: trendDir(rest, ru, 1),
+                higherBetter: true,
+                style: F.n24.copyWith(color: p.ink));
+            // Stacked at large text, like the stage rows above.
+            return big
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      key,
+                      const SizedBox(width: S.x3),
+                      Expanded(child: name),
+                    ]),
+                    const SizedBox(height: S.x1),
+                    value,
+                  ])
+                : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    key,
+                    const SizedBox(width: S.x3),
+                    Expanded(child: name),
+                    value,
+                  ]);
+          }(),
+        ],
+        const SizedBox(height: S.x4),
+        Text(note, style: F.over.copyWith(color: p.ink3, height: 1.5)),
+      ]),
+    );
+  }
+}
+
+/// The stage bar: a hatched track, the stage's share filled in its colour, and
+/// the typical range as a lightly filled box with dashed ends.
+class _ShareBarPainter extends CustomPainter {
+  final double frac;
+  final (double, double)? typical;
+  final Color color;
+  final P p;
+  _ShareBarPainter(this.frac, this.typical, this.color, this.p);
+
+  @override
+  void paint(Canvas cv, Size s) {
+    const barH = 18.0;
+    final top = (s.height - barH) / 2;
+    final track = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, top, s.width, barH), const Radius.circular(6));
+    cv.save();
+    cv.clipRRect(track);
+    cv.drawRRect(track, Paint()..color = p.card2);
+    final hatch = Paint()
+      ..color = p.track
+      ..strokeWidth = 3;
+    for (var x = -barH; x < s.width + barH; x += 9) {
+      cv.drawLine(Offset(x, top + barH), Offset(x + barH, top), hatch);
+    }
+    cv.restore();
+    if (frac > 0) {
+      cv.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(0, top, math.max(6, s.width * frac), barH),
+              const Radius.circular(6)),
+          Paint()..color = color);
+    }
+    final t = typical;
+    if (t != null) {
+      final a = s.width * t.$1.clamp(0.0, 1.0);
+      final b = math.max(a + 4, s.width * t.$2.clamp(0.0, 1.0));
+      cv.drawRect(Rect.fromLTRB(a, 0, b, s.height),
+          Paint()..color = p.ink.withValues(alpha: .12));
+      final dash = Paint()
+        ..color = p.ink2
+        ..strokeWidth = 1.5;
+      for (final x in [a, b]) {
+        for (var y = 0.0; y < s.height; y += 5) {
+          cv.drawLine(Offset(x, y), Offset(x, math.min(y + 3, s.height)), dash);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ShareBarPainter o) =>
+      o.frac != frac || o.typical != typical || o.color != color;
+}
+
+/// The little dashed box beside "TYPICAL RANGE".
+class _TypicalKeyPainter extends CustomPainter {
+  final P p;
+  _TypicalKeyPainter(this.p);
+
+  @override
+  void paint(Canvas cv, Size s) {
+    final r = Rect.fromLTWH(s.width * .2, 0, s.width * .6, s.height);
+    cv.drawRect(r, Paint()..color = p.ink.withValues(alpha: .12));
+    final dash = Paint()
+      ..color = p.ink2
+      ..strokeWidth = 1.5;
+    for (final x in [r.left, r.right]) {
+      for (var y = 0.0; y < s.height; y += 5) {
+        cv.drawLine(Offset(x, y), Offset(x, math.min(y + 3, s.height)), dash);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TypicalKeyPainter o) => false;
+}
+
 class HoursNeededCard extends StatelessWidget {
   final double sleptMin, needMin;
 
   /// What the coach reports it added or removed; null when it did not say.
   final double? strainMin, debtMin, napMin;
+
+  /// The person's usual hours-vs-needed %, from stored sleep performance;
+  /// null when there are too few nights.
+  final double? usualPct;
 
   const HoursNeededCard({
     super.key,
@@ -44,6 +358,7 @@ class HoursNeededCard extends StatelessWidget {
     this.strainMin,
     this.debtMin,
     this.napMin,
+    this.usualPct,
   });
 
   @override
@@ -93,7 +408,10 @@ class HoursNeededCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_title('Hours vs. needed'), style: _titleStyle(p)),
         const SizedBox(height: S.x2),
-        Text('$pct%', style: F.n34.copyWith(color: p.ink)),
+        TrendHeadline('$pct%',
+            usual: usualPct == null ? null : '${usualPct!.round()}%',
+            dir: trendDir(pct.toDouble(), usualPct),
+            higherBetter: true),
         const SizedBox(height: S.x4),
         Row(children: [
           Expanded(child: Text('HOURS OF SLEEP', style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4))),
@@ -137,19 +455,39 @@ class ConsistencyChart extends StatelessWidget {
   /// Oldest first; the last is the night on screen.
   final List<NightWindow> nights;
   final double? sri;
-  const ConsistencyChart({super.key, required this.nights, this.sri});
+
+  /// The coach's bedtime and the wake time it implies (bedtime + need), in
+  /// minutes past midnight — WHOOP's dashed "optimal bed/wake time" lines.
+  /// Both or neither; none without a coach bedtime and a computed need.
+  final double? optimalBedMin, optimalWakeMin;
+
+  const ConsistencyChart({
+    super.key,
+    required this.nights,
+    this.sri,
+    this.optimalBedMin,
+    this.optimalWakeMin,
+  });
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final optimal = optimalBedMin != null && optimalWakeMin != null;
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_title('Sleep consistency'), style: _titleStyle(p)),
-        if (sri != null) ...[
-          const SizedBox(height: S.x2),
-          Text('${sri!.round()}%', style: F.n34.copyWith(color: p.ink)),
-        ],
+        const SizedBox(height: S.x2),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          if (sri != null) TrendHeadline('${sri!.round()}%'),
+          const Spacer(),
+          if (optimal)
+            Text('- - -  OPTIMAL BED/WAKE TIME',
+                style: F.over.copyWith(
+                    color: p.ink2,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w700)),
+        ]),
         const SizedBox(height: S.x4),
         SizedBox(
           height: 200,
@@ -157,7 +495,8 @@ class ConsistencyChart extends StatelessWidget {
             size: Size.infinite,
             painter: _ConsistencyPainter(nights, p,
                 F.over.copyWith(color: p.ink3), F.cap.copyWith(
-                    color: p.ink, fontWeight: FontWeight.w700)),
+                    color: p.ink, fontWeight: FontWeight.w700),
+                optimal ? (optimalBedMin!, optimalWakeMin!) : null),
           ),
         ),
         const SizedBox(height: S.x2),
@@ -180,7 +519,10 @@ class _ConsistencyPainter extends CustomPainter {
   final List<NightWindow> n;
   final P p;
   final TextStyle axis, tag;
-  _ConsistencyPainter(this.n, this.p, this.axis, this.tag);
+
+  /// (bedtime, wake) in minutes past midnight, drawn dashed across.
+  final (double, double)? optimal;
+  _ConsistencyPainter(this.n, this.p, this.axis, this.tag, [this.optimal]);
 
   /// Minutes after the previous 15:00, so a night reads top-to-bottom without
   /// wrapping at midnight — and a late wake (12:14) still lands below its
@@ -190,11 +532,17 @@ class _ConsistencyPainter extends CustomPainter {
     return ((d.hour * 60 + d.minute - 900) % 1440).toDouble();
   }
 
+  static double _mOf(double minOfDay) => (minOfDay - 900) % 1440;
+
   @override
   void paint(Canvas cv, Size s) {
     if (n.isEmpty) return;
     cv.clipRect(Offset.zero & s);
-    final all = [for (final w in n) ...[_m(w.onset), _m(w.wake)]];
+    final o = optimal;
+    final all = [
+      for (final w in n) ...[_m(w.onset), _m(w.wake)],
+      if (o != null) ...[_mOf(o.$1), _mOf(o.$2)],
+    ];
     var lo = all.reduce(math.min) - 60;
     var hi = all.reduce(math.max) + 60;
     lo = (lo / 120).floor() * 120;
@@ -220,6 +568,17 @@ class _ConsistencyPainter extends CustomPainter {
           Paint()..color = p.line);
       text(clock(m), axis, Offset(0, y(m)));
     }
+    if (o != null) {
+      final dash = Paint()
+        ..color = p.ink2
+        ..strokeWidth = 1.5;
+      for (final m in [_mOf(o.$1), _mOf(o.$2)]) {
+        final yy = y(m);
+        for (var x = left; x < s.width; x += 9) {
+          cv.drawLine(Offset(x, yy), Offset(math.min(x + 5, s.width), yy), dash);
+        }
+      }
+    }
     final slot = w / n.length;
     for (var i = 0; i < n.length; i++) {
       final last = i == n.length - 1;
@@ -244,19 +603,30 @@ class _ConsistencyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ConsistencyPainter o) => o.n != n;
+  bool shouldRepaint(_ConsistencyPainter o) => o.n != n || o.optimal != optimal;
 }
 
 class AsleepAwakeCard extends StatelessWidget {
   final double asleepMin, awakeMin;
   final int? wakeEvents;
   final double? efficiency;
+
+  /// The person's usual efficiency %; null with too few nights.
+  final double? usualEfficiency;
+
+  /// Where in the night the wakings were, as (start, end) fractions of the
+  /// window. With them the bars are split WHOOP-style — the asleep bar broken
+  /// at each waking, the awake track ticked; without them, one plain split.
+  final List<(double, double)> awakeSpans;
+
   const AsleepAwakeCard({
     super.key,
     required this.asleepMin,
     required this.awakeMin,
     this.wakeEvents,
     this.efficiency,
+    this.usualEfficiency,
+    this.awakeSpans = const [],
   });
 
   @override
@@ -264,12 +634,18 @@ class AsleepAwakeCard extends StatelessWidget {
     final p = P.of(c);
     final total = asleepMin + awakeMin;
     final f = total <= 0 ? 0.0 : asleepMin / total;
+    final e = efficiency;
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_title('Sleep efficiency'), style: _titleStyle(p)),
-        if (efficiency != null) ...[
+        if (e != null) ...[
           const SizedBox(height: S.x2),
-          Text('${efficiency!.round()}%', style: F.n34.copyWith(color: p.ink)),
+          TrendHeadline('${e.round()}%',
+              usual: usualEfficiency == null
+                  ? null
+                  : '${usualEfficiency!.round()}%',
+              dir: trendDir(e, usualEfficiency),
+              higherBetter: true),
         ],
         const SizedBox(height: S.x4),
         Row(children: [
@@ -277,20 +653,29 @@ class AsleepAwakeCard extends StatelessWidget {
           Text(_hm(asleepMin), style: F.n24.copyWith(color: p.ink)),
         ]),
         const SizedBox(height: S.x2),
-        ClipRRect(
-          borderRadius: R.rPill,
-          child: SizedBox(
-            height: 14,
-            child: Row(children: [
-              Expanded(
-                  flex: (f * 1000).round(),
-                  child: Container(color: p.on(C.sleep))),
-              Expanded(
-                  flex: ((1 - f) * 1000).round(),
-                  child: Container(color: p.ink2)),
-            ]),
+        if (awakeSpans.isNotEmpty)
+          SizedBox(
+            height: 64,
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: _WakePainter(awakeSpans, p),
+            ),
+          )
+        else
+          ClipRRect(
+            borderRadius: R.rPill,
+            child: SizedBox(
+              height: 14,
+              child: Row(children: [
+                Expanded(
+                    flex: (f * 1000).round(),
+                    child: Container(color: p.on(C.sleep))),
+                Expanded(
+                    flex: ((1 - f) * 1000).round(),
+                    child: Container(color: p.ink2)),
+              ]),
+            ),
           ),
-        ),
         const SizedBox(height: S.x2),
         Row(children: [
           Expanded(child: Text('AWAKE', style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4))),
@@ -309,6 +694,53 @@ class AsleepAwakeCard extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// The asleep bar broken at every waking, over a hatched awake track with a
+/// tick at each one: WHOOP's efficiency picture.
+class _WakePainter extends CustomPainter {
+  final List<(double, double)> spans;
+  final P p;
+  _WakePainter(this.spans, this.p);
+
+  @override
+  void paint(Canvas cv, Size s) {
+    const barH = 22.0, gap = 14.0;
+    final asleep = Paint()..color = p.on(C.sleep);
+    final cut = Paint()..color = p.card;
+    final r = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, s.width, barH), const Radius.circular(8));
+    cv.save();
+    cv.clipRRect(r);
+    cv.drawRRect(r, asleep);
+    for (final (a, b) in spans) {
+      final x0 = s.width * a, x1 = math.max(x0 + 2, s.width * b);
+      cv.drawRect(Rect.fromLTRB(x0, 0, x1, barH), cut);
+    }
+    cv.restore();
+    // The awake track: hatched, with a light tick wherever a waking was.
+    final y0 = barH + gap;
+    final track = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, y0, s.width, barH), const Radius.circular(4));
+    cv.save();
+    cv.clipRRect(track);
+    cv.drawRRect(track, Paint()..color = p.card2);
+    final hatch = Paint()
+      ..color = p.track
+      ..strokeWidth = 3;
+    for (var x = -barH; x < s.width + barH; x += 9) {
+      cv.drawLine(Offset(x, y0 + barH), Offset(x + barH, y0), hatch);
+    }
+    final tick = Paint()..color = p.ink;
+    for (final (a, b) in spans) {
+      final x0 = s.width * a, x1 = math.max(x0 + 3, s.width * b);
+      cv.drawRect(Rect.fromLTRB(x0, y0, x1, y0 + barH), tick);
+    }
+    cv.restore();
+  }
+
+  @override
+  bool shouldRepaint(_WakePainter o) => o.spans != spans;
 }
 
 class SleepStressCard extends StatelessWidget {
@@ -416,18 +848,8 @@ class OvernightHrCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_title('Hours of sleep'), style: _titleStyle(p)),
         const SizedBox(height: S.x2),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(_hm(sleptMin), style: F.n34.copyWith(color: p.ink)),
-            if (dir != 0)
-              Icon(dir > 0 ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-                  size: 20, color: p.on(dir > 0 ? C.green : C.orange)),
-          ]),
-        ),
-        if (u != null)
-          Text(_hm(u), style: F.cap.copyWith(color: p.ink3)),
+        TrendHeadline(_hm(sleptMin),
+            usual: u == null ? null : _hm(u), dir: dir, higherBetter: true),
         if (hr.length >= 10) ...[
           const SizedBox(height: S.x4),
           SizedBox(

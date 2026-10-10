@@ -148,21 +148,19 @@ void main() {
           'stages_confidence': ?conf,
         };
 
-    testWidgets('a stage is a range, never a count', (t) async {
+    testWidgets(
+        'the stage card shows WHOOP-style figures with the certainty note',
+        (t) async {
       await _pump(t,
           SleepData(day: '2026-05-20', night: staged(), tstHistory: _flat(20, 420)));
-      // No confidence published => the WIDEST interval, which is the honest
-      // default: we do not know how well we saw the night, so we say least.
-      // deep 80m, half-width 0.75x = 60m.
-      // Twice: the Stages row, and the header of the Deep comparison below it.
-      // Both had to move — one card showing a range while the other still
-      // showed a count is the contradiction this item exists to remove.
-      expect(find.text('20m–2h 20m'), findsNWidgets(2));
-      // And the share column is gone with the count it was computed from.
-      for (final share in const ['52%', '17%', '19%', '13%']) {
-        expect(find.text(share), findsNothing);
-      }
-      expect(find.textContaining('Shares of'), findsNothing);
+      // The owner chose WHOOP's exact stage figures (2026-10-10) over the
+      // range-only rows, on condition the card always says how certain wrist
+      // staging is. The deep COMPARISON below keeps its range: no confidence
+      // published => the widest interval, deep 80m, half-width 0.75x = 60m.
+      expect(find.text('20m–2h 20m'), findsOneWidget);
+      expect(find.text('1:20'), findsWidgets); // deep, as WHOOP prints it
+      expect(find.textContaining('Stages are estimated from the wrist'),
+          findsOneWidget);
     });
 
     testWidgets('a better-seen night gets a narrower range', (t) async {
@@ -174,7 +172,8 @@ void main() {
               tstHistory: _flat(20, 420)));
       // Same 80 minutes, half-width 0.45x = 36m. Narrower than the 60m above,
       // from the night's own confidence rather than one published figure.
-      expect(find.text('44m–1h 56m'), findsNWidgets(2));
+      // (The deep comparison; the stage card shows WHOOP's figure.)
+      expect(find.text('44m–1h 56m'), findsOneWidget);
     });
 
     testWidgets('the deep comparison stops asserting a difference', (t) async {
