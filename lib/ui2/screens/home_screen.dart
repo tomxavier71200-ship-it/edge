@@ -54,6 +54,8 @@ import '../activity/day_strain.dart' show DayStrainDetail;
 import '../profile/alarm.dart' show AlarmScreen;
 import '../profile/customize.dart' show CustomizeScreen;
 import 'calm_breathing.dart';
+import 'health_screen.dart' show HealthMonitorRoute;
+import 'stress_monitor.dart' show StressMonitorScreen;
 import 'home_sections.dart';
 import '../profile/devices.dart' show formatDayTime, bandLabelFor, MyDevices;
 import '../profile/profile.dart';
@@ -2668,14 +2670,12 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
               ),
 
             // Health and Stress Monitor tiles under the dials, WHOOP's order.
-            // Both open the Health tab.
+            // Each opens its own screen, the same one the Health tab opens.
             if (isToday)
               MonitorTiles(
                 d: d,
-                onHealth: () =>
-                    ShellScope.maybeOf(c)?.select(ShellDomain.health),
-                onStress: () =>
-                    ShellScope.maybeOf(c)?.select(ShellDomain.health),
+                onHealth: () => go(c, const HealthMonitorRoute()),
+                onStress: () => go(c, const StressMonitorScreen()),
               ),
 
             // The morning read: what the rings mean together, in one sentence.

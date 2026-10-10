@@ -466,6 +466,239 @@ class HealthScreen extends StatefulWidget {
   State<HealthScreen> createState() => _HealthScreenState();
 }
 
+/// The Health Monitor's vitals from [d]: a [RangeTile] per vital that read
+/// last night (keyed by metric), each one's verdict for the monitor card, and
+/// a written reason for each vital that did not. Shared by the Health tab and
+/// [HealthMonitorRoute], so both judge the same way.
+({
+  Map<String, Widget> tiles,
+  Map<String, VitalStatus> status,
+  List<Widget> gaps,
+}) healthVitals(BuildContext c, HealthData d) {
+  final l = AppLocalizations.of(c);
+  final gaps = <Widget>[];
+
+  // One tile per vital, by metric key; shown in WHOOP's order.
+  final tiles = <String, Widget>{};
+  // Each vital's verdict for WHOOP's Health Monitor card, by metric key.
+  final status = <String, VitalStatus>{};
+
+  // ALL FIVE ROWS ARE READ FROM THE NIGHT, so all five take the same
+  // measured gap. `overnight: false` is for a row that is not — a hole at
+  // 2 AM says nothing about a daytime number, and offering it as the reason
+  // would be the invented cause the whole absence layer refuses.
+  // `rising` is the ONE value judgement a row makes, and it is per metric:
+  // resting heart rate falling is good news, HRV rising is. A metric this
+  // project makes no directional claim about takes [Rising.neither] and
+  // draws its arrow in ink — the direction is stated, the verdict is not
+  // invented.
+  void row(Metric m, IconData icon, Color col, String name, String sub,
+      String value, String unit, List<double?> series, String metricKey,
+      {String? whyAbsent,
+      bool overnight = true,
+      Rising rising = Rising.neither,
+      String Function(double)? fmt}) {
+    if (m.isEmpty) {
+      final s = StatusCard.forMetric(
+          l?.healthNoMetric(name.toLowerCase()) ??
+              'No ${name.toLowerCase()}',
+          m,
+          why: whyAbsent ?? '', gap: overnight ? d.nightGap : null);
+      if (s != null) gaps.add(s);
+      return;
+    }
+    // Against the reader's own usual range once there is one; until then
+    // the tile says how many more nights the range needs.
+    final nr = normalRangeOf(d.points(metricKey));
+    final v = m.value;
+    status[metricKey] = VitalStatus.building;
+    if (nr.range != null && v != null) {
+      final inside = nr.range!.contains(v.toDouble());
+      status[metricKey] = inside ? VitalStatus.inside : VitalStatus.outside;
+      // A WHOOP-style tile once there is a range to stand it against.
+      tiles[metricKey] = RangeTile(
+          icon: icon,
+          name: name,
+          value: v.toDouble(),
+          unit: unit,
+          range: nr.range!,
+          fmt: fmt ?? (x) => x.round().toString(),
+          onTap: () => go(c, MetricDetail(metricKey)));
+      return;
+    }
+    // No range yet: the same tile, saying how many more nights it needs
+    // rather than judging the number.
+    if (v == null) return;
+    final left = kRangeMinNights - nr.nights;
+    tiles[metricKey] = RangeTile(
+        icon: icon,
+        name: name,
+        value: v.toDouble(),
+        unit: unit,
+        range: null,
+        note: left > 0
+            ? 'usual range in $left more night${left == 1 ? '' : 's'}'
+            : null,
+        fmt: fmt ?? (x) => x.round().toString(),
+        onTap: () => go(c, MetricDetail(metricKey)));
+  }
+
+  // Five of these rows come off the overnight block, and `getToday` holds
+  // that block over until today's settles. "Last night" / "Overnight" were
+  // fixed literals, so a days-old night was stated as last night's — while
+  // the Trends tab one tap away correctly said "as of 4 days ago" about the
+  // same numbers.
+  final night = heldOverNightOf(d.today);
+  String ofNight(String s) => night == null ? s : '$s · ${prettyDay(night)}';
+
+  final sleepMin = d.sleepMin;
+
+  final rhr = d.daily('resting_hr');
+  row(rhr, LucideIcons.heart, C.red, l?.healthRowRestingHr ?? 'Resting heart rate',
+      ofNight(l?.healthSubOvernight ?? 'Overnight'),
+      rhr.value == null ? '' : '${rhr.value!.round()}', 'bpm',
+      d.spark('resting_hr', 24), 'resting_hr',
+      // Sleep duration and nocturnal RHR are gated separately, so "no night
+      // was scored" is often the wrong reason and contradicts the Sleep row
+      // sitting two lines down. Only the branch this screen can SEE is
+      // stated — the other named a beat-quality gate it never read.
+      // Nocturnal resting heart rate: lower is the direction every part of
+      // this app already treats as better — it is what the illness CUSUM
+      // watches for a RISE, and what readiness scores as `lowerIsBetter`.
+      rising: Rising.bad,
+      whyAbsent: sleepMin.isEmpty
+          ? (l?.healthWhyReadFromSleep ??
+              'Read from sleep, and no night was scored.')
+          : '');
+
+  final hrvMetric = d.hrv;
+  row(hrvMetric, LucideIcons.activity, C.green, l?.healthRowHrv ?? 'HRV',
+      ofNight(l?.healthSubRmssdAsleep ?? 'RMSSD, asleep'),
+      hrvMetric.value == null ? '' : '${hrvMetric.value!.round()}', 'ms',
+      d.spark('hrv', 24), 'hrv',
+      rising: Rising.good,
+      // Blaming signal quality unconditionally told a day-one user their
+      // sensor produced dirty data on a night that never happened.
+      whyAbsent: sleepMin.isEmpty
+          ? (l?.healthWhyReadOnlyFromSleep ??
+              'Read only from sleep, and no night was scored.')
+          : '');
+
+  // Sleep and the nightly stress score are not Health Monitor vitals —
+  // WHOOP's monitor shows the overnight four; both have their own screens.
+
+  final respMetric = d.resp;
+  row(respMetric, LucideIcons.wind, C.teal, l?.healthRowRespRate ?? 'Respiratory rate',
+      ofNight(l?.healthSubAsleep ?? 'Asleep'),
+      respMetric.value == null ? '' : respMetric.value!.toStringAsFixed(1),
+      'br/min',
+      d.spark('resp_rate', 24), 'resp_rate',
+      fmt: (x) => x.toStringAsFixed(1),
+      // DELIBERATELY UNJUDGED. Readiness scores a rise as a cost, but that
+      // is a deviation from your own baseline, not a claim that breathing
+      // slower is better health — nobody here would tell you a falling
+      // respiratory rate is good news. Direction, no verdict.
+      // THE ESTIMATOR'S OWN REASON when it left one, not a guess written
+      // here. `respiration.rsa` records which gate it failed — too few beats,
+      // artifact fraction over the gate, no stable HF peak, or a peak that
+      // moved across spectral resolutions — and the repository now carries
+      // that note through. This screen guessed "too noisy" for all four,
+      // which was right about a quarter of the time.
+      whyAbsent: respMetric.note?.isNotEmpty == true
+          ? respMetric.note!
+          : (sleepMin.isEmpty
+              ? (l?.healthWhyReadOnlyFromSleep ??
+                  'Read only from sleep, and no night was scored.')
+              : (l?.healthWhyNoReadingLastNight ??
+                  'No reading from last night.')));
+
+  // Skin temperature, the fourth overnight vital WHOOP's monitor shows. The
+  // stored quantity is standard deviations from the person's own nights, so
+  // that is the unit printed — never degrees.
+  final skin = metricOf(d.today['skin_temp']);
+  String signed(double x) =>
+      '${x >= 0 ? '+' : '−'}${x.abs().toStringAsFixed(1)}';
+  row(skin, LucideIcons.thermometer, C.orange,
+      l?.healthRowSkinTemp ?? 'Skin temperature',
+      ofNight(l?.healthVsOwnNights ?? 'vs your own nights'),
+      skin.value == null ? '' : signed(skin.value!.toDouble()),
+      'SD',
+      d.spark('skin_temp', 24),
+      'skin_temp',
+      fmt: signed,
+      whyAbsent: sleepMin.isEmpty
+          ? (l?.healthWhyReadOnlyFromSleep ??
+              'Read only from sleep, and no night was scored.')
+          : '');
+  return (tiles: tiles, status: status, gaps: gaps);
+}
+
+/// The Health Monitor opened from outside the Health tab (Home's tile): reads
+/// the same data the tab does, then shows [HealthMonitorScreen].
+class HealthMonitorRoute extends StatefulWidget {
+  const HealthMonitorRoute({super.key});
+
+  @override
+  State<HealthMonitorRoute> createState() => _HealthMonitorRouteState();
+}
+
+class _HealthMonitorRouteState extends State<HealthMonitorRoute> {
+  HealthData? _d;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final repo = repoOf(context);
+    if (repo == null) {
+      setState(() => _d = const HealthData());
+      return;
+    }
+    try {
+      final d = await HealthData.load(repo);
+      if (mounted) setState(() => (_d = d, _failed = false));
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final d = _d;
+    if (d == null) {
+      return detailScaffold(c, 'Health monitor', [
+        if (_failed)
+          StatusCard('Could not read your vitals',
+              'The stored rows failed to load. Nothing was deleted.',
+              fix: 'Try again', icon: LucideIcons.databaseZap, onFix: () {
+            setState(() => _failed = false);
+            _load();
+          })
+        else
+          const Padding(
+            padding: EdgeInsets.only(top: S.x8),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+      ]);
+    }
+    final v = healthVitals(c, d);
+    return HealthMonitorScreen(
+      tiles: [
+        for (final k in kMonitorVitals) ?v.tiles[k],
+      ],
+      gaps: v.gaps,
+    );
+  }
+}
+
+/// The Health Monitor's vitals in WHOOP's order: breathing, resting heart
+/// rate, HRV, skin temperature.
+const kMonitorVitals = ['resp_rate', 'resting_hr', 'hrv', 'skin_temp'];
+
 class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   // EXPLORE SITS SECOND, not last. Five chips do not fit a 390 pt frame at 1×:
   // the fifth is clipped by the edge, and a half-visible chip is exactly the
@@ -687,160 +920,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   Widget _overview(BuildContext c, HealthData d) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
-    final gaps = <Widget>[];
-
-    // One tile per vital, by metric key; shown in WHOOP's order.
-    final tiles = <String, Widget>{};
-    // Each vital's verdict for WHOOP's Health Monitor card, by metric key.
-    final status = <String, VitalStatus>{};
-
-    // ALL FIVE ROWS ARE READ FROM THE NIGHT, so all five take the same
-    // measured gap. `overnight: false` is for a row that is not — a hole at
-    // 2 AM says nothing about a daytime number, and offering it as the reason
-    // would be the invented cause the whole absence layer refuses.
-    // `rising` is the ONE value judgement a row makes, and it is per metric:
-    // resting heart rate falling is good news, HRV rising is. A metric this
-    // project makes no directional claim about takes [Rising.neither] and
-    // draws its arrow in ink — the direction is stated, the verdict is not
-    // invented.
-    void row(Metric m, IconData icon, Color col, String name, String sub,
-        String value, String unit, List<double?> series, String metricKey,
-        {String? whyAbsent,
-        bool overnight = true,
-        Rising rising = Rising.neither,
-        String Function(double)? fmt}) {
-      if (m.isEmpty) {
-        final s = StatusCard.forMetric(
-            l?.healthNoMetric(name.toLowerCase()) ??
-                'No ${name.toLowerCase()}',
-            m,
-            why: whyAbsent ?? '', gap: overnight ? d.nightGap : null);
-        if (s != null) gaps.add(s);
-        return;
-      }
-      // Against the reader's own usual range once there is one; until then
-      // the tile says how many more nights the range needs.
-      final nr = normalRangeOf(d.points(metricKey));
-      final v = m.value;
-      status[metricKey] = VitalStatus.building;
-      if (nr.range != null && v != null) {
-        final inside = nr.range!.contains(v.toDouble());
-        status[metricKey] = inside ? VitalStatus.inside : VitalStatus.outside;
-        // A WHOOP-style tile once there is a range to stand it against.
-        tiles[metricKey] = RangeTile(
-            icon: icon,
-            name: name,
-            value: v.toDouble(),
-            unit: unit,
-            range: nr.range!,
-            fmt: fmt ?? (x) => x.round().toString(),
-            onTap: () => go(c, MetricDetail(metricKey)));
-        return;
-      }
-      // No range yet: the same tile, saying how many more nights it needs
-      // rather than judging the number.
-      if (v == null) return;
-      final left = kRangeMinNights - nr.nights;
-      tiles[metricKey] = RangeTile(
-          icon: icon,
-          name: name,
-          value: v.toDouble(),
-          unit: unit,
-          range: null,
-          note: left > 0
-              ? 'usual range in $left more night${left == 1 ? '' : 's'}'
-              : null,
-          fmt: fmt ?? (x) => x.round().toString(),
-          onTap: () => go(c, MetricDetail(metricKey)));
-    }
-
-    // Five of these rows come off the overnight block, and `getToday` holds
-    // that block over until today's settles. "Last night" / "Overnight" were
-    // fixed literals, so a days-old night was stated as last night's — while
-    // the Trends tab one tap away correctly said "as of 4 days ago" about the
-    // same numbers.
-    final night = heldOverNightOf(d.today);
-    String ofNight(String s) => night == null ? s : '$s · ${prettyDay(night)}';
-
-    final sleepMin = d.sleepMin;
-
-    final rhr = d.daily('resting_hr');
-    row(rhr, LucideIcons.heart, C.red, l?.healthRowRestingHr ?? 'Resting heart rate',
-        ofNight(l?.healthSubOvernight ?? 'Overnight'),
-        rhr.value == null ? '' : '${rhr.value!.round()}', 'bpm',
-        d.spark('resting_hr', 24), 'resting_hr',
-        // Sleep duration and nocturnal RHR are gated separately, so "no night
-        // was scored" is often the wrong reason and contradicts the Sleep row
-        // sitting two lines down. Only the branch this screen can SEE is
-        // stated — the other named a beat-quality gate it never read.
-        // Nocturnal resting heart rate: lower is the direction every part of
-        // this app already treats as better — it is what the illness CUSUM
-        // watches for a RISE, and what readiness scores as `lowerIsBetter`.
-        rising: Rising.bad,
-        whyAbsent: sleepMin.isEmpty
-            ? (l?.healthWhyReadFromSleep ??
-                'Read from sleep, and no night was scored.')
-            : '');
-
-    final hrvMetric = d.hrv;
-    row(hrvMetric, LucideIcons.activity, C.green, l?.healthRowHrv ?? 'HRV',
-        ofNight(l?.healthSubRmssdAsleep ?? 'RMSSD, asleep'),
-        hrvMetric.value == null ? '' : '${hrvMetric.value!.round()}', 'ms',
-        d.spark('hrv', 24), 'hrv',
-        rising: Rising.good,
-        // Blaming signal quality unconditionally told a day-one user their
-        // sensor produced dirty data on a night that never happened.
-        whyAbsent: sleepMin.isEmpty
-            ? (l?.healthWhyReadOnlyFromSleep ??
-                'Read only from sleep, and no night was scored.')
-            : '');
-
-    // Sleep and the nightly stress score are not Health Monitor vitals —
-    // WHOOP's monitor shows the overnight four; both have their own screens.
-
-    final respMetric = d.resp;
-    row(respMetric, LucideIcons.wind, C.teal, l?.healthRowRespRate ?? 'Respiratory rate',
-        ofNight(l?.healthSubAsleep ?? 'Asleep'),
-        respMetric.value == null ? '' : respMetric.value!.toStringAsFixed(1),
-        'br/min',
-        d.spark('resp_rate', 24), 'resp_rate',
-        fmt: (x) => x.toStringAsFixed(1),
-        // DELIBERATELY UNJUDGED. Readiness scores a rise as a cost, but that
-        // is a deviation from your own baseline, not a claim that breathing
-        // slower is better health — nobody here would tell you a falling
-        // respiratory rate is good news. Direction, no verdict.
-        // THE ESTIMATOR'S OWN REASON when it left one, not a guess written
-        // here. `respiration.rsa` records which gate it failed — too few beats,
-        // artifact fraction over the gate, no stable HF peak, or a peak that
-        // moved across spectral resolutions — and the repository now carries
-        // that note through. This screen guessed "too noisy" for all four,
-        // which was right about a quarter of the time.
-        whyAbsent: respMetric.note?.isNotEmpty == true
-            ? respMetric.note!
-            : (sleepMin.isEmpty
-                ? (l?.healthWhyReadOnlyFromSleep ??
-                    'Read only from sleep, and no night was scored.')
-                : (l?.healthWhyNoReadingLastNight ??
-                    'No reading from last night.')));
-
-    // Skin temperature, the fourth overnight vital WHOOP's monitor shows. The
-    // stored quantity is standard deviations from the person's own nights, so
-    // that is the unit printed — never degrees.
-    final skin = metricOf(d.today['skin_temp']);
-    String signed(double x) =>
-        '${x >= 0 ? '+' : '−'}${x.abs().toStringAsFixed(1)}';
-    row(skin, LucideIcons.thermometer, C.orange,
-        l?.healthRowSkinTemp ?? 'Skin temperature',
-        ofNight(l?.healthVsOwnNights ?? 'vs your own nights'),
-        skin.value == null ? '' : signed(skin.value!.toDouble()),
-        'SD',
-        d.spark('skin_temp', 24),
-        'skin_temp',
-        fmt: signed,
-        whyAbsent: sleepMin.isEmpty
-            ? (l?.healthWhyReadOnlyFromSleep ??
-                'Read only from sleep, and no night was scored.')
-            : '');
+    final (:tiles, :status, :gaps) = healthVitals(c, d);
 
     final illness = d.today['illness'];
     final state = illness is Map ? illness['state']?.toString() : null;
@@ -967,8 +1047,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
             // temperature. A vital with no reading last night has no tile;
             // its reason is among the gaps under the grid.
             tiles: [
-              for (final k in ['resp_rate', 'resting_hr', 'hrv', 'skin_temp'])
-                ?tiles[k],
+              for (final k in kMonitorVitals) ?tiles[k],
             ],
             gaps: gaps,
           ),

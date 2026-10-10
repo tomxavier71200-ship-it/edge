@@ -45,7 +45,7 @@ import '../../compute/findings.dart';
 import '../../models/metric.dart';
 import '../activity/catalogue.dart';
 import '../screens/health_monitor.dart'
-    show HealthMonitorCard, LiveHrPanel, StressMonitorCard, VitalStatus;
+    show HealthMonitorCard, LiveHrPanel, StressMonitorCard, StressSparkline, VitalStatus;
 import '../activity/live.dart';
 import '../activity/picker.dart' show ActivityPicker, ActivityRow;
 import '../activity/poster.dart'
@@ -697,6 +697,13 @@ Map<String, Widget> _nutritionAndWellnessCases() {
     'live_hr_panel': const LiveHrPanel.preview(hr: 76, zone: null, trace: [
       74, 75, 75, 76, 76, 75, 76, 77, 76, 76, 75, 76,
     ]),
+    'stress_sparkline': SizedBox(
+      height: 32,
+      child: StressSparkline([
+        for (var i = 0; i < 12; i++)
+          (at: DateTime(2026, 10, 3, 8, 15 * i), v: .6 + (i % 4) * .4),
+      ]),
+    ),
     'mood_picker': MoodPicker(value: 4, onChanged: (_) {}),
     'mood_picker_blank': MoodPicker(onChanged: (_) {}),
     'field_stepper': Surface(

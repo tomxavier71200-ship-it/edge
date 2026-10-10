@@ -441,11 +441,7 @@ class StressMonitorCard extends StatelessWidget {
             ]),
           ),
           if (readings.length >= 2)
-            SizedBox(
-              width: 150,
-              height: 70,
-              child: CustomPaint(painter: _MiniStress(readings, p)),
-            ),
+            SizedBox(width: 150, height: 70, child: StressSparkline(readings)),
         ]),
       ]),
     );
@@ -453,7 +449,17 @@ class StressMonitorCard extends StatelessWidget {
 }
 
 /// Today's readings as a thin line on the 0–3 scale, coloured low → high,
-/// with a dot on the newest.
+/// with a dot on the newest; nothing under two readings. Sized by its parent.
+class StressSparkline extends StatelessWidget {
+  final List<StressReading> readings;
+  const StressSparkline(this.readings, {super.key});
+
+  @override
+  Widget build(BuildContext c) => readings.length < 2
+      ? const SizedBox.shrink()
+      : CustomPaint(painter: _MiniStress(readings, P.of(c)), size: Size.infinite);
+}
+
 class _MiniStress extends CustomPainter {
   final List<StressReading> r;
   final P p;

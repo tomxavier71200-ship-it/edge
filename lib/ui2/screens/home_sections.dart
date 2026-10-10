@@ -34,7 +34,9 @@ import 'log_workout.dart'
     show LogWorkout, Suggestion, WorkoutSuggestionScreen, activeSuggestions;
 import 'metric_detail.dart' show MetricDetail, specOf;
 import 'sleep_detail.dart';
-import 'stress_detail.dart' show kStressMinWindows;
+import 'health_monitor.dart' show StressSparkline;
+import 'stress_detail.dart'
+    show StressReading, kStressMinWindows, stressReadings;
 
 /// Days a dashboard average needs before it exists.
 const kBaselineMin = 4;
@@ -523,12 +525,9 @@ class MonitorTiles extends StatefulWidget {
 }
 
 class _MonitorTilesState extends State<MonitorTiles> {
-  /// Latest scored 15-minute window today, 0–100, and when; null for none.
-  ({double score, DateTime at})? _stress;
-
-  /// How many windows today scored — the level waits for
-  /// [kStressMinWindows].
-  int _scored = 0;
+  /// Today's scored 15-minute windows on the 0–3 scale, oldest first. The
+  /// level waits for [kStressMinWindows] of them.
+  List<StressReading> _readings = const [];
 
   @override
   void initState() {
@@ -550,22 +549,13 @@ class _MonitorTilesState extends State<MonitorTiles> {
     if (repo == null) return;
     try {
       final today = todayLabel();
-      final s = await repo.getDayStress(today);
-      ({double score, DateTime at})? last;
-      var scored = 0;
-      for (final e in (s['stress_day'] is List ? s['stress_day'] as List : const [])) {
-        if (e is! Map || e['t'] is! num || e['score'] is! num) continue;
-        final at =
-            DateTime.fromMillisecondsSinceEpoch((e['t'] as num).toInt() * 1000);
-        if (dayLabelOf(at) != today) continue;
-        scored++;
-        last = (score: (e['score'] as num).toDouble(), at: at);
-      }
-      if (mounted) setState(() => (_stress = last, _scored = scored));
+      final r = stressReadings(await repo.getDayStress(today), today)
+        ..sort((a, b) => a.at.compareTo(b.at));
+      if (mounted) setState(() => _readings = r);
     } catch (_) {}
   }
 
-  /// The overnight vitals the Health overview judges, counted the same way
+  /// The overnight vitals the Health Monitor judges, counted the same way
   /// (normalRangeOf: newest point against the earlier nights). Only those with
   /// a range count; none with a range → null, and the tile says so.
   ///
@@ -576,7 +566,7 @@ class _MonitorTilesState extends State<MonitorTiles> {
   ({(int, int)? counts, bool ranged}) _inRange() {
     var inside = 0, total = 0;
     var ranged = false;
-    for (final k in const ['hrv', 'resting_hr', 'resp_rate']) {
+    for (final k in const ['resp_rate', 'resting_hr', 'hrv', 'skin_temp']) {
       final pts = widget.d.series[k] ?? const [];
       final r = normalRangeOf(pts).range;
       if (r == null || pts.isEmpty) continue;
@@ -593,49 +583,58 @@ class _MonitorTilesState extends State<MonitorTiles> {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final (counts: hr, :ranged) = _inRange();
-    final s = _scored >= kStressMinWindows ? _stress : null;
-    final v = s == null ? null : s.score / 100 * 3;
+    final r = _readings;
+    final last = r.length >= kStressMinWindows ? r.last : null;
+    final v = last?.v;
     final lvl = v == null ? null : stressLevelOf(v);
-    Widget tile(String title, VoidCallback onTap, Widget badge, String word,
-            Color wordCol, String sub) =>
+    // WHOOP's Home pair: a title with a chevron, one big figure, a word under
+    // it, and one small line of context.
+    Widget tile(String title, VoidCallback onTap, String semantics, Widget body,
+            String sub) =>
         Expanded(
           child: Surface(
             onTap: onTap,
-            semanticLabel: '$title. $word. $sub',
+            semanticLabel: '$title. $semantics. $sub',
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(
                   child: Text(title.toUpperCase(),
-                      style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+                      style: F.over.copyWith(
+                          color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
                 ),
                 Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
               ]),
-              const SizedBox(height: S.x4),
-              Row(children: [
-                badge,
-                const SizedBox(width: S.x3),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(word.toUpperCase(),
-                        maxLines: 2,
-                        style: F.over.copyWith(
-                            color: wordCol, letterSpacing: 1.4,
-                            fontWeight: FontWeight.w700)),
-                    Text(sub, style: F.cap.copyWith(color: p.ink2)),
-                  ]),
-                ),
-              ]),
+              const SizedBox(height: S.x3),
+              body,
+              const Spacer(),
+              const SizedBox(height: S.x2),
+              Text(sub, style: F.cap.copyWith(color: p.ink2)),
             ]),
           ),
         );
-    Widget box(Widget child, Color col) => Container(
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          padding: const EdgeInsets.symmetric(horizontal: S.x1),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: p.wash(col), borderRadius: R.rSm),
-          child: child,
-        );
+    Widget figure(String big, Color bigCol, String word, Color wordCol) =>
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(big, style: F.n34.copyWith(color: bigCol)),
+          ),
+          Text(word.toUpperCase(),
+              maxLines: 2,
+              style: F.over.copyWith(
+                  color: wordCol, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+        ]);
     final all = hr != null && hr.$1 == hr.$2;
+    final hCol = hr == null ? p.ink3 : p.on(all ? C.green : C.orange);
+    final hWord = hr == null
+        ? (ranged ? 'No reading' : 'Building range')
+        : all
+            ? 'Within range'
+            : 'Outside range';
+    final sCol = lvl == null ? p.ink3 : p.on(kStressLevelColors[lvl]);
+    final sWord = lvl == null
+        ? (r.isEmpty ? 'No reading' : 'Calculating')
+        : kStressLevelWords[lvl];
     return Padding(
       padding: const EdgeInsets.only(top: S.x4),
       child: IntrinsicHeight(
@@ -643,39 +642,51 @@ class _MonitorTilesState extends State<MonitorTiles> {
           tile(
             'Health Monitor',
             widget.onHealth,
-            box(
-                Icon(hr == null ? LucideIcons.minus
-                        : all ? LucideIcons.check : LucideIcons.triangleAlert,
+            hr == null ? hWord : '${hr.$1} of ${hr.$2} $hWord',
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                width: 30,
+                height: 30,
+                margin: const EdgeInsets.only(top: S.x1, right: S.x2),
+                decoration: BoxDecoration(
+                    color: p.wash(hr == null ? C.n500 : (all ? C.green : C.orange)),
+                    borderRadius: R.rSm),
+                child: Icon(
+                    hr == null
+                        ? LucideIcons.minus
+                        : all
+                            ? LucideIcons.check
+                            : LucideIcons.triangleAlert,
                     size: 18,
-                    color: hr == null ? p.ink3 : p.on(all ? C.green : C.orange)),
-                hr == null ? p.ink3 : (all ? C.green : C.orange)),
-            hr == null
-                ? (ranged ? 'No reading' : 'Building range')
-                : all
-                    ? 'Within range'
-                    : 'Outside range',
-            hr == null ? p.ink3 : p.on(all ? C.green : C.orange),
+                    color: hCol),
+              ),
+              Expanded(
+                child: figure(hr == null ? '—' : '${hr.$1}/${hr.$2}',
+                    hr == null ? p.ink3 : p.ink, hWord, hCol),
+              ),
+            ]),
             hr == null
                 ? (ranged ? 'Not yet today' : 'Needs 7 nights')
-                : '${hr.$1}/${hr.$2} metrics',
+                : 'Last night',
           ),
           const SizedBox(width: S.x3),
           tile(
             'Stress Monitor',
             widget.onStress,
-            box(
-                Text(v == null ? '—' : v.toStringAsFixed(1),
-                    style: F.n24.copyWith(
-                        color: lvl == null ? p.ink3 : p.on(kStressLevelColors[lvl]))),
-                lvl == null ? p.ink3 : kStressLevelColors[lvl]),
-            lvl == null ? 'No reading' : kStressLevelWords[lvl],
-            lvl == null ? p.ink3 : p.on(kStressLevelColors[lvl]),
-            s == null
-                ? (_scored == 0
+            v == null ? sWord : '${v.toStringAsFixed(1)}, $sWord',
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              figure(v == null ? '—' : v.toStringAsFixed(1),
+                  v == null ? p.ink3 : p.ink, sWord, sCol),
+              if (r.length >= 2) ...[
+                const SizedBox(height: S.x2),
+                SizedBox(height: 32, child: StressSparkline(r)),
+              ],
+            ]),
+            last != null
+                ? 'as of ${clock(last.at.hour * 60 + last.at.minute)}'
+                : r.isEmpty
                     ? 'Not yet today'
-                    : 'Needs an hour of wear ($_scored of '
-                        '$kStressMinWindows)')
-                : clock(s.at.hour * 60 + s.at.minute),
+                    : '${r.length} of $kStressMinWindows readings',
           ),
         ]),
       ),
