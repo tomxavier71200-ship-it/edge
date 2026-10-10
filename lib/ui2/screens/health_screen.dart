@@ -28,6 +28,7 @@ import 'ecg.dart' show EcgEntryCard, pairedIsMaverickOf;
 import 'findings_log.dart';
 import 'home_screen.dart';
 import 'healthspan_screen.dart' show HealthspanScreen, kHabitMinDays;
+import 'health_monitor.dart';
 import 'stress_detail.dart';
 import 'investigate.dart';
 import 'metric_detail.dart';
@@ -149,6 +150,7 @@ class HealthData {
       'sleep',
       'stress',
       'resp_rate',
+      'skin_temp',
     ]) {
       charts[k] = pointsOf(await repo.getChart(k));
     }
@@ -547,6 +549,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     try {
       final d = await HealthData.load(repo);
       if (stillNewest(#day, t)) setState(() => (_d = d, _loading = false));
+      // The Overview's Stress Monitor card reads today's readings too.
+      if (mounted) _loadStress();
     } catch (_) {
       if (stillNewest(#day, t)) setState(() => _loading = false);
     }
@@ -674,6 +678,25 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     } catch (_) {
       if (stillNewest(#stress, t)) setState(() => _sFailed = true);
     }
+  }
+
+  /// WHOOP's Stress Monitor card on the Health tab: today's time at high
+  /// stress against a typical day of this weekday, and today's readings.
+  /// Opens the Stress tab. The time needs [kStressMinWindows] readings.
+  Widget _stressCard(BuildContext c) {
+    final s = _s;
+    final readings = s == null ? const <StressReading>[] : stressReadings(s, todayLabel());
+    final split = stressSplit(readings, sleep: _sSpans.sleep, work: _sSpans.work);
+    final usual = typicalSplit(_sUsual);
+    return StressMonitorCard(
+      highMin: readings.length < kStressMinWindows
+          ? null
+          : split.total[2].toDouble(),
+      typicalHighMin: usual?.total[2].toDouble(),
+      weekday: weekdayName(DateTime.now()).substring(0, 3),
+      readings: readings,
+      onTap: () => _select(6),
+    );
   }
 
   /// Whole day, outside activities, and sleep, each against the same
@@ -911,6 +934,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     final gaps = <Widget>[];
     var ranged = 0, inRange = 0;
     final tiles = <Widget>[];
+    // Each vital's verdict for WHOOP's Health Monitor card, by metric key.
+    final status = <String, VitalStatus>{};
 
     // ALL FIVE ROWS ARE READ FROM THE NIGHT, so all five take the same
     // measured gap. `overnight: false` is for a row that is not — a hole at
@@ -940,9 +965,12 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
       // the plain row, saying how many more nights the range needs.
       final nr = normalRangeOf(d.points(metricKey));
       final v = m.value;
+      status[metricKey] = VitalStatus.building;
       if (nr.range != null && v != null) {
         ranged++;
-        if (nr.range!.contains(v.toDouble())) inRange++;
+        final inside = nr.range!.contains(v.toDouble());
+        if (inside) inRange++;
+        status[metricKey] = inside ? VitalStatus.inside : VitalStatus.outside;
         // A WHOOP-style tile once there is a range to stand it against.
         tiles.add(RangeTile(
             icon: icon,
@@ -1066,6 +1094,25 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
                 : (l?.healthWhyNoReadingLastNight ??
                     'No reading from last night.')));
 
+    // Skin temperature, the fourth overnight vital WHOOP's monitor shows. The
+    // stored quantity is standard deviations from the person's own nights, so
+    // that is the unit printed — never degrees.
+    final skin = metricOf(d.today['skin_temp']);
+    String signed(double x) =>
+        '${x >= 0 ? '+' : '−'}${x.abs().toStringAsFixed(1)}';
+    row(skin, LucideIcons.thermometer, C.orange,
+        l?.healthRowSkinTemp ?? 'Skin temperature',
+        ofNight(l?.healthVsOwnNights ?? 'vs your own nights'),
+        skin.value == null ? '' : signed(skin.value!.toDouble()),
+        'SD',
+        d.spark('skin_temp', 24),
+        'skin_temp',
+        fmt: signed,
+        whyAbsent: sleepMin.isEmpty
+            ? (l?.healthWhyReadOnlyFromSleep ??
+                'Read only from sleep, and no night was scored.')
+            : '');
+
     final illness = d.today['illness'];
     final state = illness is Map ? illness['state']?.toString() : null;
     // The CUSUM watch runs on NOCTURNAL RESTING HEART RATE ALONE. The copy here
@@ -1174,40 +1221,62 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         );
       }),
       const SizedBox(height: S.x3),
-      // The one-line answer first: is last night normal for me? Only rows
-      // that have a usual range count, so a new user sees no verdict at all.
-      if (ranged > 0) ...[
-        RangeBanner(
-            inside: inRange,
-            total: ranged,
-            when: night == null
-                ? (l?.healthSubLastNight ?? 'Last night')
-                : prettyDay(night)),
-        const SizedBox(height: S.x3),
-      ],
-      // Two tiles to a row, WHOOP's Health Monitor grid.
-      for (var i = 0; i < tiles.length; i += 2) ...[
-        IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(child: tiles[i]),
-            const SizedBox(width: S.x3),
-            Expanded(
-                child: i + 1 < tiles.length ? tiles[i + 1] : const SizedBox()),
-          ]),
-        ),
-        const SizedBox(height: S.x3),
-      ],
-      if (rows.isNotEmpty)
-        Surface(
-          pad: const EdgeInsets.symmetric(horizontal: S.x4),
-          child: Column(children: [
-            for (var i = 0; i < rows.length; i++) ...[
-              if (i > 0) Divider(color: p.line, height: 1),
-              rows[i],
+      // WHOOP's Health Monitor card: the four overnight vitals as ticks and
+      // warnings, opening the per-vital cards (built here, shown there).
+      HealthMonitorCard(
+        items: [
+          (LucideIcons.wind, 'Resp', status['resp_rate'] ?? VitalStatus.building),
+          (LucideIcons.heart, 'RHR', status['resting_hr'] ?? VitalStatus.building),
+          (LucideIcons.activity, 'HRV', status['hrv'] ?? VitalStatus.building),
+          (LucideIcons.thermometer, 'Temp',
+              status['skin_temp'] ?? VitalStatus.building),
+        ],
+        onTap: () => go(
+          c,
+          HealthMonitorScreen(children: [
+            // The one-line answer first: is last night normal for me? Only
+            // rows with a usual range count, so a new user sees no verdict.
+            if (ranged > 0) ...[
+              RangeBanner(
+                  inside: inRange,
+                  total: ranged,
+                  when: night == null
+                      ? (l?.healthSubLastNight ?? 'Last night')
+                      : prettyDay(night)),
+              const SizedBox(height: S.x3),
             ],
+            // Two tiles to a row, WHOOP's Health Monitor grid.
+            for (var i = 0; i < tiles.length; i += 2) ...[
+              IntrinsicHeight(
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: tiles[i]),
+                      const SizedBox(width: S.x3),
+                      Expanded(
+                          child: i + 1 < tiles.length
+                              ? tiles[i + 1]
+                              : const SizedBox()),
+                    ]),
+              ),
+              const SizedBox(height: S.x3),
+            ],
+            if (rows.isNotEmpty)
+              Surface(
+                pad: const EdgeInsets.symmetric(horizontal: S.x4),
+                child: Column(children: [
+                  for (var i = 0; i < rows.length; i++) ...[
+                    if (i > 0) Divider(color: p.line, height: 1),
+                    rows[i],
+                  ],
+                ]),
+              ),
+            for (final g in gaps) ...[const SizedBox(height: S.x3), g],
           ]),
         ),
-      for (final g in gaps) ...[const SizedBox(height: S.x3), g],
+      ),
+      const SizedBox(height: S.x3),
+      _stressCard(c),
 
       // OBSERVATIONS — the illness watch, wrapped, plus a door to the other
       // three detectors.

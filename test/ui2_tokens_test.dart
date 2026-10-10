@@ -204,6 +204,8 @@ const _notComponents = {
   'StreakScreen',
   'StrengthScreen',
   'HealthspanScreen',
+  // The vital cards it shows are built by the Health tab and pushed in.
+  'HealthMonitorScreen',
   // Reads and writes the notification prefs and re-arms reminders through
   // AppState: a live control, with no app above the gallery to drive it.
   'WindDownToggle',

@@ -44,6 +44,7 @@ import '../../ai/nightly_sweep.dart' show SweepFinding;
 import '../../compute/findings.dart';
 import '../../models/metric.dart';
 import '../activity/catalogue.dart';
+import '../screens/health_monitor.dart' show HealthMonitorCard, StressMonitorCard, VitalStatus;
 import '../activity/live.dart';
 import '../activity/picker.dart' show ActivityPicker, ActivityRow;
 import '../activity/poster.dart'
@@ -364,6 +365,24 @@ Map<String, Widget> goldenCases() => {
       'hours_needed': const HoursNeededCard(
           sleptMin: 289, needMin: 621, strainMin: 30, debtMin: 127, napMin: 0,
           usualPct: 61),
+      'health_monitor_card': const HealthMonitorCard(items: [
+        (LucideIcons.wind, 'Resp', VitalStatus.inside),
+        (LucideIcons.heart, 'RHR', VitalStatus.outside),
+        (LucideIcons.activity, 'HRV', VitalStatus.inside),
+        (LucideIcons.thermometer, 'Temp', VitalStatus.building),
+      ]),
+      'stress_monitor_card': StressMonitorCard(
+        highMin: 5,
+        typicalHighMin: 25,
+        weekday: 'Sat',
+        readings: [
+          for (var i = 0; i < 24; i++)
+            (
+              at: DateTime(2026, 10, 3, 8, 15 * i),
+              v: .5 + (i % 5) * .35,
+            ),
+        ],
+      ),
       'trend_headline': const TrendHeadline('6:42',
           usual: '6:03', dir: 1, higherBetter: true),
       'stage_ranges': const StageRangesCard(
