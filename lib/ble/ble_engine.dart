@@ -3417,6 +3417,9 @@ class BleEngine {
       }
       _log('[BOOT gen5] Android native name present ("$name").');
     }
+    // Whether the band is broadcasting standard heart rate to other devices
+    // (gym machines, Zwift). State only, shown on App health; never a gate.
+    state.hrBroadcast = hello.hrBroadcast;
     // Family refinement: a recognized discriminator refines the stored type;
     // an unrecognized/null mapping is NOT by itself a rejection.
     if (hello.isWhoop5) {

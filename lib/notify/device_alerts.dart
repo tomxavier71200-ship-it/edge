@@ -7,6 +7,8 @@
 //     once per drain. Re-arms only after the battery recovers past
 //     threshold+10 (hysteresis) or goes back on the charger.
 //   • Charging started: once per plug-in, gated by [ChargeAlertPolicy].
+//   • Charge before bed: once an evening (19–23 h) when the band is under
+//     [DeviceAlerts.chargeTonightPct] but above the low threshold.
 //
 // THE EDGE STATE IS PERSISTED (issue #179). It used to live only in RAM, which
 // is wrong on Android specifically: EdgeApplication pre-warms a Dart engine on
@@ -366,7 +368,43 @@ class DeviceAlerts {
     if (lowArmed != armedBefore) {
       await _io(() => _store.writeInt(_kLowArmed, lowArmed ? 1 : 0));
     }
+    // The evening nudge: enough charge for the day, maybe not for the night.
+    // Once a day (the dedupe key is the day's), in the low alert's slot so the
+    // two never stack; a drop by quiet hours simply lets a later update retry.
+    if (chargeTonight(
+        pct: batteryPct,
+        charging: charging,
+        now: DateTime.fromMillisecondsSinceEpoch(nowSec * 1000),
+        lowPct: _lowPct)) {
+      await _io(() => _notes.show(_event(
+            osId: NotificationService.idLowBattery,
+            kind: 'band_charge_tonight',
+            title: 'Charge before bed',
+            body: 'Your band is at ${batteryPct!.round()}%. Charge it this '
+                "evening so tonight's sleep is recorded.",
+          )));
+    }
   }
+
+  /// The evening threshold: under this, a night of recording is at risk.
+  static const int chargeTonightPct = 35;
+
+  /// Whether to suggest charging before bed: between 19:00 and 23:00 local,
+  /// not charging, under [chargeTonightPct] — but not under [lowPct], where
+  /// the low-battery alert already speaks. Unknown battery never nudges.
+  @visibleForTesting
+  static bool chargeTonight({
+    required double? pct,
+    required bool? charging,
+    required DateTime now,
+    required double lowPct,
+  }) =>
+      pct != null &&
+      charging != true &&
+      pct < chargeTonightPct &&
+      pct >= lowPct &&
+      now.hour >= 19 &&
+      now.hour < 23;
 
   /// One band alert, in the currency the shared emitter speaks.
   ///

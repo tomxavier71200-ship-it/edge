@@ -363,6 +363,10 @@ class DeviceState {
   int? chargingTs;
 
   bool? wristOn;
+
+  /// WHOOP 5.0/MG hello: the band is broadcasting standard Bluetooth heart
+  /// rate for other devices to read. Null on bands that do not report it.
+  bool? hrBroadcast;
   int? liveHr; // latest live HR from the foreground stream
   int? liveHrAt; // epoch ms
   int?

@@ -28,6 +28,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/metric.dart';
 import '../../state/app_state.dart';
 import '../../state/units_controller.dart';
+import '../activity/whoop_summary.dart' show ActivityTileRow, weekHeading;
 import '../activity/catalogue.dart';
 import '../activity/day_strain.dart';
 import '../activity/live.dart';
@@ -591,7 +592,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
       ..._importCard(c, d),
       ..._morningAfter(c, p, d),
       const SizedBox(height: S.x5),
-      for (final w in d.workouts) ...[
+      for (final (i, w) in d.workouts.indexed) ...[
+        // WHOOP groups its list by week: a heading wherever the week changes.
+        if (i == 0 ||
+            weekHeading(d.workouts[i - 1].start, DateTime.now()) !=
+                weekHeading(w.start, DateTime.now())) ...[
+          if (i > 0) const SizedBox(height: S.x3),
+          Text(weekHeading(w.start, DateTime.now()),
+              style: F.over.copyWith(
+                  color: p.ink2, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+          const SizedBox(height: S.x2),
+        ],
         _HistoryRow(w,
             weightKg: d.weightKg,
             onDelete: w.id.isEmpty
@@ -962,129 +973,75 @@ class _HistoryRow extends StatelessWidget {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);
     final a = w.activity;
-    final stats = _stats(c);
-    return Surface(
-      // An imported row does not open. The summary screen behind this tap is
-      // built to show a session THIS band measured — its rating control, its
-      // heart-rate trace, its zone split — and it has nowhere to say whose
-      // workout it is. A screen that presents an Apple Watch run exactly like
-      // one of ours is the fabrication this whole table exists to avoid, so
-      // the row stays a row until that screen can name its source.
-      onTap: w.importedFrom == null ? () => _open(c) : null,
-      child: Column(children: [
-        Row(children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration:
-                BoxDecoration(color: p.wash(a.color), borderRadius: R.rMd),
-            child: Icon(a.icon, size: 19, color: p.on(a.color)),
-          ),
-          const SizedBox(width: S.x3),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Flexible(
-                      // The store's own word for it when it is not ours: the
-                      // catalogue knows the ~40 types this app can start, and
-                      // "Workout" over a surf loses the one thing we were told.
-                      child: Text(w.importedTitle ?? a.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: F.body.copyWith(
-                              color: p.ink, fontWeight: FontWeight.w600)),
-                    ),
-                    // The flag the setup screen promised, visible on the one
-                    // list this session shows up in.
-                    if (w.private) ...[
-                      const SizedBox(width: S.x2),
-                      Icon(LucideIcons.lock, size: 13, color: p.ink3),
-                    ],
-                  ]),
-                  // "Apple Watch · Today, 07:12". The source is not decoration
-                  // and it is not the word "imported": a band-measured session
-                  // and an Apple Watch session are different measurements, and
-                  // the name of the thing that took it is the difference.
-                  Text(
-                      w.importedFrom == null
-                          ? w.when(loc)
-                          : '${w.importedFrom} · ${w.when(loc)}',
-                      style: F.over.copyWith(color: p.ink3)),
-                ]),
-          ),
-          if (w.strain != null) ...[
-            Text(w.strain!.toStringAsFixed(1),
-                style: F.n17.copyWith(color: p.ink)),
-            const SizedBox(width: S.x1),
-            Padding(
-              padding: const EdgeInsets.only(top: S.x1),
-              // "strain", not "load". Training load is CTL/ATL over weeks;
-              // this is one session's 0–21 strain, and the two were being
-              // shown under the same word on the same screen.
-              child: Text(loc?.workoutStrainLabel ?? 'strain',
-                  style: F.over.copyWith(color: p.ink3)),
-            ),
-          ],
-          if (onDelete != null) ...[
-            const SizedBox(width: S.x2),
+    // WHOOP's activity row: the coloured block with the icon and the
+    // session's strain (or its length when it has none), the name, and when.
+    // Everything else lives on the summary the row opens.
+    final stats = w.importedFrom == null ? const <(String, String, String?)>[] : _stats(c);
+    final whenLine = w.importedFrom == null
+        ? w.when(loc)
+        : '${w.importedFrom} · ${w.when(loc)}';
+    return Column(children: [
+      ActivityTileRow(
+        icon: a.icon,
+        color: a.color,
+        value: w.strain?.toStringAsFixed(1) ?? hms(w.duration),
+        name: w.importedTitle ?? a.name,
+        sub: whenLine,
+        trailing: w.strain == null ? '' : hms(w.duration),
+        locked: w.private,
+        // An imported row does not open: the summary is built for a session
+        // THIS band measured, and has nowhere to say whose workout it is.
+        onTap: w.importedFrom == null ? () => _open(c) : null,
+      ),
+      // An imported session's own figures, since it has no summary to open.
+      if (stats.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(S.x3, S.x2, S.x3, 0),
+          child: Column(children: [
+            for (var i = 0; i < stats.length; i++) ...[
+              if (i > 0) Divider(color: p.line, height: S.x4),
+              PosterStatRow(
+                icon: statIcon(stats[i].$1),
+                label: stats[i].$1,
+                value: stats[i].$2,
+                unit: stats[i].$3,
+                accent: p.on(a.color),
+              ),
+            ],
+          ]),
+        ),
+      if (onRetime != null || onDelete != null)
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          // The way to correct a window the detector clipped, or one a
+          // session started late.
+          if (onRetime != null)
             Pressable(
-              semanticLabel: loc?.workoutDeleteSessionLabel ?? 'Delete this session',
-              onTap: onDelete,
+              onTap: onRetime,
+              semanticLabel: loc?.workoutFixTimesOnSessionLabel ??
+                  'Fix the times on this session',
               child: Padding(
-                padding: const EdgeInsets.all(S.x1),
-                child:
-                    Icon(LucideIcons.trash2, size: 17, color: p.ink3),
+                padding: const EdgeInsets.all(S.x2),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(LucideIcons.clock, size: 14, color: p.on(C.blue)),
+                  const SizedBox(width: S.x1),
+                  Text(loc?.workoutFixTimes ?? 'Fix the times',
+                      style: F.cap.copyWith(
+                          color: p.on(C.blue), fontWeight: FontWeight.w600)),
+                ]),
               ),
             ),
-          ],
+          if (onDelete != null)
+            Pressable(
+              semanticLabel:
+                  loc?.workoutDeleteSessionLabel ?? 'Delete this session',
+              onTap: onDelete,
+              child: Padding(
+                padding: const EdgeInsets.all(S.x2),
+                child: Icon(LucideIcons.trash2, size: 17, color: p.ink3),
+              ),
+            ),
         ]),
-        if (w.zoneMinutes.length == 5) ...[
-          const SizedBox(height: S.x4),
-          ChartFrame(
-            title: loc?.workoutTimeInZonesTitle ?? 'TIME IN ZONES',
-            unit: loc?.workoutMinutesUnit ?? 'minutes',
-            height: 8,
-            legend: [
-              for (var i = 0; i < 5; i++)
-                ('Z${i + 1} · ${w.zoneMinutes[i].round()}m', ZoneBar.cols(p)[i]),
-            ],
-            child: CustomPaint(
-                size: Size.infinite, painter: ZoneBar(w.zoneFractions, p)),
-          ),
-        ],
-        const SizedBox(height: S.x4),
-        for (var i = 0; i < stats.length; i++) ...[
-          if (i > 0) Divider(color: p.line, height: S.x5),
-          PosterStatRow(
-            icon: statIcon(stats[i].$1),
-            label: stats[i].$1,
-            value: stats[i].$2,
-            unit: stats[i].$3,
-            accent: p.on(a.color),
-          ),
-        ],
-        // The way to correct a window the detector clipped, or one a session
-        // started late. Nested inside the card's own tap: the inner Pressable
-        // wins, so the row still opens the summary everywhere else.
-        if (onRetime != null) ...[
-          Divider(color: p.line, height: S.x5),
-          Pressable(
-            onTap: onRetime,
-            semanticLabel: loc?.workoutFixTimesOnSessionLabel ??
-                'Fix the times on this session',
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(LucideIcons.clock, size: 14, color: p.on(C.blue)),
-              const SizedBox(width: S.x2),
-              Text(loc?.workoutFixTimes ?? 'Fix the times',
-                  style: F.cap.copyWith(
-                      color: p.on(C.blue), fontWeight: FontWeight.w600)),
-            ]),
-          ),
-        ],
-      ]),
-    );
+    ]);
   }
 
   /// `(name, value, unit)`. Absence is a WORD here rather than a dropped row,

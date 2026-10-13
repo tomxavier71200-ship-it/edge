@@ -1105,9 +1105,9 @@ void main() {
             1.0));
         await tester.pumpAndSettle();
         expect(find.text(unit), findsWidgets, reason: '${arch.name} chart');
-        // Five bands of colour with the minutes in the key.
-        expect(find.text('minutes'), findsWidgets, reason: '${arch.name} zones');
-        expect(find.textContaining('Z1 · '), findsWidgets);
+        // A bar per zone, WHOOP-style, with the unit stated once.
+        expect(find.text('h:mm'), findsWidgets, reason: '${arch.name} zones');
+        expect(find.text('ZONE 1'), findsWidgets);
         // The edges are drawn off a GUESSED ceiling, so the card that draws
         // them says so in words. This was only ever pinned by the goldens,
         // which is why it went four sweeps without anyone being able to say

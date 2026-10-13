@@ -207,6 +207,9 @@ const _notComponents = {
   // The vital cards it shows are built by the Health tab and pushed in.
   'HealthMonitorScreen',
   'HealthMonitorRoute',
+  'AppHealthScreen',
+  'WhoopCompareScreen',
+  'RecordsScreen',
   'StressMonitorScreen',
   'StressMonitorView',
   'StressTrendsScreen',

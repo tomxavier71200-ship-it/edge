@@ -40,6 +40,7 @@ import '../paint_activity.dart';
 import '../theme.dart';
 import 'catalogue.dart';
 import 'strain_coach.dart';
+import 'whoop_summary.dart' show ZoneBreakdown;
 import 'summary.dart';
 
 /// What the band and the phone know right now. Read once per tick.
@@ -780,7 +781,11 @@ Widget counterButton(P p, IconData i, Color col, String label,
 /// The live heart-rate block, or an honest absence.
 class LiveHeart extends StatelessWidget {
   final LiveFeed feed;
-  const LiveHeart(this.feed, {super.key});
+
+  /// False when the screen already leads with the strain dial, so it is not
+  /// drawn twice.
+  final bool showCoach;
+  const LiveHeart(this.feed, {super.key, this.showCoach = true});
 
   @override
   Widget build(BuildContext c) {
@@ -809,7 +814,7 @@ class LiveHeart extends StatelessWidget {
     return Column(children: [
       // The strain coach leads, WHOOP-style: the workout's load against
       // today's target, then the heart rate under it.
-      if (feed.strain != null) ...[
+      if (showCoach && feed.strain != null) ...[
         StrainCoach(feed.strain!),
         const SizedBox(height: S.x4),
       ],
@@ -828,9 +833,9 @@ class LiveHeart extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(LucideIcons.heart, size: 18, color: p.on(C.red)),
+              Icon(LucideIcons.heart, size: 24, color: p.on(C.red)),
               const SizedBox(width: S.x2),
-              Text('${feed.hr}', style: F.n24.copyWith(color: p.ink)),
+              Text('${feed.hr}', style: F.n48.copyWith(color: p.ink)),
               const SizedBox(width: S.x1),
               Text(l?.activityLiveBpmUnit ?? 'bpm',
                   style: F.cap.copyWith(color: p.ink3)),
@@ -845,27 +850,11 @@ class LiveHeart extends StatelessWidget {
       ),
       if (feed.zoneMinutes.length == 5) ...[
         const SizedBox(height: S.x4),
-        ChartFrame(
-          title: l?.activityLiveTimeInZonesTitle ?? 'TIME IN ZONES',
-          unit: 'minutes',
-          height: 10,
-          legend: [
-            for (var i = 0; i < 5; i++)
-              ('Z${i + 1} · ${feed.zoneMinutes[i].round()}m', ZoneBar.cols(p)[i]),
-          ],
-          child: CustomPaint(
-              size: Size.infinite,
-              painter: ZoneBar(_fractions(feed.zoneMinutes), p)),
-        ),
+        ZoneBreakdown(minutes: feed.zoneMinutes),
       ],
     ]);
   }
 
-  static List<double> _fractions(List<double> mins) {
-    final total = mins.fold<double>(0, (a, b) => a + b);
-    if (total <= 0) return const [0, 0, 0, 0, 0];
-    return [for (final m in mins) m / total];
-  }
 }
 
 /// Why this session is being recorded without a route, and the one thing that
@@ -1095,7 +1084,11 @@ class LiveMeasured extends StatelessWidget {
         final l = AppLocalizations.of(ctx);
         final f = feed?.call() ?? LiveFeed.none;
         return Column(children: [
-          const SizedBox(height: S.x6),
+          const SizedBox(height: S.x4),
+          if (f.strain != null) ...[
+            StrainCoach(f.strain!),
+            const SizedBox(height: S.x4),
+          ],
           Text(l?.activityLiveDurationHeader ?? 'DURATION',
               style: F.over.copyWith(color: p.ink3)),
           const SizedBox(height: S.x3),
@@ -1117,7 +1110,7 @@ class LiveMeasured extends StatelessWidget {
           // a golden, and the metric fallback there is what the store holds.
           ..._distanceStats(ctx, p, f, a, weightKg, elapsed),
           const SizedBox(height: S.x8),
-          LiveHeart(f),
+          LiveHeart(f, showCoach: false),
           if (f.route.length > 1) ...[
             const SizedBox(height: S.x5),
             ChartFrame(

@@ -219,6 +219,7 @@ Future<bool> runHeadlessSync({BandLease? lease}) async {
       debugPrint(
         '[bgsync] strap not reachable this cycle — will catch up next time.',
       );
+      await recordBackgroundSync(reached: false);
       await checkSyncStaleness();
       return true;
     }
@@ -326,6 +327,7 @@ Future<bool> runHeadlessSync({BandLease? lease}) async {
       debugPrint('[bgsync] derive skipped: $e');
     }
     debugPrint('[bgsync] done (local drain + light derive).');
+    await recordBackgroundSync(reached: true);
     await checkSyncStaleness();
     // Koop Cloud, Android only: iOS background slots are too short for a
     // whole-database upload, so the iPhone keeps uploading on open.
@@ -569,6 +571,25 @@ Future<bool> runHeadlessSync({BandLease? lease}) async {
     } catch (e) {
       debugPrint('[bgsync] banglejs sync skipped: $e');
     }
+  }
+}
+
+// ── the last background cycle, for the App health screen ──
+// When the most recent headless cycle ran and whether it reached the band.
+// Written by the headless isolate, read by the foreground (after
+// Prefs.reload), so "did it sync overnight?" has an answer that is not a
+// guess from how far the data reaches.
+const String kBgSyncLastMs = 'bg_sync_last_ms';
+const String kBgSyncLastReached = 'bg_sync_last_reached';
+
+/// Never throws: a bookkeeping write must not mark the cycle as failed.
+Future<void> recordBackgroundSync({required bool reached}) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(kBgSyncLastMs, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setBool(kBgSyncLastReached, reached);
+  } catch (e) {
+    debugPrint('[bgsync] could not record the cycle: $e');
   }
 }
 

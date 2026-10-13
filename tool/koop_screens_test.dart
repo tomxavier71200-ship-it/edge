@@ -17,6 +17,12 @@ import 'package:openstrap_edge/data/day_label.dart';
 import 'package:openstrap_edge/ui2/activity/day_strain.dart';
 import 'package:openstrap_edge/models/metric.dart';
 import 'package:openstrap_edge/ui2/screens/home_sections.dart';
+import 'package:openstrap_edge/ui2/profile/app_health.dart';
+import 'package:openstrap_edge/ui2/activity/summary.dart';
+import 'package:openstrap_edge/ui2/activity/live.dart';
+import 'package:openstrap_edge/ui2/screens/records_screen.dart';
+import 'package:openstrap_edge/ui2/activity/whoop_summary.dart';
+import 'package:openstrap_edge/ui2/activity/catalogue.dart' show activityByName;
 import 'package:openstrap_edge/ui2/screens/streak_screen.dart';
 import 'package:openstrap_edge/ui2/screens/more_screen.dart';
 import 'package:openstrap_edge/ui2/screens/sleep_whoop.dart';
@@ -297,6 +303,89 @@ void main() {
 
     'tab_workout': const WorkoutScreen(),
     'tab_more': const MoreScreen(),
+    'activity_summary': ActivitySummary(ActivityResult(
+      activityByName('Running')!,
+      start: DateTime(2026, 10, 12, 7, 5),
+      duration: Motion.tick * 2760,
+      avgHr: 148,
+      maxHr: 176,
+      calories: 512,
+      strain: 12.6,
+      hr: [
+        for (var i = 0; i < 46; i++)
+          (110 + 50 * math.sin(i / 46 * math.pi) + (i * 7 % 9)).toDouble()
+      ],
+      zoneMinutes: const [6, 12, 15, 9, 2],
+    )),
+    'workout_history': Builder(builder: (c) => ListView(padding: const EdgeInsets.all(16), children: [
+      for (final (h, rows) in [
+        ('THIS WEEK', [
+          (LucideIcons.footprints, C.strain, '12.6', 'Running', 'Today, 07:05', '46:00'),
+          (LucideIcons.dumbbell, C.orange, '8.1', 'Weightlifting', 'Sat, 18:20', '52:00'),
+        ]),
+        ('LAST WEEK', [
+          (LucideIcons.bike, C.strain, '7.3', 'Cycling', 'Fri 9 Oct, 12:09', '27:00'),
+          (LucideIcons.activity, C.teal, '41:00', 'Yoga', 'Wed 7 Oct, 07:30', ''),
+        ]),
+      ]) ...[
+        Text(h, style: F.over.copyWith(color: P.of(c).ink2, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        for (final r in rows) ...[
+          ActivityTileRow(
+              icon: r.$1, color: r.$2, value: r.$3, name: r.$4, sub: r.$5,
+              trailing: r.$6, onTap: () {}),
+          const SizedBox(height: 12),
+        ],
+        const SizedBox(height: 12),
+      ],
+    ])),
+    'live_workout': LiveMeasured(activityByName('Running')!,
+        feed: () => LiveFeed(
+              hr: 156,
+              maxHr: 171,
+              zone: 3,
+              calories: 214,
+              strain: 9.4,
+              zoneMinutes: const [3, 6, 9, 4, 0],
+              hrCurve: [
+                for (var i = 0; i < 22; i++) 120.0 + i * 1.6
+              ],
+              bandConnected: true,
+            )),
+    'records': ListView(padding: const EdgeInsets.all(16), children: const [
+      RecordTile(icon: LucideIcons.activity, color: C.green, name: 'Highest HRV',
+          value: '84', unit: 'ms', date: '2026-09-21'),
+      SizedBox(height: 12),
+      RecordTile(icon: LucideIcons.heart, color: C.red,
+          name: 'Lowest resting heart rate', value: '49', unit: 'bpm',
+          date: '2026-10-03'),
+      SizedBox(height: 12),
+      RecordTile(icon: LucideIcons.batteryCharging, color: C.green,
+          name: 'Highest recovery', value: '94', unit: '%', date: '2026-09-28'),
+      SizedBox(height: 12),
+      RecordTile(icon: LucideIcons.moon, color: C.sleep, name: 'Longest sleep',
+          value: '9:41', unit: '', date: '2026-10-11'),
+      SizedBox(height: 12),
+      RecordTile(icon: LucideIcons.flame, color: C.strain,
+          name: 'Highest day strain', value: null, unit: ''),
+    ]),
+    'app_health': ListView(padding: const EdgeInsets.all(16), children: [
+      HealthChecksCard(
+          checks: appHealthChecks(
+        now: DateTime(2026, 10, 12, 9),
+        paired: true,
+        connected: true,
+        dataThrough: DateTime(2026, 10, 12, 8, 40),
+        bgLast: DateTime(2026, 10, 12, 4),
+        bgReached: false,
+        batteryPct: 14,
+        charging: false,
+        wornMinToday: 312,
+        cloudOn: true,
+        cloudLine: 'Synced 5 min ago',
+        cloudError: false,
+      )),
+    ]),
     'coach_bubble': ListView(padding: const EdgeInsets.all(16), children: [
       CoachBubble(
           oneLiner: 'Hey Tom, your stress peaked at 1.4 around 6:54, shortly '
@@ -576,7 +665,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

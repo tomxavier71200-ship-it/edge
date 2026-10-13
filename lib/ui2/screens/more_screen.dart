@@ -23,6 +23,7 @@ import 'calm_breathing.dart';
 import 'coach.dart';
 import 'home_screen.dart' show go, pad;
 import 'journal_compose.dart';
+import 'records_screen.dart' show RecordsScreen;
 import 'log_food.dart';
 import 'healthspan_screen.dart';
 import 'monthly_report.dart';
@@ -69,6 +70,10 @@ class MoreScreen extends StatelessWidget {
       DoorRow(LucideIcons.user, C.blue, 'Profile and settings',
           'Devices, data, notifications and privacy',
           onTap: () => go(c, const ProfileHome())),
+      const SizedBox(height: S.x3),
+      DoorRow(LucideIcons.trophy, C.yellow, 'Personal records',
+          'Your best HRV, sleep, recovery and strain, and when',
+          onTap: () => go(c, const RecordsScreen())),
       const SizedBox(height: S.x3),
       // Koop Cloud, one tap away: signed in or not, and the account.
       ListenableBuilder(

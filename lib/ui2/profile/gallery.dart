@@ -59,6 +59,11 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/home_sections.dart' show CoachBubble, MonitorTiles;
+import 'app_health.dart' show HealthChecksCard, appHealthChecks;
+import '../screens/records_screen.dart' show RecordTile;
+import '../activity/whoop_summary.dart'
+    show ActivityStatGrid, ActivityStrainHeader, ActivityTileRow, ZoneBreakdown;
+import 'whoop_compare.dart' show Agreement, AgreementCard;
 import '../screens/more_screen.dart' show DoorRow, DoorTile, FeatureCard;
 import '../screens/sleep_whoop.dart';
 import '../screens/stress_detail.dart';
@@ -708,6 +713,64 @@ Map<String, Widget> _nutritionAndWellnessCases() {
         oneLiner: 'Your long sleep last night cleared the debt from the week.',
         onTap: () {}),
     'coach_bubble_empty': CoachBubble(oneLiner: null, onTap: () {}),
+    'health_checks': HealthChecksCard(
+        checks: appHealthChecks(
+      now: DateTime(2026, 10, 12, 9),
+      paired: true,
+      connected: false,
+      dataThrough: DateTime(2026, 10, 12, 8, 40),
+      bgLast: DateTime(2026, 10, 12, 4),
+      bgReached: true,
+      batteryPct: 14,
+      charging: false,
+      wornMinToday: 312,
+      cloudOn: true,
+      cloudLine: 'Synced 5 min ago',
+      cloudError: false,
+    )),
+    'agreement_card': const AgreementCard(
+        name: 'HRV',
+        unit: 'ms',
+        decimals: 0,
+        a: Agreement(6, 3.2, 4.1, [
+          ('2026-10-12', 64, 61),
+          ('2026-10-11', 58, 57),
+          ('2026-10-10', 71, 66),
+        ])),
+    'agreement_card_empty': const AgreementCard(
+        name: 'Strain', unit: '', decimals: 1, a: null),
+    'activity_strain_header': ActivityStrainHeader(
+        strain: 12.6,
+        start: DateTime(2026, 10, 12, 7, 5),
+        duration: Motion.tick * 2760),
+    'activity_stat_grid': const ActivityStatGrid(stats: [
+      ('Duration', '46:00', ''),
+      ('Avg HR', '148', 'bpm'),
+      ('Max HR', '176', 'bpm'),
+      ('Calories', null, 'kcal'),
+    ]),
+    'zone_breakdown': const ZoneBreakdown(minutes: [6, 12, 15, 9, 2]),
+    'activity_tile_row': ActivityTileRow(
+        icon: LucideIcons.bike,
+        color: C.strain,
+        value: '7.3',
+        name: 'Cycling',
+        sub: 'Today, 12:09',
+        trailing: '27:00',
+        onTap: () {}),
+    'record_tile': const RecordTile(
+        icon: LucideIcons.activity,
+        color: C.green,
+        name: 'Highest HRV',
+        value: '84',
+        unit: 'ms',
+        date: '2026-09-21'),
+    'record_tile_building': const RecordTile(
+        icon: LucideIcons.flame,
+        color: C.strain,
+        name: 'Highest day strain',
+        value: null,
+        unit: ''),
     'mood_picker': MoodPicker(value: 4, onChanged: (_) {}),
     'mood_picker_blank': MoodPicker(onChanged: (_) {}),
     'field_stepper': Surface(

@@ -20,6 +20,8 @@ import '../../state/app_state.dart';
 import '../../state/locale_controller.dart';
 import '../ui2.dart';
 import '../screens/coach.dart' show CoachSetup, coachSubtitle;
+import 'app_health.dart' show AppHealthScreen;
+import 'whoop_compare.dart' show WhoopCompareScreen;
 import 'data.dart' show DataScreen;
 import 'devices.dart';
 import 'settings.dart';
@@ -271,6 +273,8 @@ class _ProfileHomeState extends State<ProfileHome> {
           onEdit: () => _open(c, const EditProfile()),
           onCoach: () => _open(c, const CoachSetup()),
           onCloud: () => _open(c, const DataScreen()),
+          onHealth: () => _open(c, const AppHealthScreen()),
+          onCompare: () => _open(c, const WhoopCompareScreen()),
         ),
       );
 }
@@ -279,7 +283,8 @@ class ProfileHomeView extends StatelessWidget {
   /// Null while the counts are still being read — the numbers are absent, not
   /// zero, and a zero rendered during a load is a wrong number on screen.
   final ProfileStats? stats;
-  final VoidCallback? onDevices, onSettings, onEdit, onCoach, onCloud;
+  final VoidCallback? onDevices, onSettings, onEdit, onCoach, onCloud,
+      onHealth, onCompare;
 
   const ProfileHomeView(
       {super.key,
@@ -287,6 +292,8 @@ class ProfileHomeView extends StatelessWidget {
       this.onDevices,
       this.onCoach,
       this.onCloud,
+      this.onHealth,
+      this.onCompare,
       this.onSettings,
       this.onEdit,
       });
@@ -345,6 +352,13 @@ class ProfileHomeView extends StatelessWidget {
                       onTap: () => _pickLanguage(c))),
                 ]),
                 settingsGroup(c, l?.profileYourDataGroup ?? 'Your data', [
+                  SetRow(LucideIcons.heartPulse, C.green, 'App health',
+                      sub: 'Is the band syncing, did last night sync, battery, '
+                          'cloud',
+                      onTap: onHealth),
+                  SetRow(LucideIcons.gitCompare, C.blue, 'Koop vs WHOOP',
+                      sub: 'Your nights side by side with a WHOOP export',
+                      onTap: onCompare),
                   // Koop Cloud: signed in or not, and how fresh — the same
                   // line More shows, opening the same screen.
                   ListenableBuilder(

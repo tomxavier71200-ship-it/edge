@@ -40,6 +40,7 @@ import '../screens/home_screen.dart' show unitsOf;
 import '../screens/log_workout.dart' show bumpInsights;
 import '../theme.dart';
 import 'catalogue.dart';
+import 'whoop_summary.dart';
 import 'picker.dart';
 // The share card and this screen describe the same session, so they draw its
 // stats with the same widget and split its values with the same function.
@@ -636,7 +637,11 @@ String? _heroStatName(ActivityResult r) => switch (r.arch) {
 /// until somebody edits one of them.
 class SessionStats extends StatelessWidget {
   final ActivityResult r;
-  const SessionStats(this.r, {super.key});
+
+  /// Stats already shown larger above (the WHOOP grid), so this list does not
+  /// print them a second time.
+  final Set<String> skip;
+  const SessionStats(this.r, {super.key, this.skip = const {}});
 
   @override
   Widget build(BuildContext c) {
@@ -646,6 +651,7 @@ class SessionStats extends StatelessWidget {
     final accent = p.on(r.activity.color);
     final rows = <Widget>[];
     for (final s in sessionStats(r, unitsOf(c))) {
+      if (skip.contains(s.$1)) continue;
       if (rows.isNotEmpty) rows.add(Divider(color: p.line, height: S.x5));
       final (value, unit) = splitStatUnit(s.$2);
       rows.add(PosterStatRow(
@@ -656,6 +662,7 @@ class SessionStats extends StatelessWidget {
         accent: accent,
       ));
     }
+    if (rows.isEmpty) return const SizedBox.shrink();
     return Surface(child: Column(children: rows));
   }
 }
@@ -1101,6 +1108,63 @@ class _ActivitySummaryState extends State<ActivitySummary> {
         ),
         const SizedBox(height: S.x5),
       ],
+      // WHOOP's summary when the session has a strain: the activity's strain
+      // on the dial, when it ran, and the four headline stats as tiles. The
+      // archetype's own hero (distance, volume) still leads when there is one.
+      if (r.strain != null) ...[
+        ActivityStrainHeader(
+            strain: r.strain!, start: r.start, duration: r.duration),
+        const SizedBox(height: S.x5),
+        ActivityStatGrid(stats: [
+          ('Duration', hms(r.duration), ''),
+          ('Avg HR', r.avgHr?.toString(), 'bpm'),
+          ('Max HR', r.maxHr?.toString(), 'bpm'),
+          ('Calories', r.calories == null ? null : grouped(r.calories!), 'kcal'),
+        ]),
+        if (_heroStatName(r) == null) ...[
+          const SizedBox(height: S.x5),
+          ..._legacyHero(c, p, hero),
+        ],
+        const SizedBox(height: S.x5),
+        ..._definingObject(c, p),
+        const SizedBox(height: S.x3),
+        SessionStats(r,
+            skip: const {'Avg HR', 'Max HR', 'Calories', 'Strain', 'Time'}),
+        // A match and a basic session already lead with this chart.
+        if (r.hr.whereType<double>().length >= 2 &&
+            arch != Arch.match &&
+            arch != Arch.basic) ...[
+          const SizedBox(height: S.x3),
+          Surface(child: _hrFrame(p)),
+        ],
+      ] else ...[
+        ..._legacyHero(c, p, hero),
+        const SizedBox(height: S.x5),
+        ..._definingObject(c, p),
+        const SizedBox(height: S.x5),
+        SessionStats(r),
+      ],
+      // TS-09 — directly under the measurements, because that is what it is
+      // being asked against, and directly where the answer lands: once rated,
+      // this card is gone and 'Your rating' is the last row of the card above.
+      if (_askRpe) ...[
+        const SizedBox(height: S.x3),
+        _rpePrompt(p),
+      ],
+      ..._body(c, p),
+      // Zones belong to any session that banked a split — a lift and a yoga
+      // class have heart-rate zones too.
+      ..._zoneSection(p),
+      const SizedBox(height: S.x5),
+      _basisNote(p),
+    ];
+  }
+
+  /// The archetype's own headline (distance, volume, laps) or elapsed time,
+  /// as the screen drew it before the WHOOP header.
+  List<Widget> _legacyHero(BuildContext c, P p, (String, String, String) hero) {
+    final l = AppLocalizations.of(c);
+    return [
       // ONE flexible child. A `Flexible` hero next to a `Spacer` split the row
       // by flex, so the headline got half the width whatever it said, and a
       // 1,500 m swim printed '1,…' at 2x text. The privacy pill keeps its
@@ -1134,22 +1198,6 @@ class _ActivitySummaryState extends State<ActivitySummary> {
       const SizedBox(height: S.x1),
       Text(hero.$3, style: F.cap.copyWith(color: p.ink2)),
       const SizedBox(height: S.x5),
-      ..._definingObject(c, p),
-      const SizedBox(height: S.x5),
-      SessionStats(r),
-      // TS-09 — directly under the measurements, because that is what it is
-      // being asked against, and directly where the answer lands: once rated,
-      // this card is gone and 'Your rating' is the last row of the card above.
-      if (_askRpe) ...[
-        const SizedBox(height: S.x3),
-        _rpePrompt(p),
-      ],
-      ..._body(c, p),
-      // Zones belong to any session that banked a split — a lift and a yoga
-      // class have heart-rate zones too.
-      ..._zoneSection(p),
-      const SizedBox(height: S.x5),
-      _basisNote(p),
     ];
   }
 
@@ -1697,22 +1745,6 @@ class _ActivitySummaryState extends State<ActivitySummary> {
     );
   }
 
-  /// The zone split, with the minutes in the key rather than in a second row
-  /// underneath it that has to be kept in step by hand.
-  Widget _zoneFrame(P p) => ChartFrame(
-        title: AppLocalizations.of(context)?.activitySummaryTimeInZonesTitle ??
-            'TIME IN ZONES',
-        unit: 'minutes',
-        height: 10,
-        legend: [
-          for (var i = 0; i < 5; i++)
-            ('Z${i + 1} · ${r.zoneMinutes[i].round()}m', ZoneBar.cols(p)[i]),
-        ],
-        footnote: zonesWhy(r.zoneSource, r.zoneMaxHr, AppLocalizations.of(context)),
-        child: CustomPaint(
-            size: Size.infinite, painter: ZoneBar(_zoneFractions(), p)),
-      );
-
   // ─────────── ARCHETYPE BODY ───────────
   List<Widget> _body(BuildContext c, P p) {
     final l = AppLocalizations.of(c);
@@ -1842,14 +1874,16 @@ class _ActivitySummaryState extends State<ActivitySummary> {
           Section(
               AppLocalizations.of(context)?.activitySummaryHeartRateZones ??
                   'Heart-rate zones',
-              Surface(child: _zoneFrame(p))),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                ZoneBreakdown(minutes: r.zoneMinutes),
+                // How the zone edges were set, as the old chart's footnote said.
+                const SizedBox(height: S.x2),
+                Text(
+                    zonesWhy(r.zoneSource, r.zoneMaxHr,
+                        AppLocalizations.of(context)),
+                    style: F.cap.copyWith(color: p.ink3)),
+              ])),
         ];
-
-  List<double> _zoneFractions() {
-    final total = r.zoneMinutes.fold<double>(0, (x, y) => x + y);
-    if (total <= 0) return const [0, 0, 0, 0, 0];
-    return [for (final z in r.zoneMinutes) z / total];
-  }
 
   /// [v] is always in kg (storage unit); [_u] converts + rounds for display
   /// the same way its edit-field does.
