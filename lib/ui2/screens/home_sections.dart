@@ -31,6 +31,7 @@ import 'home_screen.dart';
 import 'health_screen.dart' show kStressLevelColors, kStressLevelWords, stressLevelOf;
 import 'coach.dart' show kCoachAccent;
 import 'journal_compose.dart';
+import 'workout_screen.dart' show openActivityPicker;
 import 'log_workout.dart'
     show LogWorkout, Suggestion, WorkoutSuggestionScreen, activeSuggestions;
 import 'metric_detail.dart' show MetricDetail, specOf;
@@ -469,7 +470,9 @@ Widget yourDayCard(BuildContext c, HomeData d) {
       );
   return Surface(
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text('ACTIVITIES', style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+      Text("TODAY'S ACTIVITIES",
+          style: F.over.copyWith(
+              color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
       const SizedBox(height: S.x3),
       if (rows.isEmpty)
         Padding(
@@ -487,7 +490,9 @@ Widget yourDayCard(BuildContext c, HomeData d) {
             () => go(c, const LogWorkout())),
         const SizedBox(width: S.x2),
         action(LucideIcons.timer, 'Start activity',
-            () => ShellScope.maybeOf(c)?.select(ShellDomain.workout)),
+            () => repoOf(c) == null
+                ? ShellScope.maybeOf(c)?.select(ShellDomain.workout)
+                : openActivityPicker(c)),
       ]),
     ]),
   );

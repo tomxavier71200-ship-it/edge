@@ -28,7 +28,8 @@ import '../../l10n/app_localizations.dart';
 import '../../models/metric.dart';
 import '../../state/app_state.dart';
 import '../../state/units_controller.dart';
-import '../activity/whoop_summary.dart' show ActivityTileRow, weekHeading;
+import '../activity/whoop_summary.dart'
+    show ActivityTileRow, typicalOf, weekHeading;
 import '../activity/catalogue.dart';
 import '../activity/day_strain.dart';
 import '../activity/live.dart';
@@ -605,6 +606,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
         ],
         _HistoryRow(w,
             weightKg: d.weightKg,
+            peers: d.workouts,
             onDelete: w.id.isEmpty
                 ? null
                 : () => _confirmDeleteWorkout(c, w),
@@ -958,14 +960,37 @@ class _HistoryRow extends StatelessWidget {
   /// Remove this session locally. Null hides the control (no id to delete).
   final VoidCallback? onDelete;
 
+  /// Every listed session, so the summary can compare this one with the
+  /// same activity's usual over the 30 days before it.
+  final List<_PastWorkout> peers;
+
   const _HistoryRow(this.w,
-      {this.weightKg, this.onRetime, this.onDelete});
+      {this.weightKg, this.onRetime, this.onDelete, this.peers = const []});
 
   Future<void> _open(BuildContext c) async {
     final nav = Navigator.of(c);
     final r = await _detailOf(c.read<AppState>(), w);
+    final from = DateTime(w.start.year, w.start.month, w.start.day - 30);
+    final typical = typicalOf([
+      for (final o in peers)
+        if (o.id != w.id &&
+            o.importedFrom == null &&
+            o.activity.name == w.activity.name &&
+            o.start.isBefore(w.start) &&
+            o.start.isAfter(from))
+          (strain: o.strain, calories: o.calories, avgHr: o.avgHr),
+    ]);
+    int? count;
+    try {
+      count = await LocalDb.sessionCountOfType(
+          w.activity.typeKey, w.start.millisecondsSinceEpoch ~/ 1000);
+    } catch (_) {}
     await nav.push(MaterialPageRoute(
-        builder: (_) => ActivitySummary(r, weightKg: weightKg)));
+        builder: (_) => ActivitySummary(r,
+            weightKg: weightKg,
+            typical: typical,
+            detected: w.detected,
+            sessionCount: count)));
   }
 
   @override
@@ -1156,6 +1181,20 @@ List<double?> lastSevenDays(Object? points, DateTime end) {
 /// [history] is the user's own previous/best per lift. Absent is honest — the
 /// live screen says "First time on this lift" — so the resume path passes what
 /// it has rather than blocking on a query.
+/// Straight to the activity list from outside the Workout tab (Home's Start
+/// activity, WHOOP-style), with the person's weight for the calorie line.
+Future<void> openActivityPicker(BuildContext c) async {
+  final nav = Navigator.of(c);
+  final app = c.read<AppState>();
+  double? weight;
+  try {
+    weight = ((await app.repo?.getProfile())?['weight_kg'] as num?)?.toDouble();
+  } catch (_) {}
+  await nav.push(MaterialPageRoute(
+      builder: (_) => ActivityPicker(
+          weightKg: weight, host: activityHost(app), recent: const [])));
+}
+
 ActivityHost activityHost(AppState app,
     {Map<String, SetHistory> history = const {}}) {
   // The id of the session this host opened, remembered across calls.
@@ -1732,7 +1771,11 @@ class _PastWorkout {
       this.private = false,
       this.importedFrom,
       this.importedTitle,
-      this.distanceM});
+      this.distanceM,
+      this.detected = false});
+
+  /// Confirmed from the detector's suggestion rather than started or typed.
+  final bool detected;
 
   List<double> get zoneFractions {
     final total = zoneMinutes.fold<double>(0, (a, b) => a + b);
@@ -1952,6 +1995,7 @@ Future<_WorkoutData> _loadWorkoutData(AppState app) async {
             steps: (r['steps'] as num?)?.toInt(),
             zoneMinutes: _decodeZoneMinutes(r['zone_min']),
             private: r['private'] == true,
+            detected: r['source'] == 'detected',
           ));
         }
       }

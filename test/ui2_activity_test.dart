@@ -1106,7 +1106,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(unit), findsWidgets, reason: '${arch.name} chart');
         // A bar per zone, WHOOP-style, with the unit stated once.
-        expect(find.text('h:mm'), findsWidgets, reason: '${arch.name} zones');
+        expect(find.text('h:mm:ss'), findsWidgets, reason: '${arch.name} zones');
         expect(find.text('ZONE 1'), findsWidgets);
         // The edges are drawn off a GUESSED ceiling, so the card that draws
         // them says so in words. This was only ever pinned by the goldens,
@@ -1441,7 +1441,7 @@ void main() {
 
       await tester.tap(find.byIcon(LucideIcons.plus).first); // work + 5
       await tester.pump();
-      await tester.tap(find.text('Start'));
+      await tester.tap(find.text('Start activity'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('50 S WORK'), findsOneWidget);

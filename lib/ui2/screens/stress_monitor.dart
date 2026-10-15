@@ -286,12 +286,46 @@ class _StressMonitorViewState extends State<StressMonitorView>
         ),
       ],
       Section('Stress last night', _lastNight(c, d)),
-      const SizedBox(height: S.x5),
-      ActionCard('Breathe for 2 minutes', 'Slow breathing to settle your system',
-          'Start', LucideIcons.wind, C.blue,
-          onTap: () => go(c, const CalmBreathing())),
+      // WHOOP's two closing sections: something to do about it, and what the
+      // number is.
+      Section(
+          'Sessions',
+          ActionCard('Breathe for 2 minutes',
+              'Slow, paced breathing to bring your stress down',
+              'Start', LucideIcons.wind, C.blue,
+              onTap: () => go(c, const CalmBreathing()))),
+      Section(
+        'How it works',
+        IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(
+              child: _explainer(P.of(c), 'WHAT IS STRESS?',
+                  'How switched-on your body is right now. It is not always '
+                  'bad: a hard workout or a deadline raises it, and that can '
+                  'help you perform.'),
+            ),
+            const SizedBox(width: S.x3),
+            Expanded(
+              child: _explainer(P.of(c), 'MEASURING STRESS',
+                  'Koop reads it from your heartbeat timing every 15 minutes '
+                  'and shows it from 0 to 3. The higher it is, the more '
+                  'activated you are.'),
+            ),
+          ]),
+        ),
+      ),
     ]);
   }
+
+  Widget _explainer(P p, String title, String body) => Surface(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: F.over.copyWith(
+                  color: p.ink, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+          const SizedBox(height: S.x2),
+          Text(body, style: F.cap.copyWith(color: p.ink2)),
+        ]),
+      );
 
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //

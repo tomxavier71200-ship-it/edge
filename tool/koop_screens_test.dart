@@ -20,6 +20,7 @@ import 'package:openstrap_edge/ui2/screens/home_sections.dart';
 import 'package:openstrap_edge/ui2/profile/app_health.dart';
 import 'package:openstrap_edge/ui2/activity/summary.dart';
 import 'package:openstrap_edge/ui2/activity/live.dart';
+import 'package:openstrap_edge/ui2/activity/setup.dart';
 import 'package:openstrap_edge/ui2/screens/records_screen.dart';
 import 'package:openstrap_edge/ui2/activity/whoop_summary.dart';
 import 'package:openstrap_edge/ui2/activity/catalogue.dart' show activityByName;
@@ -316,7 +317,9 @@ void main() {
           (110 + 50 * math.sin(i / 46 * math.pi) + (i * 7 % 9)).toDouble()
       ],
       zoneMinutes: const [6, 12, 15, 9, 2],
-    )),
+      zoneSource: 'tanaka',
+      zoneMaxHr: 190,
+    ), typical: (strain: 10.9, calories: 431.0, avgHr: 152.0), detected: true, sessionCount: 31),
     'workout_history': Builder(builder: (c) => ListView(padding: const EdgeInsets.all(16), children: [
       for (final (h, rows) in [
         ('THIS WEEK', [
@@ -369,6 +372,8 @@ void main() {
       RecordTile(icon: LucideIcons.flame, color: C.strain,
           name: 'Highest day strain', value: null, unit: ''),
     ]),
+    'activity_setup': ActivitySetup(activityByName('Running')!,
+        weightKg: 72, host: const ActivityHost(bandConnected: true)),
     'app_health': ListView(padding: const EdgeInsets.all(16), children: [
       HealthChecksCard(
           checks: appHealthChecks(

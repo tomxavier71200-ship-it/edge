@@ -245,10 +245,13 @@ abstract class LocalRepository {
   /// detected, or detected too narrowly. Scored from the 1 Hz substrate over
   /// [startTs, endTs] (epoch SECONDS); a window with no substrate is still
   /// saved, just unscored. Returns `{workout_id, unscored, hr_samples}`.
+  /// [source] is `'manual'` for a hand-logged window and `'detected'` for
+  /// one the user confirmed from the detector's suggestion.
   Future<Map<String, dynamic>> logManualWorkout({
     required int startTs,
     required int endTs,
     required String type,
+    String source = 'manual',
   }) => throw UnimplementedError('re-layer: logManualWorkout');
 
   /// Retime an existing session and re-score it over the new window. Used to

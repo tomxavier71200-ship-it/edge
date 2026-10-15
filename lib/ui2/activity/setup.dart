@@ -135,15 +135,53 @@ class _ActivitySetupState extends State<ActivitySetup> {
               children: [
                 Center(
                   child: Column(children: [
-                    Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                          color: p.wash(a.color), shape: BoxShape.circle),
-                      child: Icon(a.icon, size: 38, color: p.on(a.color)),
-                    ),
                     const SizedBox(height: S.x4),
-                    Text(a.name, style: F.t2.copyWith(color: p.ink)),
+                    // WHOOP's start screen: one big circle saying whether the
+                    // band is there, with the beat once one is arriving.
+                    Builder(builder: (c) {
+                      final hr = widget.host.feed?.call().hr;
+                      final on = widget.host.bandConnected;
+                      return Semantics(
+                        label: hr != null
+                            ? 'Heart rate $hr'
+                            : on
+                                ? 'Band connected'
+                                : 'Band disconnected',
+                        child: ExcludeSemantics(
+                          child: Container(
+                            width: 200,
+                            height: 200,
+                            decoration: BoxDecoration(
+                                color: on ? p.on(C.strain) : p.card2,
+                                shape: BoxShape.circle),
+                            child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(LucideIcons.heart,
+                                      size: 30, color: on ? p.bg : p.ink3),
+                                  const SizedBox(height: S.x2),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                        hr != null
+                                            ? '$hr'
+                                            : on
+                                                ? 'CONNECTED'
+                                                : 'DISCONNECTED',
+                                        style: (hr != null ? F.n48 : F.label)
+                                            .copyWith(
+                                                color: on ? p.bg : p.ink2,
+                                                letterSpacing: hr != null ? 0 : 1.6,
+                                                fontWeight: FontWeight.w700)),
+                                  ),
+                                  if (hr != null)
+                                    Text('BPM',
+                                        style: F.over.copyWith(color: p.bg)),
+                                ]),
+                          ),
+                        ),
+                      );
+                    }),
                     const SizedBox(height: S.x1),
                     Text(_trackLabel(a.track, l),
                         textAlign: TextAlign.center,
@@ -274,9 +312,9 @@ class _ActivitySetupState extends State<ActivitySetup> {
                   ),
                 ],
                 const SizedBox(height: S.x8),
-                BigButton(l?.activitySetupStart ?? 'Start',
+                BigButton(l?.activitySetupStart ?? 'Start activity',
                     icon: LucideIcons.play,
-                    color: a.color,
+                    color: C.strain,
                     onTap: _starting ? null : _start),
               ],
             ),

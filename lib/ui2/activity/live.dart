@@ -40,7 +40,7 @@ import '../paint_activity.dart';
 import '../theme.dart';
 import 'catalogue.dart';
 import 'strain_coach.dart';
-import 'whoop_summary.dart' show ZoneBreakdown;
+import 'whoop_summary.dart' show ZoneBreakdown, zoneBpmRanges;
 import 'summary.dart';
 
 /// What the band and the phone know right now. Read once per tick.
@@ -850,7 +850,9 @@ class LiveHeart extends StatelessWidget {
       ),
       if (feed.zoneMinutes.length == 5) ...[
         const SizedBox(height: S.x4),
-        ZoneBreakdown(minutes: feed.zoneMinutes),
+        ZoneBreakdown(
+            minutes: feed.zoneMinutes,
+            ranges: zoneBpmRanges(feed.zoneSource, feed.zoneMaxHr)),
       ],
     ]);
   }

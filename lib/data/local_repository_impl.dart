@@ -2739,10 +2739,12 @@ class LocalRepositoryImpl extends LocalRepository {
     required int startTs,
     required int endTs,
     required String type,
+    String source = 'manual',
   }) => _writeManualSession(
     startTs: startTs,
     endTs: endTs,
     type: type,
+    source: source,
     // A manual row's id is derived from its start second, so re-logging the
     // same window is an UPDATE of that row, not a collision with it. Pass
     // the id we are about to write as the one to skip in the overlap check.

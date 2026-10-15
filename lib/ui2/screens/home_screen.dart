@@ -2170,7 +2170,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   }
 
   /// Which of Peak / Perform / Get by the Tonight card is showing.
-  int _planSel = 0;
+  /// Peak / Perform / Get by, remembered like WHOOP's "Tomorrow I want to".
+  int _planSel = Prefs.getInt(_kPlanSelKey, 0).clamp(0, 2);
+  static const _kPlanSelKey = 'home.sleep_plan';
 
   @override
   void initState() {
@@ -3253,6 +3255,10 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           ),
           if (plans.isNotEmpty) ...[
             const SizedBox(height: S.x3),
+            Text('TOMORROW I WANT TO',
+                style: F.over.copyWith(
+                    color: p.ink2, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+            const SizedBox(height: S.x2),
             Row(
               children: [
                 for (var i = 0; i < plans.length; i++) ...[
@@ -3261,7 +3267,10 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                     child: Pressable(
                       semanticLabel:
                           '${plans[i].$1}: bed by ${clock(plans[i].$3)}',
-                      onTap: () => setState(() => _planSel = i),
+                      onTap: () {
+                        Prefs.setInt(_kPlanSelKey, i);
+                        setState(() => _planSel = i);
+                      },
                       child: AnimatedContainer(
                         duration: motion(c, Motion.base),
                         padding: const EdgeInsets.all(S.x2),

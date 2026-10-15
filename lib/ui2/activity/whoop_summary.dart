@@ -1,13 +1,16 @@
-// WHOOP's activity summary pieces: the activity's strain on the dial with its
-// start and end times under it, the four headline stats two to a row, and the
-// time in each heart-rate zone as a bar per zone, hardest first.
+// WHOOP's activity summary pieces, as the real app lays them out: the
+// activity's strain as a big number with its lean against the usual for that
+// activity, "Key statistics vs. 30-day average", and one card per heart-rate
+// zone, hardest first, with its share and its time to the second.
 //
-// Every value is handed in from [ActivityResult]; an absent one prints "—" and
-// a session with no strain gets no dial — never a dial at zero.
+// Every value is handed in. An absent one prints "—", and a comparison only
+// appears when there is a usual to compare against — never against zero.
 
 import 'package:flutter/material.dart';
 
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+import 'package:openstrap_analytics/onehz.dart' as ana;
 
 import '../ui2.dart';
 
@@ -21,171 +24,378 @@ String timeRange(DateTime start, Duration d) {
   return '${t(start)} – ${t(start.add(d))}';
 }
 
-/// The activity's strain, WHOOP's way: the dial out of 21 in the strain
-/// colour, "ACTIVITY STRAIN", and when it ran.
-class ActivityStrainHeader extends StatelessWidget {
-  final double strain;
-  final DateTime start;
-  final Duration duration;
-  const ActivityStrainHeader(
-      {super.key,
-      required this.strain,
-      required this.start,
-      required this.duration});
+/// The usual for an activity type over the 30 days before a session: the
+/// mean of each figure over the earlier sessions that have it. Null under two
+/// such sessions — one earlier ride is not a usual ride.
+typedef ActivityTypical = ({double? strain, double? calories, double? avgHr});
 
-  @override
-  Widget build(BuildContext c) {
-    final p = P.of(c);
-    return Column(children: [
-      Center(
-        child: HeroDial(
-          value: strain / 21,
-          color: C.strain,
-          size: 190,
-          number: (t) => (strain * t).toStringAsFixed(1),
-          label: 'Activity strain',
-        ),
-      ),
-      const SizedBox(height: S.x2),
-      Text(timeRange(start, duration),
-          style: F.over.copyWith(
-              color: p.ink2, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
-    ]);
+ActivityTypical? typicalOf(
+    List<({double? strain, int? calories, int? avgHr})> earlier) {
+  if (earlier.length < 2) return null;
+  double? mean(Iterable<num?> xs) {
+    final v = [for (final x in xs) ?x];
+    return v.length < 2 ? null : v.reduce((a, b) => a + b) / v.length;
   }
+
+  return (
+    strain: mean(earlier.map((e) => e.strain)),
+    calories: mean(earlier.map((e) => e.calories)),
+    avgHr: mean(earlier.map((e) => e.avgHr)),
+  );
 }
 
-/// Four stats, two to a row: (label, value, unit). A null value prints "—".
-class ActivityStatGrid extends StatelessWidget {
-  final List<(String, String?, String)> stats;
-  const ActivityStatGrid({super.key, required this.stats});
+/// Each zone's heart-rate span, zone 1 first, as (from, to) bpm — `to` null
+/// on zone 5, which has no ceiling. Rebuilt from the ceiling the session's
+/// split was banded on, through the SAME analytics function that banded it,
+/// so the card cannot name edges the minutes were not counted against. Only
+/// for the percentage-of-maximum sets (`tanaka`, `observed`); a reserve set
+/// also needs the resting rate it used, which the summary does not carry, so
+/// it gets no ranges rather than wrong ones.
+List<(int, int?)>? zoneBpmRanges(String? source, num? maxHr) {
+  if (maxHr == null || maxHr <= 0) return null;
+  if (source != 'tanaka' && source != 'observed') return null;
+  final z = ana.HeartRateZones.zonesFromMaxHr(maxHr.toDouble(), source: source!)
+      .zones;
+  if (z.length != 5) return null;
+  return [
+    for (var i = 0; i < 5; i++)
+      (z[i].lower.round(), i < 4 ? z[i].upper.round() - 1 : null),
+  ];
+}
+
+/// The milestones a count of sessions works towards.
+const kMilestones = [5, 10, 25, 50, 100, 250, 500, 1000];
+
+/// The next milestone above [count]; null past the last one.
+int? nextMilestone(int count) {
+  for (final m in kMilestones) {
+    if (m > count) return m;
+  }
+  return null;
+}
+
+/// WHOOP's milestone card: "31/50", how many more to go, and a bar.
+class MilestoneCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String activity;
+  final int count;
+  const MilestoneCard(
+      {super.key,
+      required this.icon,
+      required this.color,
+      required this.activity,
+      required this.count});
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    Widget tile((String, String?, String) s) => Surface(
-          semanticLabel: '${s.$1}: ${s.$2 ?? 'not measured'} ${s.$3}',
+    final next = nextMilestone(count);
+    if (next == null) return const SizedBox.shrink();
+    final left = next - count;
+    return Surface(
+      semanticLabel: '$count of $next $activity sessions. $left more until '
+          'your next milestone',
+      child: Row(children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: p.on(color), width: 2)),
+          child: Icon(icon, size: 24, color: p.on(color)),
+        ),
+        const SizedBox(width: S.x4),
+        Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(s.$1.toUpperCase(),
-                style: F.over.copyWith(
-                    color: p.ink2, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+            Text.rich(TextSpan(children: [
+              TextSpan(
+                  text: '$count',
+                  style: F.n24.copyWith(color: p.on(C.strain))),
+              TextSpan(text: '/$next', style: F.n24.copyWith(color: p.ink)),
+            ])),
+            Text(
+                '$left more ${activity.toLowerCase()} '
+                '${left == 1 ? 'session' : 'sessions'} until your next milestone',
+                style: F.body.copyWith(color: p.ink2)),
             const SizedBox(height: S.x2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(s.$2 ?? '—',
-                      style: F.n34.copyWith(color: s.$2 == null ? p.ink3 : p.ink)),
-                  if (s.$2 != null && s.$3.isNotEmpty) ...[
-                    const SizedBox(width: S.x1),
-                    Text(s.$3, style: F.body.copyWith(color: p.ink2)),
-                  ],
-                ],
+            ClipRRect(
+              borderRadius: R.rPill,
+              child: LinearProgressIndicator(
+                value: count / next,
+                minHeight: 5,
+                backgroundColor: p.track,
+                color: p.on(C.strain),
               ),
             ),
           ]),
-        );
-    return Column(children: [
-      for (var i = 0; i < stats.length; i += 2) ...[
-        if (i > 0) const SizedBox(height: S.x3),
-        IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(child: tile(stats[i])),
-            const SizedBox(width: S.x3),
-            Expanded(
-                child: i + 1 < stats.length ? tile(stats[i + 1]) : const SizedBox()),
-          ]),
         ),
-      ],
+      ]),
+    );
+  }
+}
+
+/// A small ▲/▼ chip with the difference from the usual, or nothing.
+class DeltaChip extends StatelessWidget {
+  final String text;
+  final bool up;
+  const DeltaChip(this.text, {super.key, required this.up});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: S.x2, vertical: 2),
+      decoration: BoxDecoration(color: p.card2, borderRadius: R.rSm),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text('${up ? '▲' : '▼'} $text',
+            style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+}
+
+/// The activity's strain, WHOOP's way: a big number in the strain colour,
+/// its lean against the usual for this activity, and "ACTIVITY STRAIN".
+class ActivityStrainHeader extends StatelessWidget {
+  final double strain;
+
+  /// The usual strain for this activity, or null without one.
+  final double? typical;
+  const ActivityStrainHeader({super.key, required this.strain, this.typical});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final t = typical;
+    final d = t == null ? null : strain - t;
+    return Semantics(
+      label: 'Activity strain ${strain.toStringAsFixed(1)}'
+          '${d == null ? '' : ', ${d.abs().toStringAsFixed(1)} ${d >= 0 ? 'above' : 'below'} your usual'}',
+      child: ExcludeSemantics(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: S.x3,
+              runSpacing: S.x1,
+              children: [
+                Text(strain.toStringAsFixed(1),
+                    style: F.n48.copyWith(color: p.on(C.strain))),
+                if (d != null && d.abs() >= .05)
+                  DeltaChip(d.abs().toStringAsFixed(1), up: d > 0),
+              ]),
+          Text('ACTIVITY STRAIN',
+              style: F.over.copyWith(
+                  color: p.ink2, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+        ]),
+      ),
+    );
+  }
+}
+
+/// WHOOP's "Key statistics vs. 30-day average": one card per figure, the
+/// value large and, when there is a usual, the usual under it with the arrow
+/// saying which side today fell. Scrolls sideways like WHOOP's.
+class ActivityStatGrid extends StatelessWidget {
+  /// (label, value, unit, usual value or null, icon).
+  final List<(String, String?, String, String?, bool?)> stats;
+  final List<IconData> icons;
+  const ActivityStatGrid({super.key, required this.stats, this.icons = const []});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final anyUsual = stats.any((s) => s.$4 != null);
+    Widget card(int i) {
+      final s = stats[i];
+      return Container(
+        width: 190,
+        padding: const EdgeInsets.all(S.x4),
+        decoration: BoxDecoration(color: p.card, borderRadius: R.rLg),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            if (i < icons.length) ...[
+              Icon(icons[i], size: 18, color: p.ink2),
+              const SizedBox(width: S.x2),
+            ],
+            Flexible(
+              child: Text(s.$1.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: F.over.copyWith(
+                      color: p.ink2, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+            ),
+          ]),
+          const SizedBox(height: S.x3),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(s.$2 ?? '—',
+                    style: F.n34.copyWith(color: s.$2 == null ? p.ink3 : p.ink)),
+                if (s.$2 != null && s.$3.isNotEmpty) ...[
+                  const SizedBox(width: S.x1),
+                  Text(s.$3, style: F.body.copyWith(color: p.ink2)),
+                ],
+              ],
+            ),
+          ),
+          if (s.$4 != null && s.$5 != null) ...[
+            const SizedBox(height: S.x2),
+            DeltaChip('${s.$4}${s.$3.isEmpty ? '' : s.$3}', up: s.$5!),
+          ],
+        ]),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(
+          child: Text('KEY STATISTICS',
+              style: F.over.copyWith(
+                  color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+        ),
+        if (anyUsual)
+          Flexible(
+            child: Text('VS. 30 DAY AVERAGE',
+                textAlign: TextAlign.right,
+                style: F.over.copyWith(color: p.ink2, letterSpacing: 1.2)),
+          ),
+      ]),
+      const SizedBox(height: S.x3),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (var i = 0; i < stats.length; i++) ...[
+            if (i > 0) const SizedBox(width: S.x3),
+            Semantics(
+              label: '${stats[i].$1}: ${stats[i].$2 ?? 'not measured'} ${stats[i].$3}'
+                  '${stats[i].$4 == null ? '' : ', usual ${stats[i].$4}'}',
+              child: ExcludeSemantics(child: card(i)),
+            ),
+          ],
+        ]),
+      ),
     ]);
   }
 }
 
-/// Minutes in zones 1–5 as WHOOP lists them: hardest zone first, each a bar
-/// in its colour as long as its share, with the time and the percentage.
+/// Minutes in zones 1–5 as WHOOP lists them: one card per zone, hardest
+/// first, its share of the session, its time to the second, and a bar.
 class ZoneBreakdown extends StatelessWidget {
-  /// Five values, zone 1 first.
+  /// Five values, zone 1 first, in minutes.
   final List<double> minutes;
-  const ZoneBreakdown({super.key, required this.minutes});
+
+  /// Each zone's bpm span ([zoneBpmRanges]); null leaves them off.
+  final List<(int, int?)>? ranges;
+  const ZoneBreakdown({super.key, required this.minutes, this.ranges});
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     final total = minutes.fold<double>(0, (a, b) => a + b);
     final cols = ZoneBar.cols(p);
-    String hm(double m) {
-      final t = m.round();
-      return '${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}';
+    String hms(double m) {
+      final s = (m * 60).round();
+      return '${s ~/ 3600}:${(s ~/ 60 % 60).toString().padLeft(2, '0')}'
+          ':${(s % 60).toString().padLeft(2, '0')}';
     }
 
-    return Surface(
-      child: Column(children: [
-        // The unit, said once, like every chart in the app.
-        Row(children: [
-          Expanded(
-            child: Text('TIME IN ZONES',
-                style: F.over.copyWith(
-                    color: p.ink, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
-          ),
-          Text('h:mm', style: F.cap.copyWith(color: p.ink3)),
-        ]),
-        const SizedBox(height: S.x3),
-        for (var z = 4; z >= 0; z--) ...[
-          if (z < 4) const SizedBox(height: S.x3),
-          Semantics(
-            label: 'Zone ${z + 1}: ${minutes[z].round()} minutes',
-            child: ExcludeSemantics(
-              child: Row(children: [
-                SizedBox(
-                  width: 64,
-                  child: Text('ZONE ${z + 1}',
-                      style: F.over.copyWith(
-                          color: p.ink2,
-                          letterSpacing: 1.2,
-                          fontWeight: FontWeight.w700)),
-                ),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (c, box) => Stack(children: [
-                      Container(
-                          height: 10,
-                          decoration: BoxDecoration(
-                              color: p.track, borderRadius: R.rPill)),
-                      Container(
-                        height: 10,
-                        width: total <= 0
-                            ? 0
-                            : box.maxWidth * (minutes[z] / total).clamp(0.0, 1.0),
-                        decoration: BoxDecoration(
-                            color: cols[z], borderRadius: R.rPill),
+    String pct(double m) {
+      if (total <= 0) return '—';
+      final v = m / total * 100;
+      return v > 0 && v < 1 ? '<1%' : '${v.round()}%';
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // The unit, said once, like every chart in the app.
+      Row(children: [
+        Expanded(
+          child: Text('TIME IN ZONES',
+              style: F.over.copyWith(
+                  color: p.ink, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+        ),
+        Text('h:mm:ss', style: F.cap.copyWith(color: p.ink3)),
+      ]),
+      const SizedBox(height: S.x3),
+      for (var z = 4; z >= 0; z--) ...[
+        if (z < 4) const SizedBox(height: S.x2),
+        Semantics(
+          label: 'Zone ${z + 1}: ${minutes[z].round()} minutes, ${pct(minutes[z])}',
+          child: ExcludeSemantics(
+            child: Opacity(
+              // An empty zone sits back, as WHOOP greys it out.
+              opacity: minutes[z] <= 0 ? .45 : 1,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(S.x4, S.x3, S.x4, S.x3),
+                decoration: BoxDecoration(color: p.card, borderRadius: R.rMd),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(
+                      flex: 3,
+                      child: Wrap(
+                          spacing: S.x3,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text('ZONE ${z + 1}',
+                                style: F.over.copyWith(
+                                    color: p.ink,
+                                    letterSpacing: 1.4,
+                                    fontWeight: FontWeight.w700)),
+                            if (ranges case final r? when r.length == 5)
+                              Text(
+                                  r[z].$2 == null
+                                      ? '${r[z].$1}+ BPM'
+                                      : '${r[z].$1}–${r[z].$2} BPM',
+                                  style: F.over.copyWith(
+                                      color: p.ink2, letterSpacing: 1.2)),
+                            Text(pct(minutes[z]),
+                                style: F.cap.copyWith(
+                                    color: cols[z], fontWeight: FontWeight.w700)),
+                          ]),
+                    ),
+                    const SizedBox(width: S.x2),
+                    Flexible(
+                      flex: 2,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(hms(minutes[z]),
+                            style: F.n17.copyWith(color: p.ink)),
                       ),
-                    ]),
-                  ),
-                ),
-                const SizedBox(width: S.x3),
-                SizedBox(
-                  width: 48,
-                  child: Text(hm(minutes[z]),
-                      textAlign: TextAlign.right,
-                      style: F.body.copyWith(color: p.ink)),
-                ),
-                SizedBox(
-                  width: 44,
-                  child: Text(
-                      total <= 0
-                          ? '—'
-                          : '${(minutes[z] / total * 100).round()}%',
-                      textAlign: TextAlign.right,
-                      style: F.cap.copyWith(color: p.ink3)),
-                ),
-              ]),
+                    ),
+                  ]),
+                  if (minutes[z] > 0) ...[
+                    const SizedBox(height: S.x2),
+                    LayoutBuilder(
+                      builder: (c, box) => Stack(children: [
+                        Container(
+                            height: 8,
+                            decoration: BoxDecoration(
+                                color: p.track, borderRadius: R.rPill)),
+                        Container(
+                          height: 8,
+                          width: total <= 0
+                              ? 0
+                              : box.maxWidth * (minutes[z] / total).clamp(0.0, 1.0),
+                          decoration: BoxDecoration(
+                              color: cols[z], borderRadius: R.rPill),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ]),
+              ),
             ),
           ),
-        ],
-      ]),
-    );
+        ),
+      ],
+    ]);
   }
 }
 

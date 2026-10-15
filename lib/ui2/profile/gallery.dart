@@ -62,7 +62,13 @@ import '../screens/home_sections.dart' show CoachBubble, MonitorTiles;
 import 'app_health.dart' show HealthChecksCard, appHealthChecks;
 import '../screens/records_screen.dart' show RecordTile;
 import '../activity/whoop_summary.dart'
-    show ActivityStatGrid, ActivityStrainHeader, ActivityTileRow, ZoneBreakdown;
+    show
+        ActivityStatGrid,
+        ActivityStrainHeader,
+        ActivityTileRow,
+        DeltaChip,
+        MilestoneCard,
+        ZoneBreakdown;
 import 'whoop_compare.dart' show Agreement, AgreementCard;
 import '../screens/more_screen.dart' show DoorRow, DoorTile, FeatureCard;
 import '../screens/sleep_whoop.dart';
@@ -739,16 +745,17 @@ Map<String, Widget> _nutritionAndWellnessCases() {
         ])),
     'agreement_card_empty': const AgreementCard(
         name: 'Strain', unit: '', decimals: 1, a: null),
-    'activity_strain_header': ActivityStrainHeader(
-        strain: 12.6,
-        start: DateTime(2026, 10, 12, 7, 5),
-        duration: Motion.tick * 2760),
+    'activity_strain_header':
+        const ActivityStrainHeader(strain: 11.2, typical: 9.4),
     'activity_stat_grid': const ActivityStatGrid(stats: [
-      ('Duration', '46:00', ''),
-      ('Avg HR', '148', 'bpm'),
-      ('Max HR', '176', 'bpm'),
-      ('Calories', null, 'kcal'),
+      ('Calories', '585', 'kcal', '364', true),
+      ('Avg HR', '116', 'bpm', '125', false),
+      ('Max HR', '168', 'bpm', null, null),
+      ('Duration', '1:45:58', '', null, null),
     ]),
+    'delta_chip': const DeltaChip('1.8', up: true),
+    'milestone_card': const MilestoneCard(
+        icon: LucideIcons.bike, color: C.strain, activity: 'Cycling', count: 31),
     'zone_breakdown': const ZoneBreakdown(minutes: [6, 12, 15, 9, 2]),
     'activity_tile_row': ActivityTileRow(
         icon: LucideIcons.bike,

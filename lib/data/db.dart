@@ -10572,6 +10572,19 @@ class LocalDb {
   /// awaits this while it opens, and it used to pull every session row an
   /// install had ever written (full payload, sorted) back across the platform
   /// channel to add up one integer.
+  /// Finished sessions of one activity [type] (the stored `type`, e.g.
+  /// `cycling`) up to and including [atOrBeforeSec] — the count a milestone
+  /// card shows for that session, so an older session reads its own number.
+  static Future<int> sessionCountOfType(String type, int atOrBeforeSec) async {
+    final db = await instance;
+    final r = await db.rawQuery(
+      "SELECT COUNT(*) c FROM sessions WHERE status IS NOT 'live' "
+      'AND LOWER(type) = ? AND start_ts <= ?',
+      [type.toLowerCase(), atOrBeforeSec],
+    );
+    return (r.first['c'] as num?)?.toInt() ?? 0;
+  }
+
   static Future<int> finishedSessionCount() async {
     final db = await instance;
     final r = await db.rawQuery(

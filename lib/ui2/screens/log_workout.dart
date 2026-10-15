@@ -174,6 +174,8 @@ class _WorkoutSuggestionScreenState extends State<WorkoutSuggestionScreen> {
         startTs: s.startTs,
         endTs: s.endTs,
         type: s.activity?.typeKey ?? 'other',
+        // Marked so the summary can say the band found it, as WHOOP does.
+        source: 'detected',
       );
       // Every write path exports, or the health store quietly disagrees with
       // the log (#130). No-op with health sync off; never throws.

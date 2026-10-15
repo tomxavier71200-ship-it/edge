@@ -686,11 +686,27 @@ class ActivitySummary extends StatefulWidget {
   /// escalation the spec refuses.
   final bool justFinished;
 
+  /// The usual for this activity over the 30 days before it (see
+  /// [typicalOf]); null without two earlier sessions, and then nothing on the
+  /// screen is compared.
+  final ActivityTypical? typical;
+
+  /// The band found this session (confirmed from a suggestion): WHOOP's
+  /// "Auto-detected" chip.
+  final bool detected;
+
+  /// How many sessions of this activity, this one included; null hides the
+  /// milestone card.
+  final int? sessionCount;
+
   const ActivitySummary(this.result,
       {super.key,
       this.weightKg,
       this.onRetrySave,
-      this.justFinished = false});
+      this.justFinished = false,
+      this.typical,
+      this.detected = false,
+      this.sessionCount});
 
   @override
   State<ActivitySummary> createState() => _ActivitySummaryState();
@@ -1111,16 +1127,47 @@ class _ActivitySummaryState extends State<ActivitySummary> {
       // WHOOP's summary when the session has a strain: the activity's strain
       // on the dial, when it ran, and the four headline stats as tiles. The
       // archetype's own hero (distance, volume) still leads when there is one.
+      if (widget.detected) ...[
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Pill('Auto-detected', C.n500, icon: LucideIcons.sparkles),
+        ),
+        const SizedBox(height: S.x3),
+      ],
       if (r.strain != null) ...[
         ActivityStrainHeader(
-            strain: r.strain!, start: r.start, duration: r.duration),
-        const SizedBox(height: S.x5),
-        ActivityStatGrid(stats: [
-          ('Duration', hms(r.duration), ''),
-          ('Avg HR', r.avgHr?.toString(), 'bpm'),
-          ('Max HR', r.maxHr?.toString(), 'bpm'),
-          ('Calories', r.calories == null ? null : grouped(r.calories!), 'kcal'),
-        ]),
+            strain: r.strain!, typical: widget.typical?.strain),
+        const SizedBox(height: S.x2),
+        Text('${timeRange(r.start, r.duration)}  ·  ${hms(r.duration)}',
+            style: F.cap.copyWith(color: p.ink2)),
+        const SizedBox(height: S.x4),
+        if (r.hr.whereType<double>().length >= 2 &&
+            arch != Arch.match &&
+            arch != Arch.basic) ...[
+          Surface(child: _hrFrame(p)),
+          const SizedBox(height: S.x5),
+        ],
+        Builder(builder: (c) {
+          final t = widget.typical;
+          (String?, bool?) vs(int? now, double? usual) =>
+              now == null || usual == null || (now - usual).abs() < 1
+                  ? (null, null)
+                  : (grouped(usual.round()), now > usual);
+          final cal = vs(r.calories, t?.calories);
+          final hr = vs(r.avgHr, t?.avgHr);
+          return ActivityStatGrid(icons: const [
+            LucideIcons.flame,
+            LucideIcons.heart,
+            LucideIcons.heartPulse,
+            LucideIcons.timer,
+          ], stats: [
+            ('Calories', r.calories == null ? null : grouped(r.calories!), 'kcal',
+                cal.$1, cal.$2),
+            ('Avg HR', r.avgHr?.toString(), 'bpm', hr.$1, hr.$2),
+            ('Max HR', r.maxHr?.toString(), 'bpm', null, null),
+            ('Duration', hms(r.duration), '', null, null),
+          ]);
+        }),
         if (_heroStatName(r) == null) ...[
           const SizedBox(height: S.x5),
           ..._legacyHero(c, p, hero),
@@ -1130,13 +1177,7 @@ class _ActivitySummaryState extends State<ActivitySummary> {
         const SizedBox(height: S.x3),
         SessionStats(r,
             skip: const {'Avg HR', 'Max HR', 'Calories', 'Strain', 'Time'}),
-        // A match and a basic session already lead with this chart.
-        if (r.hr.whereType<double>().length >= 2 &&
-            arch != Arch.match &&
-            arch != Arch.basic) ...[
-          const SizedBox(height: S.x3),
-          Surface(child: _hrFrame(p)),
-        ],
+
       ] else ...[
         ..._legacyHero(c, p, hero),
         const SizedBox(height: S.x5),
@@ -1155,6 +1196,11 @@ class _ActivitySummaryState extends State<ActivitySummary> {
       // Zones belong to any session that banked a split — a lift and a yoga
       // class have heart-rate zones too.
       ..._zoneSection(p),
+      if (widget.sessionCount case final n? when n > 0) ...[
+        const SizedBox(height: S.x5),
+        MilestoneCard(
+            icon: a.icon, color: a.color, activity: a.name, count: n),
+      ],
       const SizedBox(height: S.x5),
       _basisNote(p),
     ];
@@ -1871,18 +1917,15 @@ class _ActivitySummaryState extends State<ActivitySummary> {
   List<Widget> _zoneSection(P p) => r.zoneMinutes.length != 5
       ? const []
       : [
-          Section(
-              AppLocalizations.of(context)?.activitySummaryHeartRateZones ??
-                  'Heart-rate zones',
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                ZoneBreakdown(minutes: r.zoneMinutes),
-                // How the zone edges were set, as the old chart's footnote said.
-                const SizedBox(height: S.x2),
-                Text(
-                    zonesWhy(r.zoneSource, r.zoneMaxHr,
-                        AppLocalizations.of(context)),
-                    style: F.cap.copyWith(color: p.ink3)),
-              ])),
+          const SizedBox(height: S.x5),
+          ZoneBreakdown(
+              minutes: r.zoneMinutes,
+              ranges: zoneBpmRanges(r.zoneSource, r.zoneMaxHr)),
+          // How the zone edges were set.
+          const SizedBox(height: S.x2),
+          Text(
+              zonesWhy(r.zoneSource, r.zoneMaxHr, AppLocalizations.of(context)),
+              style: F.cap.copyWith(color: p.ink3)),
         ];
 
   /// [v] is always in kg (storage unit); [_u] converts + rounds for display
