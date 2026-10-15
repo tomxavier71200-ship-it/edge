@@ -258,11 +258,14 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: S.x5),
             child: Column(children: [
-              HeroDial(
-                value: d.readiness.normalized(100),
-                color: band.color,
-                number: (t) => '${(v * t).round()}%',
-                label: 'Recovery',
+              RingHero(
+                tag: RingHero.of('recovery'),
+                child: HeroDial(
+                  value: d.readiness.normalized(100),
+                  color: band.color,
+                  number: (t) => '${(v * t).round()}%',
+                  label: 'Recovery',
+                ),
               ),
               const SizedBox(height: S.x4),
               Text(band.label,

@@ -29,7 +29,7 @@ enum ShellDomain {
   nutrition('Nutrition', LucideIcons.utensils, C.domFood, inBar: false),
   workout('Workout', LucideIcons.dumbbell, C.domMove),
   wellness('Wellness', LucideIcons.leaf, C.domMind, inBar: false),
-  more('More', LucideIcons.ellipsis, C.domHome);
+  more('You', LucideIcons.circleUser, C.domHome);
 
   const ShellDomain(this.label, this.icon, this.accent, {this.inBar = true});
 
@@ -184,13 +184,11 @@ class _TabBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(S.x4, S.x2, S.x4, S.x3),
         child: Row(children: [
           Expanded(
-            child: Container(
+            child: Glass(
               height: 64,
-              decoration: BoxDecoration(
-                color: p.card,
-                borderRadius: R.rXxl,
-                boxShadow: p.el(3),
-              ),
+              color: p.card,
+              radius: R.rXxl,
+              shadow: p.el(3),
               child: Row(children: [
                 for (final d in ShellDomain.values)
                   if (d.inBar)

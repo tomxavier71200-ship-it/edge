@@ -514,8 +514,15 @@ class _SleepDetailState extends State<SleepDetail> {
     _load();
   }
 
+  // Swipe left or right for the next or previous night, as the stepper does.
   @override
   Widget build(BuildContext c) {
+    final d = _d ?? const SleepData();
+    return DaySwipe(
+        day: _day ?? d.day, days: d.days, onDay: _goDay, child: _page(c));
+  }
+
+  Widget _page(BuildContext c) {
     final d = _d ?? const SleepData();
     final l = AppLocalizations.of(c);
     final title = l?.sleepDetailNavTitle ?? 'Sleep';
@@ -683,11 +690,14 @@ class _SleepDetailState extends State<SleepDetail> {
       if (perf != null)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: S.x4),
-          child: HeroDial(
-            value: (perf / 100).clamp(0.0, 1.0),
-            color: C.sleep,
-            number: (t) => '${(perf * t).round()}%',
-            label: 'Sleep performance',
+          child: RingHero(
+            tag: RingHero.of('sleep'),
+            child: HeroDial(
+              value: (perf / 100).clamp(0.0, 1.0),
+              color: C.sleep,
+              number: (t) => '${(perf * t).round()}%',
+              label: 'Sleep performance',
+            ),
           ),
         ),
       if (rows.isNotEmpty) ...[

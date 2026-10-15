@@ -129,6 +129,10 @@ class _OpenStrapAppState extends State<OpenStrapApp> with WidgetsBindingObserver
     final theme = context.watch<ThemeController>();
     final locale = context.watch<LocaleController>();
     return MaterialApp(
+      // Apple's rubber-band at the ends of every list, on Android too, so the
+      // two phones feel the same: a soft stretch reads as "nothing more here",
+      // a hard stop reads as frozen.
+      scrollBehavior: const _KoopScroll(),
       title: 'Koop',
       debugShowCheckedModeBanner: false,
       // The palette is the design system's, the CHOICE is still the user's.
@@ -695,4 +699,19 @@ class _LiveSessionBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Every scrollable stretches at its ends (BouncingScrollPhysics) on every
+/// platform; Android's glow is dropped since the stretch already says it.
+class _KoopScroll extends MaterialScrollBehavior {
+  const _KoopScroll();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const BouncingScrollPhysics(parent: RangeMaintainingScrollPhysics());
+
+  @override
+  Widget buildOverscrollIndicator(
+          BuildContext context, Widget child, ScrollableDetails details) =>
+      child;
 }

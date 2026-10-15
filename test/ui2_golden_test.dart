@@ -183,7 +183,7 @@ void main() {
         reason: 'deep links to an off-bar domain still land on it');
     final selected = find.byWidgetPredicate(
         (w) => w is Semantics && w.properties.selected == true);
-    expect(find.descendant(of: selected, matching: find.text('More')),
+    expect(find.descendant(of: selected, matching: find.text('You')),
         findsOneWidget,
         reason: 'Nutrition is reached through More, so More reads as "here"');
     await tester.tap(find.bySemanticsLabel('Add'));

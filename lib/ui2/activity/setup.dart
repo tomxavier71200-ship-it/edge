@@ -15,6 +15,7 @@
 // same thirty-minute basis the picker's rows use, so the two screens compare.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -74,6 +75,8 @@ class _ActivitySetupState extends State<ActivitySetup> {
       _refused = !ok;
     });
     if (!ok) return;
+    // The session has started: felt, not only seen.
+    HapticFeedback.mediumImpact();
     final interval = widget.a.track == Track.interval;
     // The draft opens with the session, not with the screen: everything the
     // user types from here belongs to the session, and has to survive the

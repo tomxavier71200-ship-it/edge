@@ -22,6 +22,7 @@
 // truth that the schedule engine silently overwrites on the next sync.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -274,6 +275,8 @@ class AlarmScreenView extends StatelessWidget {
     if (action == null) return;
     try {
       await action();
+      // The band took it: a light confirming tap with the message.
+      HapticFeedback.lightImpact();
       if (c.mounted) _say(c, ok);
     } catch (e) {
       if (c.mounted) _say(c, '$e'.replaceFirst('Exception: ', ''));

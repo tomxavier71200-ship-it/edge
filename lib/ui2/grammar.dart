@@ -30,8 +30,11 @@
 //     the five tabs of the shell.
 
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../data/journal_fields.dart' show formatMinuteOfDay;
@@ -1856,7 +1859,18 @@ class InfoButton extends StatelessWidget {
                 Text('ABOUT ${title.toUpperCase()}',
                     style: F.over.copyWith(color: p.ink3)),
                 const SizedBox(height: S.x3),
-                Text(body, style: F.body.copyWith(color: p.ink2)),
+                // The first sentence as a bold lead, so the answer is the
+                // first thing read; the rest is there for whoever wants it.
+                Text.rich(TextSpan(children: [
+                  TextSpan(
+                      text: infoLead(body).$1,
+                      style: F.body.copyWith(
+                          color: p.ink, fontWeight: FontWeight.w600)),
+                  if (infoLead(body).$2.isNotEmpty)
+                    TextSpan(
+                        text: ' ${infoLead(body).$2}',
+                        style: F.body.copyWith(color: p.ink2)),
+                ])),
               ],
             ),
           ),
@@ -2501,4 +2515,222 @@ class NavBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Swipe between days, Apple-style (Designing Fluid Interfaces): the page
+/// follows the finger 1:1, the release keeps the finger's speed, the landing
+/// is chosen from where the flick was HEADING (momentum projection), and past
+/// the newest or oldest day it stretches with growing resistance instead of
+/// stopping dead. Swipe left for the next day, right for the one before —
+/// the same directions as the › and ‹ arrows, which stay for anyone who
+/// cannot swipe. [days] is newest first, as [DayNav] takes it.
+///
+/// Every motion here is a spring that starts from the page's live position,
+/// so a page still settling can be grabbed again. With reduced motion the
+/// page does not move at all; a swipe just changes the day.
+class DaySwipe extends StatefulWidget {
+  final String? day;
+  final List<String> days;
+  final ValueChanged<String> onDay;
+  final Widget child;
+  const DaySwipe(
+      {super.key,
+      required this.day,
+      required this.days,
+      required this.onDay,
+      required this.child});
+
+  /// Apple's projection: where a release at [velocity] (px/s) comes to rest,
+  /// decelerating like a scroll view.
+  static double project(double velocity, [double rate = .998]) =>
+      velocity / 1000 * rate / (1 - rate);
+
+  /// Resistance past an edge: the further over, the less the page follows.
+  static double rubberband(double overshoot, double width, [double k = .55]) =>
+      overshoot * width * k / (width + k * overshoot.abs());
+
+  @override
+  State<DaySwipe> createState() => _DaySwipeState();
+}
+
+class _DaySwipeState extends State<DaySwipe>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _x = AnimationController.unbounded(vsync: this)
+    ..addListener(() => setState(() {}));
+
+  /// The finger's own travel; the page shows it, or its rubber-banded form
+  /// past an edge.
+  double _raw = 0;
+  double _w = 1;
+
+  @override
+  void dispose() {
+    _x.dispose();
+    super.dispose();
+  }
+
+  int get _i => widget.days.indexOf(widget.day ?? '');
+  String? get _older {
+    final i = _i;
+    if (widget.days.isEmpty) return null;
+    if (i < 0) return widget.days.length > 1 ? widget.days[1] : null;
+    return i + 1 < widget.days.length ? widget.days[i + 1] : null;
+  }
+
+  String? get _newer => _i > 0 ? widget.days[_i - 1] : null;
+
+  double _shown(double raw) {
+    // Dragging right reaches for an older day, left for a newer one.
+    final open = raw > 0 ? _older != null : _newer != null;
+    return open ? raw : DaySwipe.rubberband(raw, _w);
+  }
+
+  void _start(DragStartDetails _) {
+    // Grab it where it is, even mid-settle.
+    _x.stop();
+    _raw = _x.value;
+  }
+
+  void _update(DragUpdateDetails e) {
+    _raw += e.delta.dx;
+    if (Motion.enabled(context)) _x.value = _shown(_raw);
+  }
+
+  void _end(DragEndDetails e) {
+    final v = e.velocity.pixelsPerSecond.dx;
+    // The landing is picked from where the gesture was going, not where the
+    // finger let go.
+    final landing = _raw + DaySwipe.project(v);
+    String? to;
+    if (landing > _w * .35) to = _older;
+    if (landing < -_w * .35) to = _newer;
+    _raw = 0;
+    if (to != null) {
+      HapticFeedback.selectionClick();
+      widget.onDay(to);
+      // The new day arrives from the side the finger pushed toward,
+      // carrying the finger's speed into the settle.
+      if (Motion.enabled(context)) _x.value = _x.value.sign * -_w * .25;
+    }
+    if (!Motion.enabled(context)) {
+      _x.value = 0;
+      return;
+    }
+    _x.animateWith(SpringSimulation(
+        Motion.spring(response: .35, damping: to != null ? .85 : 1),
+        _x.value,
+        0,
+        to != null ? 0 : v));
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    return LayoutBuilder(builder: (c, box) {
+      _w = box.maxWidth.isFinite && box.maxWidth > 0 ? box.maxWidth : 1;
+      final dx = _x.value;
+      return GestureDetector(
+        // The arrows are the accessible way between days; a second, invisible
+        // one in the semantics tree would only be noise.
+        excludeFromSemantics: true,
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: _start,
+        onHorizontalDragUpdate: _update,
+        onHorizontalDragEnd: _end,
+        onHorizontalDragCancel: () => _end(DragEndDetails()),
+        child: Opacity(
+          opacity: (1 - (dx.abs() / _w) * .35).clamp(.6, 1.0),
+          child: Transform.translate(offset: Offset(dx, 0), child: widget.child),
+        ),
+      );
+    });
+  }
+}
+
+/// Apple's translucent material for floating chrome (the tab bar, the pinned
+/// dials): content scrolls underneath, blurred, so the bar reads as a layer
+/// above the page rather than a strip cut out of it. With Increase Contrast
+/// on (Flutter's nearest signal to Reduce Transparency) it turns solid, so
+/// nothing is read through a blur.
+class Glass extends StatelessWidget {
+  final Widget child;
+  final Color color;
+  final BorderRadius? radius;
+  final Border? border;
+  final List<BoxShadow>? shadow;
+  final EdgeInsetsGeometry? padding;
+  final double? height;
+  const Glass({
+    super.key,
+    required this.child,
+    required this.color,
+    this.radius,
+    this.border,
+    this.shadow,
+    this.padding,
+    this.height,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final solid = MediaQuery.maybeHighContrastOf(c) ?? false;
+    final box = Container(
+      height: height,
+      padding: padding,
+      decoration: BoxDecoration(
+        // Heavier for a big surface; a light glass on light glass would lose
+        // the text, so the tint stays strong.
+        color: solid ? color : color.withValues(alpha: .78),
+        borderRadius: radius,
+        border: border,
+      ),
+      child: child,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: radius, boxShadow: shadow),
+      child: ClipRRect(
+        borderRadius: radius ?? BorderRadius.zero,
+        child: solid
+            ? box
+            : BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: box,
+              ),
+      ),
+    );
+  }
+}
+
+/// A dial that flies between screens (Apple: "if something appears from a
+/// place, it goes back to it"). Tapping a Home ring grows it into the dial at
+/// the top of that ring's screen, and going back shrinks it home. The flight
+/// draws the destination's dial, scaled, so the numbers stay whole in
+/// between. With reduced motion there is no flight.
+class RingHero extends StatelessWidget {
+  final String tag;
+  final Widget child;
+  const RingHero({super.key, required this.tag, required this.child});
+
+  /// The tag for one of Home's rings: `recovery`, `strain`, `sleep`.
+  static String of(String kind) => 'ring-$kind';
+
+  @override
+  Widget build(BuildContext c) {
+    if (!Motion.enabled(c)) return child;
+    return Hero(
+      tag: tag,
+      // The detail screen's dial is the one with a fixed size, so it is the
+      // one drawn in flight, both ways.
+      flightShuttleBuilder: (_, _, dir, from, to) => FittedBox(
+        child: (dir == HeroFlightDirection.push ? to : from).widget,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// An info text split into its first sentence and the rest, so the sheet can
+/// lead with the short answer. A text with no sentence break is all lead.
+(String, String) infoLead(String body) {
+  final m = RegExp(r'^(.+?[.!?])\s+(.*)$', dotAll: true).firstMatch(body.trim());
+  return m == null ? (body.trim(), '') : (m.group(1)!, m.group(2)!.trim());
 }

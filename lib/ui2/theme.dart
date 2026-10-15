@@ -571,6 +571,18 @@ class Motion {
   /// screen opens. Goes through [motion] like every other animation.
   static const sweep = Duration(milliseconds: 1100);
 
+  /// Apple's spring, in its own two terms: [damping] (1 = no overshoot, the
+  /// default for everything; ~0.8 only after a flick) and [response] (how
+  /// quickly it reaches the target, in seconds — not a duration; a spring has
+  /// none). Springs start from where the thing IS and carry its speed, so a
+  /// moving page can be grabbed and reversed mid-flight.
+  static SpringDescription spring({double response = .35, double damping = 1}) =>
+      SpringDescription.withDampingRatio(
+        mass: 1,
+        stiffness: math.pow(2 * math.pi / response, 2).toDouble(),
+        ratio: damping,
+      );
+
   /// The streak flame igniting: one bounce and a burst of sparks, played once
   /// when the streak grows. Never a loop; through [motion] like the rest.
   static const ignite = Duration(milliseconds: 900);

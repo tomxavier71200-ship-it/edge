@@ -310,12 +310,15 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
       child: Column(children: [
         // One dial, 0 to 21 round the circle, today's target as the faint
         // band on the track.
-        HeroDial(
+        RingHero(
+          tag: RingHero.of('strain'),
+          child: HeroDial(
           value: s / 21,
           color: C.strain,
           number: (t) => (s * t).toStringAsFixed(1),
           label: 'Strain',
           band: tg == null ? null : (tg.$1 / 21, tg.$2 / 21),
+        ),
         ),
       ]),
     );

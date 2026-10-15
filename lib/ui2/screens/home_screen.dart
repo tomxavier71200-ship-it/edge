@@ -29,6 +29,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -1016,11 +1017,16 @@ class RingTrio extends StatelessWidget {
   /// The "Why? HRV · RHR" line under the dials. Off on Home.
   final bool showDrivers;
 
+  /// Home passes true so the rings fly into their screens; a second copy of
+  /// the trio (the gallery) must not, or two heroes would share a tag.
+  final bool heroes;
+
   const RingTrio({
     super.key,
     required this.d,
     this.onOpen,
     this.showDrivers = false,
+    this.heroes = false,
   });
 
   /// Whether ANY of the three has something to draw. When none do, the screen
@@ -1061,7 +1067,8 @@ class RingTrio extends StatelessWidget {
                 for (var i = 0; i < rings.length; i++) ...[
                   if (i > 0) const SizedBox(width: S.x3),
                   Expanded(
-                    child: _RingColumn(rings[i], onTap: _open(rings[i].kind)),
+                    child: _RingColumn(rings[i],
+                        onTap: _open(rings[i].kind), heroes: heroes),
                   ),
                 ],
               ],
@@ -1132,13 +1139,11 @@ class MiniDials extends StatelessWidget {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
-    return Container(
+    return Glass(
       padding: EdgeInsets.fromLTRB(
           S.x4, MediaQuery.paddingOf(c).top + S.x2, S.x4, S.x2),
-      decoration: BoxDecoration(
-        color: p.bgTop,
-        border: Border(bottom: BorderSide(color: p.line)),
-      ),
+      color: p.bgTop,
+      border: Border(bottom: BorderSide(color: p.line)),
       child: Row(
         children: [
           for (final k in ringOrder())
@@ -1580,8 +1585,9 @@ class _Dial extends StatelessWidget {
 class _RingColumn extends StatelessWidget {
   final _RingState r;
   final VoidCallback? onTap;
+  final bool heroes;
 
-  const _RingColumn(this.r, {this.onTap});
+  const _RingColumn(this.r, {this.onTap, this.heroes = false});
 
   @override
   Widget build(BuildContext c) => Pressable(
@@ -1593,7 +1599,13 @@ class _RingColumn extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 112),
           child: AspectRatio(
             aspectRatio: 1,
-            child: _Dial(r, stroke: 9, icon: 22, valueInside: true),
+            // Home's rings fly into their screens; elsewhere (the gallery)
+            // the same ring is just a ring.
+            child: heroes
+                ? RingHero(
+                    tag: RingHero.of(r.kind.name),
+                    child: _Dial(r, stroke: 9, icon: 22, valueInside: true))
+                : _Dial(r, stroke: 9, icon: 22, valueInside: true),
           ),
         ),
         const SizedBox(height: S.x3),
@@ -2491,7 +2503,11 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           )
         : null;
 
-    final list = _refreshable(
+    final list = DaySwipe(
+        day: _day ?? d.dayId,
+        days: _days,
+        onDay: _goDay,
+        child: _refreshable(
       ListView(
         padding: pad,
         children: [
@@ -2657,6 +2673,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             if (RingTrio.has(d))
               RingTrio(
                 d: d,
+                heroes: true,
                 onOpen: (k) => _openRing(c, k),
               )
             else
@@ -2766,7 +2783,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           if (bubble != null) const SizedBox(height: 88),
         ],
       ),
-    );
+    ));
     if (bare || !RingTrio.has(d)) {
       return bubble == null ? list : Stack(children: [list, bubble]);
     }
@@ -2880,6 +2897,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         final sync = syncOf(context);
         if (sync != null) _tapSync(sync);
         await _load();
+        // The pull has landed: one light tap as the spinner goes.
+        HapticFeedback.lightImpact();
       },
       child: list,
     );
@@ -3268,6 +3287,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                       semanticLabel:
                           '${plans[i].$1}: bed by ${clock(plans[i].$3)}',
                       onTap: () {
+                        HapticFeedback.selectionClick();
                         Prefs.setInt(_kPlanSelKey, i);
                         setState(() => _planSel = i);
                       },

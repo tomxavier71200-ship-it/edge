@@ -515,6 +515,8 @@ class LiveShellState extends State<LiveShell> {
     // log twice; the second tap must do nothing at all.
     if (_finishing) return;
     _finishing = true;
+    // A firm tap: the session is over, the one moment worth feeling.
+    HapticFeedback.mediumImpact();
     _t?.cancel();
     final draft = widget.result(elapsed);
     // The app writes the session, flushes the GPS tail and hands back what it

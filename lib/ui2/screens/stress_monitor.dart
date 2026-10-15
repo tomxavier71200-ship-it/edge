@@ -172,7 +172,13 @@ class _StressMonitorScreenState extends State<StressMonitorScreen> {
       const SizedBox(height: S.x2),
       dayCenter(_day, days, (d) => setState(() => _day = d)),
       const SizedBox(height: S.x4),
-      StressMonitorView(key: ValueKey(_day), day: _day, preview: widget.preview),
+      DaySwipe(
+        day: _day,
+        days: days,
+        onDay: (d) => setState(() => _day = d),
+        child: StressMonitorView(
+            key: ValueKey(_day), day: _day, preview: widget.preview),
+      ),
     ]);
   }
 }

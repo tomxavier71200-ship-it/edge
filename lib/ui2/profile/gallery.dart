@@ -754,6 +754,20 @@ Map<String, Widget> _nutritionAndWellnessCases() {
       ('Duration', '1:45:58', '', null, null),
     ]),
     'delta_chip': const DeltaChip('1.8', up: true),
+    'glass': Builder(
+        builder: (c) => Glass(
+            color: P.of(c).card,
+            radius: R.rXxl,
+            padding: const EdgeInsets.all(S.x4),
+            child: Text('Glass bar', style: F.body.copyWith(color: P.of(c).ink)))),
+    'day_swipe': DaySwipe(
+        day: '2026-10-14',
+        days: const ['2026-10-15', '2026-10-14', '2026-10-13'],
+        onDay: (_) {},
+        child: Builder(
+            builder: (c) => Text('Swipe me',
+                style: F.body.copyWith(color: P.of(c).ink)))),
+    'ring_hero': const RingHero(tag: 'gallery-ring', child: SizedBox.square(dimension: 40)),
     'milestone_card': const MilestoneCard(
         icon: LucideIcons.bike, color: C.strain, activity: 'Cycling', count: 31),
     'zone_breakdown': const ZoneBreakdown(minutes: [6, 12, 15, 9, 2]),

@@ -65,7 +65,7 @@ class MoreScreen extends StatelessWidget {
         );
 
     return ListView(padding: pad, children: [
-      const ScreenTitle('More'),
+      const ScreenTitle('You'),
       // You, first: the door every setting is behind.
       DoorRow(LucideIcons.user, C.blue, 'Profile and settings',
           'Devices, data, notifications and privacy',
