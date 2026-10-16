@@ -62,6 +62,7 @@ import '../screens/home_sections.dart'
     show CoachBubble, MonitorTiles, StressDashRow;
 import 'app_health.dart' show HealthChecksCard, appHealthChecks;
 import '../screens/records_screen.dart' show RecordTile;
+import '../screens/overview_screen.dart' show ActivityGroup, BandHistogram;
 import '../activity/whoop_summary.dart'
     show
         ActivityStatGrid,
@@ -781,6 +782,24 @@ Map<String, Widget> _nutritionAndWellnessCases() {
         sub: 'Today, 12:09',
         trailing: '27:00',
         onTap: () {}),
+    'band_histogram': const BandHistogram(
+        title: 'DAY STRAIN',
+        labels: ['Light', 'Moderate', 'Strenuous', 'All out'],
+        counts: [3, 2, 2, 0],
+        colors: [C.strain, C.strain, C.strain, C.strain]),
+    'activity_group': ActivityGroup(
+        title: 'Moderate · 10.0–13.9',
+        count: 1,
+        avgStrain: 12.4,
+        children: [
+          ActivityTileRow(
+              icon: LucideIcons.bike,
+              color: C.strain,
+              value: '12.4',
+              name: 'CYCLING',
+              sub: 'Today · 7:05 AM – 7:51 AM',
+              trailing: '0:46:00'),
+        ]),
     'record_tile': const RecordTile(
         icon: LucideIcons.activity,
         color: C.green,

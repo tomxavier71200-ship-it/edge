@@ -37,6 +37,7 @@ import 'log_workout.dart'
 import 'metric_detail.dart' show MetricDetail, MetricSpec, specOf;
 import 'stress_monitor.dart' show StressMonitorScreen;
 import 'strength_screen.dart' show StrengthScreen;
+import 'overview_screen.dart' show OverviewScreen;
 import '../../data/db.dart' show LocalDb;
 import 'sleep_detail.dart';
 import 'health_monitor.dart' show StressSparkline;
@@ -311,11 +312,18 @@ Widget? strainRecoveryCard(BuildContext c, HomeData d) {
   if (count(s.values) < 2 && count(r.values) < 2) return null;
   final p = P.of(c);
   return Surface(
+    // WHOOP web's Overview: the same two lines over a chosen range.
+    onTap: () => go(c, OverviewScreen(series: d.series)),
     semanticLabel: 'Strain and recovery, last 7 days. '
         '${[for (var i = 0; i < 7; i++) '${s.labels[i]}: strain ${s.values[i]?.toStringAsFixed(1) ?? 'none'}, recovery ${r.values[i] == null ? 'none' : '${r.values[i]!.round()}%'}'].join('; ')}',
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('STRAIN & RECOVERY',
-          style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+      Row(children: [
+        Expanded(
+          child: Text('STRAIN & RECOVERY',
+              style: F.over.copyWith(color: p.ink, letterSpacing: 1.6)),
+        ),
+        Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+      ]),
       const SizedBox(height: S.x3),
       SizedBox(
         height: 190,

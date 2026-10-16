@@ -210,6 +210,7 @@ const _notComponents = {
   'AppHealthScreen',
   'WhoopCompareScreen',
   'RecordsScreen',
+  'OverviewScreen',
   'StressMonitorScreen',
   'StressMonitorView',
   'StressTrendsScreen',

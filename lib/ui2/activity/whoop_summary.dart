@@ -202,7 +202,14 @@ class ActivityStatGrid extends StatelessWidget {
   /// (label, value, unit, usual value or null, icon).
   final List<(String, String?, String, String?, bool?)> stats;
   final List<IconData> icons;
-  const ActivityStatGrid({super.key, required this.stats, this.icons = const []});
+
+  /// What the usual is — the header's right-hand words.
+  final String vs;
+  const ActivityStatGrid(
+      {super.key,
+      required this.stats,
+      this.icons = const [],
+      this.vs = 'VS. 30 DAY AVERAGE'});
 
   @override
   Widget build(BuildContext c) {
@@ -262,7 +269,7 @@ class ActivityStatGrid extends StatelessWidget {
         ),
         if (anyUsual)
           Flexible(
-            child: Text('VS. 30 DAY AVERAGE',
+            child: Text(vs,
                 textAlign: TextAlign.right,
                 style: F.over.copyWith(color: p.ink2, letterSpacing: 1.2)),
           ),

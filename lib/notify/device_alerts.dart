@@ -147,9 +147,17 @@ class DeviceAlerts {
   /// smaller time scale.
   Future<void> _queue = Future<void>.value();
 
-  DeviceAlerts({DeviceAlertSink? sink, DeviceAlertStore? store})
+  DeviceAlerts(
+      {DeviceAlertSink? sink,
+      DeviceAlertStore? store,
+      DateTime Function()? localNow})
       : _notes = sink ?? const _NotificationCenterSink(),
-        _store = store ?? const _PrefsDeviceAlertStore();
+        _store = store ?? const _PrefsDeviceAlertStore(),
+        _localNow = localNow ?? DateTime.now;
+
+  /// The wall clock the evening charge nudge reads its hour from. Tests pin
+  /// it, so the low-battery tests do not change result after 19:00.
+  final DateTime Function() _localNow;
 
   /// Completes when all queued alert work has settled. Tests only.
   @visibleForTesting
@@ -374,7 +382,7 @@ class DeviceAlerts {
     if (chargeTonight(
         pct: batteryPct,
         charging: charging,
-        now: DateTime.fromMillisecondsSinceEpoch(nowSec * 1000),
+        now: _localNow(),
         lowPct: _lowPct)) {
       await _io(() => _notes.show(_event(
             osId: NotificationService.idLowBattery,

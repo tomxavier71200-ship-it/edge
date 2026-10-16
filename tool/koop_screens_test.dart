@@ -31,6 +31,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
 import 'package:openstrap_edge/ui2/screens/stress_monitor.dart';
 import 'package:openstrap_edge/ui2/screens/health_monitor.dart';
+import 'package:openstrap_edge/ui2/screens/overview_screen.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
@@ -286,6 +287,7 @@ void main() {
         ?strainRecoveryCard(c, _home),
       ]),
     ),
+    'overview': OverviewScreen(series: _home.series),
     'health_overview': HealthScreen(data: _health, tab: 0),
     'health_monitor': HealthMonitorScreen(tiles: [
       RangeTile(icon: LucideIcons.wind, name: 'Respiratory rate', value: 12.8,
@@ -674,7 +676,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 2300 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 2300 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : name == 'overview' ? 1900 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));
