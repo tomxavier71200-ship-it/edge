@@ -2,6 +2,8 @@
 // stored series, and "today against your own last 30 days". Pure over the
 // points the caller already loaded — nothing is recomputed, nothing filled in.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -144,4 +146,97 @@ List<Widget> weeklyTrendCards(
       const SizedBox(height: S.x3),
     ],
   ];
+}
+
+/// WHOOP web's "Day Recovery": each input today beside yesterday, as two
+/// bars on that input's own scale. An input with neither day stored is left
+/// out; a missing day is "—", never a zero bar.
+class DayPairCard extends StatelessWidget {
+  /// (name, today, yesterday, format).
+  final List<(String, double?, double?, String Function(double))> rows;
+  final Color color;
+  const DayPairCard({super.key, required this.rows, this.color = C.green});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final shown = [for (final r in rows) if (r.$2 != null || r.$3 != null) r];
+    if (shown.isEmpty) return const SizedBox.shrink();
+    Widget bar(double? v, double top, Color col, String Function(double) f) =>
+        Flexible(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 26),
+            child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(v == null ? '—' : f(v),
+                style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 2),
+          Container(
+            height: v == null || top <= 0 ? 2 : 90 * v / top,
+            decoration: BoxDecoration(
+                color: v == null ? p.track : col, borderRadius: R.rSm),
+          ),
+            ]),
+          ),
+        );
+    return Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('TODAY VS. YESTERDAY',
+            style: F.over.copyWith(
+                color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+        const SizedBox(height: S.x3),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          for (final r in shown)
+            Expanded(
+              child: Semantics(
+                label: '${r.$1}: today ${r.$2 == null ? 'none' : r.$4(r.$2!)}, '
+                    'yesterday ${r.$3 == null ? 'none' : r.$4(r.$3!)}',
+                child: ExcludeSemantics(
+                  child: Column(children: [
+                    SizedBox(
+                      height: 90 + MediaQuery.textScalerOf(c).scale(20),
+                      child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            bar(r.$2, [r.$2 ?? 0, r.$3 ?? 0].reduce(math.max),
+                                p.on(color), r.$4),
+                            const SizedBox(width: S.x1),
+                            bar(r.$3, [r.$2 ?? 0, r.$3 ?? 0].reduce(math.max),
+                                p.ink3, r.$4),
+                          ]),
+                    ),
+                    const SizedBox(height: S.x2),
+                    Text(r.$1,
+                        textAlign: TextAlign.center,
+                        style: F.cap.copyWith(color: p.ink2)),
+                  ]),
+                ),
+              ),
+            ),
+        ]),
+        const SizedBox(height: S.x3),
+        Wrap(spacing: S.x4, children: [
+          for (final (name, col) in [('Today', p.on(color)), ('Yesterday', p.ink3)])
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: col, borderRadius: R.rSm)),
+              const SizedBox(width: S.x1),
+              Text(name, style: F.cap.copyWith(color: p.ink2)),
+            ]),
+        ]),
+      ]),
+    );
+  }
+}
+
+/// [pts]' values for today and yesterday.
+(double?, double?) todayAndYesterday(List<ChartPoint> pts, [DateTime? now]) {
+  final n = now ?? DateTime.now();
+  final v = weekValues(pts, [n, DateTime(n.year, n.month, n.day - 1)]);
+  return (v[0], v[1]);
 }

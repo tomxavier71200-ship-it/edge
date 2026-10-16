@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openstrap_edge/ui2/screens/detail_trends.dart' show todayAndYesterday;
 import 'package:openstrap_edge/ui2/screens/overview_screen.dart';
 
 void main() {
@@ -31,5 +32,12 @@ void main() {
     expect(StrainRecoveryPainter.strainFrac(6), closeTo(1 / 6, 1e-9));
     expect(StrainRecoveryPainter.strainFrac(14), closeTo(4 / 6, 1e-9));
     expect(StrainRecoveryPainter.strainFrac(21), 1);
+  });
+
+  test('todayAndYesterday reads the two calendar days, gaps null', () {
+    final now = DateTime(2026, 10, 16, 9);
+    int noon(int d) => DateTime(2026, 10, d, 12).millisecondsSinceEpoch ~/ 1000;
+    expect(todayAndYesterday([(t: noon(16), v: 63), (t: noon(14), v: 60)], now), (63, null));
+    expect(todayAndYesterday([(t: noon(15), v: 59)], now), (null, 59));
   });
 }

@@ -283,6 +283,21 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
           const SizedBox(height: S.x3),
         ],
 
+        // WHOOP web's Day Recovery: the same inputs, today beside yesterday.
+        if ([
+          for (final (k, label, f) in [
+            ('hrv', 'HRV', (double x) => '${x.round()}'),
+            ('resting_hr', 'Resting HR', (double x) => '${x.round()}'),
+            ('sleep_perf', 'Sleep', (double x) => '${x.round()}%'),
+          ])
+            if (todayAndYesterday(d.trends[k] ?? const []) case (final t, final y))
+              (label, t, y, f),
+        ] case final pairs
+            when pairs.any((r) => r.$2 != null || r.$3 != null)) ...[
+          DayPairCard(rows: pairs),
+          const SizedBox(height: S.x3),
+        ],
+
         // WHOOP's Behavior Insights: what you log, against your recovery. The
         // analysis is the journal's own (JournalFindings); this is its door
         // from the screen where the question comes up.

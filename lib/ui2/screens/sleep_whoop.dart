@@ -955,3 +955,125 @@ class _HrPainter extends CustomPainter {
   @override
   bool shouldRepaint(_HrPainter o) => o.t != t || o.hr != hr;
 }
+
+/// One night's stage minutes for [WeekStagesCard]; any of them may be absent.
+typedef NightStages = ({String label, double? deep, double? rem, double? light, double? awake});
+
+/// WHOOP web's week of sleep: one stacked bar per night (SWS at the bottom,
+/// then REM, Light and — when shown — Awake), with WHOOP's Show / Hide awake
+/// switch. Tap a bar to read that night's minutes. A night with no stage
+/// stored is an empty slot, not a short bar.
+class WeekStagesCard extends StatefulWidget {
+  final List<NightStages> nights;
+  const WeekStagesCard({super.key, required this.nights});
+
+  @override
+  State<WeekStagesCard> createState() => _WeekStagesCardState();
+}
+
+class _WeekStagesCardState extends State<WeekStagesCard> {
+  bool _awake = true;
+  int? _picked;
+
+  static const _cols = [C.stageDeep, C.stageRem, C.stageLight, C.stageAwake];
+  static const _names = ['SWS (Deep)', 'REM', 'Light', 'Awake'];
+
+  List<double?> _parts(NightStages n) =>
+      [n.deep, n.rem, n.light, if (_awake) n.awake];
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final nights = widget.nights;
+    double total(NightStages n) =>
+        _parts(n).fold<double>(0, (a, b) => a + (b ?? 0));
+    final top = nights.fold<double>(0, (a, n) => math.max(a, total(n)));
+    final i = _picked;
+    return Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_title('Sleep stages'), style: _titleStyle(p)),
+        const SizedBox(height: S.x2),
+        SubTabs(const ['Show awake', 'Hide awake'], _awake ? 0 : 1,
+            (k) => setState(() => _awake = k == 0), color: C.sleep),
+        const SizedBox(height: S.x3),
+        // One strip to tap or drag across, as every chart here reads: seven
+        // bars are too narrow to be seven buttons.
+        Scrubber(
+          value: i == null ? null : (i + .5) / nights.length,
+          onChanged: (f) {
+            final k = (f * nights.length).floor().clamp(0, nights.length - 1);
+            if (k != _picked) setState(() => _picked = k);
+          },
+          label: 'Sleep stages by night',
+          step: 1 / nights.length,
+          describe: (f) {
+            final k = (f * nights.length).floor().clamp(0, nights.length - 1);
+            final parts = [
+              for (var s = 0; s < _parts(nights[k]).length; s++)
+                if (_parts(nights[k])[s] != null)
+                  '${_names[s]} ${_hm(_parts(nights[k])[s]!)}'
+            ];
+            return '${nights[k].label}: ${parts.isEmpty ? 'no stages' : parts.join(', ')}';
+          },
+          child: SizedBox(
+          height: 150,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            for (var k = 0; k < nights.length; k++) ...[
+              if (k > 0) const SizedBox(width: S.x2),
+              Expanded(
+                child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    for (var s = _parts(nights[k]).length - 1; s >= 0; s--)
+                      if ((_parts(nights[k])[s] ?? 0) > 0)
+                        Container(
+                          height: top <= 0 ? 0 : 140 * _parts(nights[k])[s]! / top,
+                          decoration: BoxDecoration(
+                            color: _cols[s].withValues(
+                                alpha: i == null || i == k ? 1 : .4),
+                            borderRadius: s == _parts(nights[k]).length - 1 ||
+                                    _parts(nights[k])
+                                        .skip(s + 1)
+                                        .every((v) => (v ?? 0) <= 0)
+                                ? const BorderRadius.vertical(top: Radius.circular(4))
+                                : null,
+                          ),
+                        ),
+                  ]),
+              ),
+            ],
+          ]),
+          ),
+        ),
+        const SizedBox(height: S.x1),
+        Row(children: [
+          for (var k = 0; k < nights.length; k++) ...[
+            if (k > 0) const SizedBox(width: S.x2),
+            Expanded(
+              child: Text(nights[k].label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  style: F.cap.copyWith(
+                      color: k == i ? p.ink : p.ink3,
+                      fontWeight: k == i ? FontWeight.w700 : FontWeight.w500)),
+            ),
+          ],
+        ]),
+        const SizedBox(height: S.x3),
+        Wrap(spacing: S.x4, runSpacing: S.x2, children: [
+          for (var s = 0; s < (_awake ? 4 : 3); s++)
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: _cols[s], borderRadius: R.rSm)),
+              const SizedBox(width: S.x1),
+              Text(
+                  i == null
+                      ? _names[s]
+                      : '${_names[s]} ${_parts(nights[i])[s] == null ? '—' : _hm(_parts(nights[i])[s]!)}',
+                  style: F.cap.copyWith(color: p.ink2)),
+            ]),
+        ]),
+      ]),
+    );
+  }
+}

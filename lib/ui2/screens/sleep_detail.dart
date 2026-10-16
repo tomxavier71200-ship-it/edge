@@ -364,7 +364,7 @@ class SleepData {
       sri: (envValue((await repo.getInsights())['regularity'])?['sri'] as num?)
           ?.toDouble(),
       trends: await loadTrendSeries(
-          repo, const ['sleep_perf', 'sleep', 'efficiency', 'deep', 'rem']),
+          repo, const ['sleep_perf', 'sleep', 'efficiency', 'deep', 'rem', 'light']),
       windows: () {
         final out = <NightWindow>[];
         for (final w in wins) {
@@ -868,7 +868,26 @@ class _SleepDetailState extends State<SleepDetail> {
         byDay[dayLabelOf(dd)] == null ? null : axisMin(byDay[dayLabelOf(dd)]!.wake),
     ];
     final sleepCol = p.on(C.sleep);
+    // Awake is each night's time in bed less its sleep, time in bed being its
+    // time asleep over its efficiency — the stage card's own reading.
+    final tstW = week('sleep'), effW = week('efficiency');
+    final deepW = week('deep'), remW = week('rem'), lightW = week('light');
+    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final nights = <NightStages>[
+      for (var i = 0; i < days.length; i++)
+        (
+          label: wd[days[i].weekday - 1],
+          deep: deepW[i],
+          rem: remW[i],
+          light: lightW[i],
+          awake: tstW[i] == null || effW[i] == null || effW[i]! <= 0
+              ? null
+              : math.max(0, tstW[i]! / (effW[i]! / 100) - tstW[i]!).toDouble(),
+        ),
+    ];
     final cards = <Widget>[
+      if (nights.any((n) => n.deep != null || n.rem != null || n.light != null))
+        WeekStagesCard(nights: nights),
       WeekTrendCard(
         title: 'Sleep performance',
         days: days,

@@ -59,7 +59,7 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/home_sections.dart'
-    show CoachBubble, MonitorTiles, StressDashRow;
+    show CoachBubble, DayInReviewCard, MonitorTiles, StressDashRow;
 import 'app_health.dart' show HealthChecksCard, appHealthChecks;
 import '../screens/records_screen.dart' show RecordTile;
 import '../screens/overview_screen.dart' show ActivityGroup, BandHistogram;
@@ -74,6 +74,7 @@ import '../activity/whoop_summary.dart'
 import 'whoop_compare.dart' show Agreement, AgreementCard;
 import '../screens/more_screen.dart' show DoorRow, DoorTile, FeatureCard;
 import '../screens/sleep_whoop.dart';
+import '../screens/detail_trends.dart' show DayPairCard;
 import '../screens/stress_detail.dart';
 import '../screens/screens.dart';
 import '../ui2.dart';
@@ -781,6 +782,23 @@ Map<String, Widget> _nutritionAndWellnessCases() {
         name: 'Cycling',
         sub: 'Today, 12:09',
         trailing: '27:00',
+        onTap: () {}),
+    'week_stages': const WeekStagesCard(nights: [
+      (label: 'Sat', deep: 95, rem: 110, light: 230, awake: 40),
+      (label: 'Sun', deep: 80, rem: 90, light: 200, awake: 35),
+      (label: 'Mon', deep: null, rem: null, light: null, awake: null),
+      (label: 'Tue', deep: 101, rem: 95, light: 215, awake: 28),
+      (label: 'Wed', deep: 88, rem: 120, light: 190, awake: 50),
+      (label: 'Thu', deep: 70, rem: 85, light: 180, awake: 22),
+      (label: 'Fri', deep: 121, rem: 110, light: 125, awake: 37),
+    ]),
+    'day_pair': DayPairCard(rows: [
+      ('HRV', 63, 63, (x) => '${x.round()}'),
+      ('Resting HR', 58, 59, (x) => '${x.round()}'),
+      ('Sleep', 73, null, (x) => '${x.round()}%'),
+    ]),
+    'day_in_review': DayInReviewCard(
+        text: 'Two rides pushed strain to 14.7 on a 57% recovery. Aim for bed by 22:40.',
         onTap: () {}),
     'band_histogram': const BandHistogram(
         title: 'DAY STRAIN',

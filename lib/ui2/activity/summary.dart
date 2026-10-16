@@ -715,6 +715,9 @@ class ActivitySummary extends StatefulWidget {
 class _ActivitySummaryState extends State<ActivitySummary> {
   int tab = 0;
 
+  /// WHOOP web's Raw HR / % of Max switch on the heart-rate chart.
+  bool _pctOfMax = false;
+
   /// A yoga session, a tennis match and an untracked session do not break into
   /// pieces — not "have none today", never. So they do not get the tab. The
   /// card that used to sit inside it explaining its own absence was the tab
@@ -1767,7 +1770,12 @@ class _ActivitySummaryState extends State<ActivitySummary> {
 
   Widget _hrFrame(P p, {double height = 130, String? extra}) {
     final l = AppLocalizations.of(context);
-    final axis = AxisSpec.of(r.hr.whereType<double>());
+    // The same trace as a share of the max HR the zones were set from; only
+    // offered when that max is known.
+    final max = r.zoneMaxHr;
+    final pct = _pctOfMax && max != null && max > 0;
+    final hr = pct ? [for (final v in r.hr) v == null ? null : v / max * 100] : r.hr;
+    final axis = AxisSpec.of(hr.whereType<double>());
     final hard = r.hardMinutes;
     final note = [
       if (hard != null)
@@ -1776,19 +1784,26 @@ class _ActivitySummaryState extends State<ActivitySummary> {
       ?_traceNote,
       ?extra,
     ];
-    return ChartFrame(
+    final frame = ChartFrame(
       title: l?.activitySummaryHeartRateTitle ?? 'HEART RATE',
-      unit: 'bpm',
+      unit: pct ? '% of max' : 'bpm',
       height: height,
       yAxis: axis,
       xLabels: [l?.activitySummaryStart ?? 'Start', hms(r.duration)],
       footnote: note.isEmpty ? null : note.join(' '),
-      series: r.hr,
+      series: hr,
       child: CustomPaint(
           size: Size.infinite,
-          painter: LineChart(r.hr, p.on(C.red),
+          painter: LineChart(hr, p.on(C.red),
               axis: axis, t: animate(context, 1))),
     );
+    if (max == null || max <= 0) return frame;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SubTabs(const ['Raw HR', '% of max'], _pctOfMax ? 1 : 0,
+          (i) => setState(() => _pctOfMax = i == 1), color: C.red),
+      const SizedBox(height: S.x2),
+      frame,
+    ]);
   }
 
   // ─────────── ARCHETYPE BODY ───────────

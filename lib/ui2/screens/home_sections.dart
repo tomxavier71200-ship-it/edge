@@ -1370,3 +1370,34 @@ class _StressDashRowState extends State<StressDashRow> {
     );
   }
 }
+
+/// WHOOP's Day In Review card at the top of My Day: the coach's own line
+/// about today, opening the full briefing. Only when one was written.
+class DayInReviewCard extends StatelessWidget {
+  final String text;
+  final VoidCallback onTap;
+  const DayInReviewCard({super.key, required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Surface(
+      onTap: onTap,
+      semanticLabel: 'Day in review: $text',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(LucideIcons.sparkles, size: 18, color: p.on(kCoachAccent)),
+          const SizedBox(width: S.x2),
+          Expanded(
+            child: Text('DAY IN REVIEW',
+                style: F.over.copyWith(
+                    color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+          ),
+          Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+        ]),
+        const SizedBox(height: S.x2),
+        Text(text, style: F.body.copyWith(color: p.ink, height: 1.4)),
+      ]),
+    );
+  }
+}

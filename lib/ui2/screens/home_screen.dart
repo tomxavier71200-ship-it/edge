@@ -2008,19 +2008,19 @@ const kHomeSections = {
   'day': 'My Day',
   'tonight': "Tonight's sleep",
   'journal': 'Journal check-in',
+  'plan': "Today's plan",
   'dash': 'Dashboard',
   'insight': 'Weekly insight',
-  'plan': "Today's plan",
   'glance': 'At a glance',
   'breakdown': 'Breakdown of your day',
 };
 
 /// Off until turned on. Home defaults to WHOOP's order under the dials: My
-/// Day, Tonight's sleep, the journal prompt, then the Dashboard. At a glance
-/// repeats the dashboard's numbers, and the weekly insight, the plan and the
-/// breakdown all have fuller homes a tap away. Customize turns any of them
+/// Day, Tonight's sleep, the journal prompt, My Plan, then the Dashboard. At
+/// a glance repeats the dashboard's numbers, and the weekly insight and the
+/// breakdown both have fuller homes a tap away. Customize turns any of them
 /// back on.
-const _homeSectionsOff = {'glance', 'insight', 'plan', 'breakdown'};
+const _homeSectionsOff = {'glance', 'insight', 'breakdown'};
 
 /// Bumped by Customize so a Home kept alive under it re-reads the layout.
 final homeLayoutRev = ValueNotifier<int>(0);
@@ -2733,7 +2733,18 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   // Tonight and the plan are skipped on a past day — "3,000 steps
                   // left" or "bed by 22:40" about a day already over is an
                   // instruction, not a fact.
-                  'day' when isToday => [Section('My Day', yourDayCard(c, d))],
+                  'day' when isToday => [
+                    Section(
+                      'My Day',
+                      Column(children: [
+                        if (_review(c) case final w?) ...[
+                          w,
+                          const SizedBox(height: S.x3),
+                        ],
+                        yourDayCard(c, d),
+                      ]),
+                    ),
+                  ],
                   'tonight' when isToday => [
                     Section("Tonight's sleep", _tonight(c, p, d)),
                   ],
@@ -3059,6 +3070,21 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         for (final s in absent) ...[const SizedBox(height: S.x3), s],
       ],
     );
+  }
+
+  /// Today's coach line for the Day In Review card: tonight's sweep once it
+  /// is written, else this morning's briefing. Null without a coach or a line.
+  Widget? _review(BuildContext c) {
+    if (!coachReady(c)) return null;
+    for (final period in [BriefingPeriod.evening, BriefingPeriod.morning]) {
+      final b = BriefingStore.read(period);
+      if (b != null && b.day == todayLabel() && b.oneLiner.trim().isNotEmpty) {
+        return DayInReviewCard(
+            text: b.oneLiner,
+            onTap: () => go(c, AiBriefingScreen(period: period)));
+      }
+    }
+    return null;
   }
 
   Widget _plan(BuildContext c, P p, HomeData d) {
