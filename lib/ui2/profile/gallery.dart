@@ -58,7 +58,8 @@ import '../activity/summary.dart';
 import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
-import '../screens/home_sections.dart' show CoachBubble, MonitorTiles;
+import '../screens/home_sections.dart'
+    show CoachBubble, MonitorTiles, StressDashRow;
 import 'app_health.dart' show HealthChecksCard, appHealthChecks;
 import '../screens/records_screen.dart' show RecordTile;
 import '../activity/whoop_summary.dart'
@@ -754,6 +755,7 @@ Map<String, Widget> _nutritionAndWellnessCases() {
       ('Duration', '1:45:58', '', null, null),
     ]),
     'delta_chip': const DeltaChip('1.8', up: true),
+    'stress_dash_row': const StressDashRow(),
     'glass': Builder(
         builder: (c) => Glass(
             color: P.of(c).card,

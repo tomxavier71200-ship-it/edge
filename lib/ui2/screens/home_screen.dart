@@ -1862,6 +1862,11 @@ class HomeData {
         out[k] = pointsOf(await repo.getChart(specOf(k).chartKey));
       } catch (_) {}
     }
+    // WHOOP's rows that are not charted series (average heart rate, the
+    // week's zone and strength minutes). Overwrites the empty chart reads.
+    try {
+      out.addAll(await dashExtraSeries());
+    } catch (_) {}
     return out;
   }
 

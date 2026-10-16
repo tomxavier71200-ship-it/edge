@@ -9386,6 +9386,26 @@ class LocalDb {
     };
   }
 
+  /// Each served day's average waking heart rate in [fromDay]..[toDay]
+  /// (inclusive): the `hr_stats.avg` the derivation stored on the day, read
+  /// with SQLite's JSON functions in one query. A day that stored none is
+  /// absent, never a zero.
+  static Future<Map<String, double>> dayAvgHr(String fromDay, String toDay) async {
+    final db = await instance;
+    final rows = await db.rawQuery(
+      'SELECT r.day_id AS d, COALESCE('
+      "json_extract(r.payload_json,'\$.hr_stats.avg'), "
+      "json_extract(r.payload_json,'\$.wake_day_features.hr_stats.avg')) AS a "
+      'FROM day_result r $_servedDayJoin '
+      'WHERE r.day_id >= ? AND r.day_id <= ? AND json_valid(r.payload_json)',
+      [fromDay, toDay],
+    );
+    return {
+      for (final r in rows)
+        if (r['a'] is num) r['d'] as String: (r['a'] as num).toDouble(),
+    };
+  }
+
   /// Strength workouts started at or after [fromSec] (epoch seconds; rows
   /// stored in ms are tolerated), not discarded: start, end and duration. A
   /// strength workout is one typed strength / weights / lifting — the app's

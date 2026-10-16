@@ -34,7 +34,10 @@ import 'journal_compose.dart';
 import 'workout_screen.dart' show openActivityPicker;
 import 'log_workout.dart'
     show LogWorkout, Suggestion, WorkoutSuggestionScreen, activeSuggestions;
-import 'metric_detail.dart' show MetricDetail, specOf;
+import 'metric_detail.dart' show MetricDetail, MetricSpec, specOf;
+import 'stress_monitor.dart' show StressMonitorScreen;
+import 'strength_screen.dart' show StrengthScreen;
+import '../../data/db.dart' show LocalDb;
 import 'sleep_detail.dart';
 import 'health_monitor.dart' show StressSparkline;
 import 'stress_detail.dart'
@@ -60,12 +63,22 @@ const kDashMetrics = [
   'deep',
   'rem',
   'active_min',
+  // WHOOP's other rows (see dashExtraSeries).
+  'avg_hr',
+  'sleep_need',
+  'zones_13',
+  'zones_45',
+  'strength_min',
+  'stress_graph',
 ];
 
 /// On by default: WHOOP's dashboard set, as far as this app stores it.
 const _dashDefaultOn = {
   'hrv', 'resting_hr', 'steps', 'calories', 'resp_rate', 'sleep', //
-  'efficiency', 'readiness',
+  'efficiency', 'readiness', 'avg_hr', 'sleep_need', 'zones_13', //
+  'zones_45', 'strength_min',
+  // 'stress_graph' stays off by default: Home's Stress Monitor tile already
+  // shows the same level, and one number twice on one screen is a defect.
 };
 
 /// Metrics with no better direction: the arrow states the direction, never a
@@ -102,17 +115,20 @@ void setDashMetrics(List<({String id, bool on})> v) {
   homeLayoutRev.value++;
 }
 
-String dashName(String k) => specOf(k).title;
+String dashName(String k) => _dashSpec(k).title;
 
 String _fmt(String k, double v) => switch (k) {
-      'sleep' || 'deep' || 'rem' => hm(v),
+      'sleep' || 'deep' || 'rem' || 'sleep_need' => hm(v),
+      'zones_13' || 'zones_45' || 'strength_min' =>
+        '${v.round() ~/ 60}:${(v.round() % 60).toString().padLeft(2, '0')}',
       'strain' || 'resp_rate' => v.toStringAsFixed(1),
       'steps' || 'calories' => thousands(v),
       _ => '${v.round()}',
     };
 
 String _unit(String k) => switch (k) {
-      'sleep' || 'deep' || 'rem' => '',
+      'sleep' || 'deep' || 'rem' || 'sleep_need' => '',
+      'zones_13' || 'zones_45' || 'strength_min' => '',
       'readiness' => '%',
       'stress' => '/100',
       _ => specOf(k).unit,
@@ -168,15 +184,26 @@ Widget dashboardCard(BuildContext c, HomeData d, VoidCallback onEdit) {
   return Column(children: [
     for (var i = 0; i < shown.length; i++) ...[
       if (i > 0) const SizedBox(height: S.x2),
-      _dashRow(c, p, shown[i].id, _upTo(d, d.series[shown[i].id] ?? const []),
-          d.dayId ?? todayLabel()),
+      if (shown[i].id == 'stress_graph')
+        const StressDashRow()
+      else
+        _dashRow(
+            c,
+            p,
+            shown[i].id,
+            _upTo(
+                d,
+                shown[i].id == 'sleep_need'
+                    ? sleepNeedSeries(d)
+                    : d.series[shown[i].id] ?? const []),
+            d.dayId ?? todayLabel()),
     ],
   ]);
 }
 
 Widget _dashRow(
     BuildContext c, P p, String k, List<ChartPoint> pts, String viewing) {
-  final spec = specOf(k);
+  final spec = _dashSpec(k);
   final s = _summary(pts);
   final today = viewing;
 
@@ -193,7 +220,10 @@ Widget _dashRow(
     final day = dayLabelOf(DateTime.fromMillisecondsSinceEpoch(s.last.t * 1000));
     if (day != today) dated = _short(day);
     final avg = s.avg;
-    if (avg == null) {
+    if (avg == null && k == 'sleep_need') {
+      under = 'tonight';
+      said = 'For tonight';
+    } else if (avg == null) {
       under = '${s.n}/$kBaselineMin days';
       said = 'Baseline ${s.n} of $kBaselineMin days';
     } else {
@@ -213,7 +243,16 @@ Widget _dashRow(
   }
 
   return Surface(
-    onTap: () => go(c, MetricDetail(k)),
+    // The extra rows open the screen that holds their detail.
+    onTap: () => go(
+        c,
+        switch (k) {
+          'zones_13' || 'zones_45' => const DayStrainDetail(),
+          'sleep_need' => const SleepDetail(),
+          'strength_min' => const StrengthScreen(),
+          'avg_hr' => const DayStrainDetail(),
+          _ => MetricDetail(k),
+        }),
     semanticLabel:
         '${spec.title}. ${s == null ? 'No data' : _fmt(k, s.last.v)}. $said${dated.isEmpty ? '' : ', from $dated'}',
     child: Row(children: [
@@ -1121,4 +1160,205 @@ String _short(String dayId) {
   if (d == null) return dayId;
   const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return '${wd[d.weekday - 1]} ${d.day}';
+}
+
+// ─────────────── WHOOP's other dashboard rows ───────────────
+//
+// The six rows WHOOP's dashboard carries that `metric_series` does not: a
+// day's average heart rate, sleep needed, the week's minutes in zones 1–3 and
+// 4–5, the week's strength time, and today's stress line. Each comes from
+// what is already stored (the day results, the sessions, today's coach and
+// stress windows) — nothing new is computed beyond adding minutes up.
+
+/// The extra rows' names, units and icons; [specOf] knows only charted
+/// metrics.
+const _extraSpecs = <String, MetricSpec>{
+  'avg_hr': MetricSpec(
+      chartKey: 'avg_hr',
+      title: 'Average heart rate',
+      unit: 'bpm',
+      icon: LucideIcons.heartPulse,
+      higherBetter: false),
+  'sleep_need': MetricSpec(
+      chartKey: 'sleep_need',
+      title: 'Sleep needed',
+      icon: LucideIcons.bedDouble,
+      higherBetter: false),
+  'zones_13': MetricSpec(
+      chartKey: 'zones_13',
+      title: 'HR zones 1-3 (weekly)',
+      icon: LucideIcons.activity),
+  'zones_45': MetricSpec(
+      chartKey: 'zones_45',
+      title: 'HR zones 4-5 (weekly)',
+      icon: LucideIcons.flame),
+  'strength_min': MetricSpec(
+      chartKey: 'strength_min',
+      title: 'Strength activity time',
+      icon: LucideIcons.dumbbell),
+  'stress_graph': MetricSpec(
+      chartKey: 'stress', title: 'Stress monitor', icon: LucideIcons.brain),
+};
+
+MetricSpec _dashSpec(String k) => _extraSpecs[k] ?? specOf(k);
+
+/// A point at local noon of [day] — the same day key the dashboard compares.
+ChartPoint _at(String day, double v) {
+  final d = DateTime.parse(day);
+  return (t: DateTime(d.year, d.month, d.day, 12).millisecondsSinceEpoch ~/ 1000, v: v);
+}
+
+/// One point per day: the sum of [perDay] over that day and the six before
+/// it, for every day that has at least one value in its window. A week with
+/// nothing measured has no point — never a zero week.
+List<ChartPoint> rollingWeek(Map<String, double> perDay, String fromDay, String toDay) {
+  final out = <ChartPoint>[];
+  final a = DateTime.parse(fromDay), b = DateTime.parse(toDay);
+  for (var d = a; !d.isAfter(b); d = DateTime(d.year, d.month, d.day + 1)) {
+    var sum = 0.0;
+    var any = false;
+    for (var i = 0; i < 7; i++) {
+      final v = perDay[dayLabelOf(DateTime(d.year, d.month, d.day - i))];
+      if (v != null) {
+        sum += v;
+        any = true;
+      }
+    }
+    if (any) out.add(_at(dayLabelOf(d), sum));
+  }
+  return out;
+}
+
+/// The extra rows' histories, from 40 days of stored days and sessions.
+/// Each read stands alone; a failed one costs its row.
+Future<Map<String, List<ChartPoint>>> dashExtraSeries() async {
+  final now = DateTime.now();
+  final to = dayLabelOf(now);
+  final from = dayLabelOf(DateTime(now.year, now.month, now.day - 40));
+  final out = <String, List<ChartPoint>>{};
+  try {
+    final hr = await LocalDb.dayAvgHr(from, to);
+    out['avg_hr'] = [
+      for (final e in (hr.entries.toList()..sort((x, y) => x.key.compareTo(y.key))))
+        _at(e.key, e.value),
+    ];
+  } catch (_) {}
+  try {
+    final z = await LocalDb.dayZoneMinutes(from, to);
+    double? sum(List<double?> v, int a, int b) {
+      final xs = [for (var i = a; i < b; i++) ?v[i]];
+      return xs.isEmpty ? null : xs.reduce((p, q) => p + q);
+    }
+
+    out['zones_13'] = rollingWeek(
+        {for (final e in z.entries) e.key: ?sum(e.value, 0, 3)},
+        from,
+        to);
+    out['zones_45'] = rollingWeek(
+        {for (final e in z.entries) e.key: ?sum(e.value, 3, 5)},
+        from,
+        to);
+  } catch (_) {}
+  try {
+    final since = DateTime(now.year, now.month, now.day - 47).millisecondsSinceEpoch ~/ 1000;
+    final perDay = <String, double>{};
+    for (final r in await LocalDb.strengthSessionsSince(since)) {
+      final ts = (r['start_ts'] as num?)?.toInt();
+      final m = (r['duration_min'] as num?)?.toDouble();
+      if (ts == null || m == null) continue;
+      final sec = ts > 1000000000000 ? ts ~/ 1000 : ts;
+      final day = dayLabelOf(DateTime.fromMillisecondsSinceEpoch(sec * 1000));
+      perDay[day] = (perDay[day] ?? 0) + m;
+    }
+    // Strength is a real zero on a week with none logged: the sessions table
+    // is the whole record of it, so an empty week is 0 minutes, not unknown.
+    final weeks = rollingWeek(perDay, from, to);
+    final byDay = {for (final p in weeks) p.t: p.v};
+    out['strength_min'] = [
+      for (var d = DateTime.parse(from);
+          !d.isAfter(DateTime.parse(to));
+          d = DateTime(d.year, d.month, d.day + 1))
+        (t: DateTime(d.year, d.month, d.day, 12).millisecondsSinceEpoch ~/ 1000,
+         v: byDay[DateTime(d.year, d.month, d.day, 12).millisecondsSinceEpoch ~/ 1000] ?? 0),
+    ];
+  } catch (_) {}
+  return out;
+}
+
+/// Sleep needed tonight, from the coach — today only; the coach keeps no
+/// history of it, so this row has no 30-day average to show.
+List<ChartPoint> sleepNeedSeries(HomeData d) {
+  final v = d.sleepNeedMin.value;
+  return v == null ? const [] : [_at(todayLabel(), v.toDouble())];
+}
+
+/// WHOOP's Stress Monitor row: today's newest level and the day's line.
+class StressDashRow extends StatefulWidget {
+  const StressDashRow({super.key});
+
+  @override
+  State<StressDashRow> createState() => _StressDashRowState();
+}
+
+class _StressDashRowState extends State<StressDashRow> {
+  List<StressReading> _r = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final repo = repoOf(context);
+    if (repo == null) return;
+    try {
+      final today = todayLabel();
+      final r = stressReadings(await repo.getDayStress(today), today)
+        ..sort((a, b) => a.at.compareTo(b.at));
+      if (mounted) setState(() => _r = r);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final last = _r.length >= kStressMinWindows ? _r.last : null;
+    final v = last?.v;
+    final lvl = v == null ? null : stressLevelOf(v);
+    return Surface(
+      onTap: () => go(c, const StressMonitorScreen()),
+      semanticLabel: v == null
+          ? 'Stress monitor, not enough readings yet today'
+          : 'Stress monitor, ${v.toStringAsFixed(1)} ${kStressLevelWords[lvl!]}',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(LucideIcons.brain, size: 20, color: p.ink3),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Text('STRESS MONITOR',
+                style: F.over.copyWith(
+                    color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+          ),
+          Text(v == null ? '—' : v.toStringAsFixed(1),
+              style: F.n34.copyWith(color: v == null ? p.ink3 : p.ink)),
+          const SizedBox(width: S.x2),
+          if (lvl != null)
+            Text(kStressLevelWords[lvl].toUpperCase(),
+                style: F.over.copyWith(
+                    color: p.on(kStressLevelColors[lvl]),
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w700)),
+        ]),
+        if (_r.length >= 2) ...[
+          const SizedBox(height: S.x3),
+          SizedBox(height: 56, child: StressSparkline(_r)),
+        ] else ...[
+          const SizedBox(height: S.x2),
+          Text(_r.isEmpty ? 'No readings yet today' : 'Calculating',
+              style: F.cap.copyWith(color: p.ink3)),
+        ],
+      ]),
+    );
+  }
 }

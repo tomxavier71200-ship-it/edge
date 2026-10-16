@@ -86,6 +86,10 @@ final _home = HomeData(
     'sleep': _pts(30, 400, 120),
     'efficiency': _pts(30, 88, 10),
     'calories': _pts(30, 2308, 600),
+    'avg_hr': _pts(30, 79, 8),
+    'zones_13': _pts(30, 330, 120),
+    'zones_45': _pts(30, 22, 30),
+    'strength_min': _pts(30, 45, 60),
   },
 );
 
@@ -670,7 +674,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 1500 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 2300 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));
