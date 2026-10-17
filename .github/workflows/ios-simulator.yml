@@ -1,0 +1,86 @@
+name: ios-simulator
+
+# The iPhone app built for the iOS SIMULATOR, so it can be tried in a browser
+# from a machine that is not a Mac. Each push to whoop-ui builds Runner.app,
+# attaches it to the run, and — when the repo has an APPETIZE_API_TOKEN
+# secret — uploads it to Appetize.io, which runs it on a virtual iPhone in a
+# browser tab. The simulator has no Bluetooth: no band, sample/imported data
+# only.
+#
+# Setup (once): create a free Appetize.io account, make an API token there,
+# and add it as the repository secret APPETIZE_API_TOKEN. The first upload
+# creates the app and prints its link in the run summary; save the public key
+# it shows as the repository VARIABLE APPETIZE_PUBLIC_KEY so later pushes
+# update that same link instead of making a new one.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['whoop-ui']
+
+permissions:
+  contents: read
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.6'
+
+      - name: Write blank .env
+        run: |
+          echo "COMPANION_URL=" > .env
+          echo "BACKEND_URL=" >> .env
+
+      - name: Install flutterfire (required by Crashlytics Xcode build phase)
+        run: dart pub global activate flutterfire_cli 1.4.0
+
+      - run: flutter pub get
+
+      # Simulator builds are debug-only in Flutter; a debug app still starts
+      # on its own on a simulator, with the DEBUG ribbon.
+      - name: Build for the iOS simulator
+        run: flutter build ios --simulator --debug --dart-define-from-file=.env
+
+      - name: Zip the app
+        run: |
+          cd build/ios/iphonesimulator
+          zip -qr -y "$GITHUB_WORKSPACE/koop-simulator.zip" Runner.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: koop-simulator
+          path: koop-simulator.zip
+          retention-days: 14
+
+      - name: Upload to Appetize
+        env:
+          APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+          APPETIZE_PUBLIC_KEY: ${{ vars.APPETIZE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$APPETIZE_API_TOKEN" ]; then
+            echo "No APPETIZE_API_TOKEN secret; skipping the upload." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          url=https://api.appetize.io/v1/apps
+          [ -n "$APPETIZE_PUBLIC_KEY" ] && url="$url/$APPETIZE_PUBLIC_KEY"
+          curl -sS --fail-with-body -X POST "$url" \
+            -H "X-API-KEY: $APPETIZE_API_TOKEN" \
+            -F "file=@koop-simulator.zip" -F "platform=ios" \
+            -F "note=Koop ${{ github.sha }}" -o resp.json
+          key=$(python3 -c "import json;print(json.load(open('resp.json'))['publicKey'])")
+          {
+            echo "### Koop on a virtual iPhone"
+            echo "Open: https://appetize.io/app/$key"
+            if [ -z "$APPETIZE_PUBLIC_KEY" ]; then
+              echo ""
+              echo "Save \`$key\` as the repository variable APPETIZE_PUBLIC_KEY so the next push updates this link."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
