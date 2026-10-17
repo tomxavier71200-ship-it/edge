@@ -1858,6 +1858,8 @@ class HomeData {
   ) async {
     final out = <String, List<ChartPoint>>{};
     for (final k in kDashMetrics) {
+      // The extra rows are not charted series; dashExtraSeries reads them.
+      if (isDashExtra(k)) continue;
       try {
         out[k] = pointsOf(await repo.getChart(specOf(k).chartKey));
       } catch (_) {}
@@ -1865,7 +1867,7 @@ class HomeData {
     // WHOOP's rows that are not charted series (average heart rate, the
     // week's zone and strength minutes). Overwrites the empty chart reads.
     try {
-      out.addAll(await dashExtraSeries());
+      out.addAll(await dashExtraSeries(repo));
     } catch (_) {}
     return out;
   }
@@ -2008,7 +2010,7 @@ const kHomeSections = {
   'day': 'My Day',
   'tonight': "Tonight's sleep",
   'journal': 'Journal check-in',
-  'plan': "Today's plan",
+  'plan': 'My Plan',
   'dash': 'Dashboard',
   'insight': 'Weekly insight',
   'glance': 'At a glance',
@@ -2773,7 +2775,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   ],
                   'plan' when isToday => [
                     Section(
-                      l?.homeTodaysPlan ?? "Today's plan",
+                      // WHOOP's name for it: the week's goals and today's.
+                      'My Plan',
                       _plan(c, p, d),
                     ),
                   ],
@@ -3176,8 +3179,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             ),
           );
 
+    final now = DateTime.now();
+    final goals = weekGoals(d.series, d.stepGoal, now);
     return Column(
       children: [
+        // WHOOP's My Plan: the week's goals, then today's.
+        if (goals.isNotEmpty) ...[
+          WeekPlanCard(goals: goals, daysLeft: 7 - now.weekday),
+          const SizedBox(height: S.x3),
+        ],
         planBody,
         const SizedBox(height: S.x3),
         _briefingDoor(c, d),

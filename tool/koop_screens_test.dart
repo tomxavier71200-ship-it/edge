@@ -91,6 +91,15 @@ final _home = HomeData(
     'zones_13': _pts(30, 330, 120),
     'zones_45': _pts(30, 22, 30),
     'strength_min': _pts(30, 45, 60),
+    'zones_all': _pts(30, 360, 120),
+    'vo2max': _pts(6, 44, 3),
+    'sleep_perf': _pts(30, 72, 20),
+    'restorative_pct': _pts(30, 52, 10),
+    'restorative_h': _pts(30, 190, 40),
+    'time_in_bed': _pts(30, 470, 60),
+    'sleep_debt': _pts(1, 89, 0),
+    'consistency': _pts(1, 49, 0),
+    'weight': _pts(1, 74.5, 0),
   },
 );
 
@@ -282,6 +291,8 @@ void main() {
     ]),
     'dashboard': Builder(
       builder: (c) => ListView(padding: const EdgeInsets.all(16), children: [
+        WeekPlanCard(goals: weekGoals(_home.series, 8000, DateTime.now()), daysLeft: 1),
+        const SizedBox(height: 8),
         dashboardCard(c, _home, () {}),
         const SizedBox(height: 8),
         ?strainRecoveryCard(c, _home),
@@ -676,7 +687,7 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 2300 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : name == 'overview' ? 1900 : 844) * 2);
+      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 3600 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : name == 'overview' ? 1900 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

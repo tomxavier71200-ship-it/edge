@@ -59,7 +59,7 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/home_sections.dart'
-    show CoachBubble, DayInReviewCard, MonitorTiles, StressDashRow;
+    show CoachBubble, DayInReviewCard, MonitorTiles, StressDashRow, WeekPlanCard;
 import 'app_health.dart' show HealthChecksCard, appHealthChecks;
 import '../screens/records_screen.dart' show RecordTile;
 import '../screens/overview_screen.dart' show ActivityGroup, BandHistogram;
@@ -818,6 +818,11 @@ Map<String, Widget> _nutritionAndWellnessCases() {
               sub: 'Today · 7:05 AM – 7:51 AM',
               trailing: '0:46:00'),
         ]),
+    'week_plan': const WeekPlanCard(daysLeft: 1, goals: [
+      (name: '69%+ Sleep performance', met: 6, days: 7),
+      (name: '92%+ Sleep efficiency', met: 4, days: 7),
+      (name: '8,000+ steps', met: 0, days: 7),
+    ]),
     'record_tile': const RecordTile(
         icon: LucideIcons.activity,
         color: C.green,

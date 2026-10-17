@@ -38,6 +38,9 @@ import 'metric_detail.dart' show MetricDetail, MetricSpec, specOf;
 import 'stress_monitor.dart' show StressMonitorScreen;
 import 'strength_screen.dart' show StrengthScreen;
 import 'overview_screen.dart' show OverviewScreen;
+import 'vo2max_screen.dart' show Vo2maxScreen, vo2Points;
+import '../profile/profile.dart' show ProfileHome;
+import '../../data/local_repository.dart' show LocalRepository;
 import '../../data/db.dart' show LocalDb;
 import 'sleep_detail.dart';
 import 'health_monitor.dart' show StressSparkline;
@@ -71,20 +74,43 @@ const kDashMetrics = [
   'zones_45',
   'strength_min',
   'stress_graph',
+  // The rest of WHOOP's Customize list.
+  'vo2max',
+  'sleep_perf',
+  'restorative_pct',
+  'sleep_debt',
+  'consistency',
+  'zones_all',
+  'restorative_h',
+  'time_in_bed',
+  'weight',
+  'lean_mass',
 ];
 
 /// On by default: WHOOP's dashboard set, as far as this app stores it.
 const _dashDefaultOn = {
   'hrv', 'resting_hr', 'steps', 'calories', 'resp_rate', 'sleep', //
   'efficiency', 'readiness', 'avg_hr', 'sleep_need', 'zones_13', //
-  'zones_45', 'strength_min',
+  'zones_45', 'strength_min', 'vo2max', 'sleep_perf', 'restorative_pct', //
+  'sleep_debt', 'consistency',
+  // Off by default, as WHOOP lists them under "Add to my dashboard":
+  // zones_all, restorative_h, time_in_bed, weight, lean_mass.
   // 'stress_graph' stays off by default: Home's Stress Monitor tile already
   // shows the same level, and one number twice on one screen is a defect.
 };
 
+/// Rows the app keeps no history for: today's value only, and what the
+/// under-line says in place of a 30-day average.
+const _single = {
+  'sleep_need': 'tonight',
+  'sleep_debt': 'today',
+  'consistency': 'last 4 weeks',
+  'weight': 'from your profile',
+};
+
 /// Metrics with no better direction: the arrow states the direction, never a
 /// verdict.
-const _neutral = {'resp_rate', 'calories'};
+const _neutral = {'resp_rate', 'calories', 'weight', 'lean_mass', 'time_in_bed'};
 
 const _kDashKey = 'ui.dash_metrics';
 
@@ -119,8 +145,10 @@ void setDashMetrics(List<({String id, bool on})> v) {
 String dashName(String k) => _dashSpec(k).title;
 
 String _fmt(String k, double v) => switch (k) {
-      'sleep' || 'deep' || 'rem' || 'sleep_need' => hm(v),
-      'zones_13' || 'zones_45' || 'strength_min' =>
+      'sleep' || 'deep' || 'rem' || 'sleep_need' || 'sleep_debt' || //
+      'restorative_h' || 'time_in_bed' => hm(v),
+      'weight' || 'lean_mass' => v.toStringAsFixed(1),
+      'zones_13' || 'zones_45' || 'zones_all' || 'strength_min' =>
         '${v.round() ~/ 60}:${(v.round() % 60).toString().padLeft(2, '0')}',
       'strain' || 'resp_rate' => v.toStringAsFixed(1),
       'steps' || 'calories' => thousands(v),
@@ -128,9 +156,11 @@ String _fmt(String k, double v) => switch (k) {
     };
 
 String _unit(String k) => switch (k) {
-      'sleep' || 'deep' || 'rem' || 'sleep_need' => '',
-      'zones_13' || 'zones_45' || 'strength_min' => '',
-      'readiness' => '%',
+      'sleep' || 'deep' || 'rem' || 'sleep_need' || 'sleep_debt' || //
+      'restorative_h' || 'time_in_bed' => '',
+      'zones_13' || 'zones_45' || 'zones_all' || 'strength_min' || 'vo2max' => '',
+      'readiness' || 'sleep_perf' || 'restorative_pct' || 'consistency' => '%',
+      'weight' || 'lean_mass' => 'kg',
       'stress' => '/100',
       _ => specOf(k).unit,
     };
@@ -215,15 +245,18 @@ Widget _dashRow(
   IconData? arrow;
   Color arrowColor = p.ink3;
   if (s == null) {
-    under = '';
-    said = 'No data yet';
+    // The band cannot weigh anything: lean mass comes only from a scale.
+    under = k == 'lean_mass' ? 'needs a scale' : '';
+    said = k == 'lean_mass'
+        ? 'Not measured; it needs a body-composition scale'
+        : 'No data yet';
   } else {
     final day = dayLabelOf(DateTime.fromMillisecondsSinceEpoch(s.last.t * 1000));
     if (day != today) dated = _short(day);
     final avg = s.avg;
-    if (avg == null && k == 'sleep_need') {
-      under = 'tonight';
-      said = 'For tonight';
+    if (avg == null && _single.containsKey(k)) {
+      under = _single[k]!;
+      said = _single[k]!;
     } else if (avg == null) {
       under = '${s.n}/$kBaselineMin days';
       said = 'Baseline ${s.n} of $kBaselineMin days';
@@ -251,7 +284,12 @@ Widget _dashRow(
           'zones_13' || 'zones_45' => const DayStrainDetail(),
           'sleep_need' => const SleepDetail(),
           'strength_min' => const StrengthScreen(),
-          'avg_hr' => const DayStrainDetail(),
+          'avg_hr' || 'zones_all' => const DayStrainDetail(),
+          'vo2max' => const Vo2maxScreen(),
+          'sleep_perf' || 'restorative_pct' || 'restorative_h' || //
+          'time_in_bed' || 'sleep_debt' || 'consistency' =>
+            const SleepDetail(),
+          'weight' || 'lean_mass' => const ProfileHome(),
           _ => MetricDetail(k),
         }),
     semanticLabel:
@@ -1204,11 +1242,41 @@ const _extraSpecs = <String, MetricSpec>{
       chartKey: 'strength_min',
       title: 'Strength activity time',
       icon: LucideIcons.dumbbell),
+  'vo2max': MetricSpec(
+      chartKey: 'vo2max', title: 'VO₂ max', icon: LucideIcons.gauge),
+  'sleep_perf': MetricSpec(
+      chartKey: 'sleep_perf', title: 'Sleep performance', icon: LucideIcons.moon),
+  'restorative_pct': MetricSpec(
+      chartKey: 'restorative_pct',
+      title: 'Restorative sleep (%)',
+      icon: LucideIcons.batteryCharging),
+  'restorative_h': MetricSpec(
+      chartKey: 'restorative_h',
+      title: 'Restorative sleep (hours)',
+      icon: LucideIcons.batteryCharging),
+  'sleep_debt': MetricSpec(
+      chartKey: 'sleep_debt',
+      title: 'Sleep debt',
+      icon: LucideIcons.hourglass,
+      higherBetter: false),
+  'consistency': MetricSpec(
+      chartKey: 'consistency', title: 'Sleep consistency', icon: LucideIcons.repeat),
+  'zones_all': MetricSpec(
+      chartKey: 'zones_all', title: 'HR zones all (weekly)', icon: LucideIcons.heart),
+  'time_in_bed': MetricSpec(
+      chartKey: 'time_in_bed', title: 'Time in bed', icon: LucideIcons.bed),
+  'weight': MetricSpec(chartKey: 'weight', title: 'Weight', icon: LucideIcons.scale),
+  'lean_mass': MetricSpec(
+      chartKey: 'lean_mass', title: 'Lean body mass', icon: LucideIcons.personStanding),
   'stress_graph': MetricSpec(
       chartKey: 'stress', title: 'Stress monitor', icon: LucideIcons.brain),
 };
 
 MetricSpec _dashSpec(String k) => _extraSpecs[k] ?? specOf(k);
+
+/// Whether [k] is one of the rows [dashExtraSeries] reads, not a charted
+/// series.
+bool isDashExtra(String k) => _extraSpecs.containsKey(k);
 
 /// A point at local noon of [day] — the same day key the dashboard compares.
 ChartPoint _at(String day, double v) {
@@ -1239,7 +1307,7 @@ List<ChartPoint> rollingWeek(Map<String, double> perDay, String fromDay, String 
 
 /// The extra rows' histories, from 40 days of stored days and sessions.
 /// Each read stands alone; a failed one costs its row.
-Future<Map<String, List<ChartPoint>>> dashExtraSeries() async {
+Future<Map<String, List<ChartPoint>>> dashExtraSeries([LocalRepository? repo]) async {
   final now = DateTime.now();
   final to = dayLabelOf(now);
   final from = dayLabelOf(DateTime(now.year, now.month, now.day - 40));
@@ -1266,6 +1334,10 @@ Future<Map<String, List<ChartPoint>>> dashExtraSeries() async {
         {for (final e in z.entries) e.key: ?sum(e.value, 3, 5)},
         from,
         to);
+    out['zones_all'] = rollingWeek(
+        {for (final e in z.entries) e.key: ?sum(e.value, 0, 5)},
+        from,
+        to);
   } catch (_) {}
   try {
     final since = DateTime(now.year, now.month, now.day - 47).millisecondsSinceEpoch ~/ 1000;
@@ -1290,7 +1362,69 @@ Future<Map<String, List<ChartPoint>>> dashExtraSeries() async {
          v: byDay[DateTime(d.year, d.month, d.day, 12).millisecondsSinceEpoch ~/ 1000] ?? 0),
     ];
   } catch (_) {}
+  if (repo != null) out.addAll(await sleepDashSeries(repo));
   return out;
+}
+
+/// The sleep, VO₂ max and profile rows, from what is already stored: the
+/// nightly series, the runs that banked a VO₂ max, the coach's debt and
+/// regularity for today, and the weight in the profile. Each read stands
+/// alone; a failed one costs only its rows.
+Future<Map<String, List<ChartPoint>>> sleepDashSeries(LocalRepository repo) async {
+  final out = <String, List<ChartPoint>>{};
+  try {
+    out['sleep_perf'] = pointsOf(await repo.getChart('sleep_perf'));
+  } catch (_) {}
+  try {
+    Map<String, ChartPoint> byDay(Object? chart) => {
+          for (final p in pointsOf(chart))
+            dayLabelOf(DateTime.fromMillisecondsSinceEpoch(p.t * 1000)): p,
+        };
+    final tst = byDay(await repo.getChart('sleep'));
+    final deep = byDay(await repo.getChart('deep'));
+    final rem = byDay(await repo.getChart('rem'));
+    final eff = byDay(await repo.getChart('efficiency'));
+    out.addAll(restorativeSeries(tst, deep, rem, eff));
+  } catch (_) {}
+  try {
+    final n = DateTime.now();
+    final from = DateTime(n.year, n.month - 6, n.day).millisecondsSinceEpoch ~/ 1000;
+    out['vo2max'] = vo2Points(await repo.getSessions(from: from, includeDetected: false));
+  } catch (_) {}
+  try {
+    final cd = await repo.getInsights();
+    final debtH = envValue(cd['sleep_debt'])?['debt_hours'] as num?;
+    final sri = envValue(cd['regularity'])?['sri'] as num?;
+    if (debtH != null) out['sleep_debt'] = [_at(todayLabel(), debtH * 60.0)];
+    if (sri != null) out['consistency'] = [_at(todayLabel(), sri.toDouble())];
+  } catch (_) {}
+  try {
+    final w = (await repo.getProfile())['weight_kg'] as num?;
+    if (w != null && w > 0) out['weight'] = [_at(todayLabel(), w.toDouble())];
+  } catch (_) {}
+  return out;
+}
+
+/// Per night: restorative minutes (deep + REM), restorative share of time
+/// asleep, and time in bed (asleep over efficiency — the stage card's own
+/// reading). A night missing any input has no point for that row.
+Map<String, List<ChartPoint>> restorativeSeries(
+    Map<String, ChartPoint> tst,
+    Map<String, ChartPoint> deep,
+    Map<String, ChartPoint> rem,
+    Map<String, ChartPoint> eff) {
+  final days = tst.keys.toList()..sort();
+  final h = <ChartPoint>[], pct = <ChartPoint>[], bed = <ChartPoint>[];
+  for (final d in days) {
+    final t = tst[d]!;
+    final dp = deep[d]?.v, rm = rem[d]?.v, ef = eff[d]?.v;
+    if (dp != null && rm != null) {
+      h.add((t: t.t, v: dp + rm));
+      if (t.v > 0) pct.add((t: t.t, v: (dp + rm) / t.v * 100));
+    }
+    if (ef != null && ef > 0) bed.add((t: t.t, v: t.v / (ef / 100)));
+  }
+  return {'restorative_h': h, 'restorative_pct': pct, 'time_in_bed': bed};
 }
 
 /// Sleep needed tonight, from the coach — today only; the coach keeps no
@@ -1397,6 +1531,119 @@ class DayInReviewCard extends StatelessWidget {
         ]),
         const SizedBox(height: S.x2),
         Text(text, style: F.body.copyWith(color: p.ink, height: 1.4)),
+      ]),
+    );
+  }
+}
+
+// ─────────────── My Plan: this week's goals ───────────────
+
+/// One weekly goal: what it asks, and on how many of the week's days it was
+/// met so far.
+typedef WeekGoal = ({String name, int met, int days});
+
+/// WHOOP's My Plan goals for the calendar week (Monday to Sunday) holding
+/// [now]: sleep performance and sleep efficiency at or above the person's own
+/// average of the 30 days before the week, and the step goal. A goal with
+/// under [kBaselineMin] days to average is left out, never set to a made-up
+/// target; a day with no value does not count as met.
+List<WeekGoal> weekGoals(
+    Map<String, List<ChartPoint>> series, int stepGoal, DateTime now) {
+  final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
+  final weekDays = [for (var i = 0; i < 7; i++) dayLabelOf(DateTime(monday.year, monday.month, monday.day + i))];
+  Map<String, double> byDay(String k) => {
+        for (final p in series[k] ?? const <ChartPoint>[])
+          dayLabelOf(DateTime.fromMillisecondsSinceEpoch(p.t * 1000)): p.v,
+      };
+  double? usual(Map<String, double> m) {
+    final from = dayLabelOf(DateTime(monday.year, monday.month, monday.day - 30));
+    final start = weekDays.first;
+    final xs = [
+      for (final e in m.entries)
+        if (e.key.compareTo(from) >= 0 && e.key.compareTo(start) < 0) e.value,
+    ];
+    return xs.length < kBaselineMin ? null : xs.reduce((a, b) => a + b) / xs.length;
+  }
+
+  int met(Map<String, double> m, double target) =>
+      weekDays.where((d) => (m[d] ?? double.negativeInfinity) >= target).length;
+
+  final out = <WeekGoal>[];
+  for (final (k, label) in [('sleep_perf', 'Sleep performance'), ('efficiency', 'Sleep efficiency')]) {
+    final m = byDay(k);
+    final u = usual(m);
+    if (u != null) {
+      out.add((name: '${u.round()}%+ $label', met: met(m, u.roundToDouble()), days: 7));
+    }
+  }
+  if (stepGoal > 0) {
+    out.add((name: '${thousands(stepGoal)}+ steps', met: met(byDay('steps'), stepGoal.toDouble()), days: 7));
+  }
+  return out;
+}
+
+/// WHOOP's My Plan card: the week's goals with how many days each was met,
+/// how much of the week's plan is done, and the days left.
+class WeekPlanCard extends StatelessWidget {
+  final List<WeekGoal> goals;
+
+  /// Days of the week after today; 0 on Sunday.
+  final int daysLeft;
+  const WeekPlanCard({super.key, required this.goals, required this.daysLeft});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final total = goals.fold<int>(0, (a, g) => a + g.days);
+    final done = goals.fold<int>(0, (a, g) => a + g.met);
+    final pct = total == 0 ? 0 : (done / total * 100).round();
+    return Surface(
+      semanticLabel: "This week's plan, $pct percent accomplished, "
+          '${daysLeft == 0 ? 'last day' : '$daysLeft days left'}. '
+          '${[for (final g in goals) '${g.name}: ${g.met} of ${g.days} days'].join('. ')}',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("THIS WEEK'S PLAN",
+                  style: F.over.copyWith(
+                      color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(daysLeft == 0 ? 'Last day' : '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left',
+                  style: F.cap.copyWith(color: p.ink3)),
+            ]),
+          ),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('$pct%', style: F.n34.copyWith(color: p.ink)),
+            Text('ACCOMPLISHED',
+                style: F.over.copyWith(color: p.ink3, letterSpacing: 1.2)),
+          ]),
+        ]),
+        for (final g in goals) ...[
+          const SizedBox(height: S.x3),
+          Row(children: [
+            Expanded(
+              child: Text(g.name,
+                  style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+            ),
+            Text('${g.met}/${g.days}',
+                style: F.n17.copyWith(color: g.met > 0 ? p.on(C.green) : p.ink3)),
+          ]),
+          const SizedBox(height: S.x1),
+          Row(children: [
+            for (var i = 0; i < g.days; i++) ...[
+              if (i > 0) const SizedBox(width: 3),
+              Expanded(
+                child: Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                      color: i < g.met ? p.on(C.green) : p.track,
+                      borderRadius: R.rPill),
+                ),
+              ),
+            ],
+          ]),
+        ],
       ]),
     );
   }
