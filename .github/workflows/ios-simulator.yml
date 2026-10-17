@@ -46,8 +46,18 @@ jobs:
 
       # Simulator builds are debug-only in Flutter; a debug app still starts
       # on its own on a simulator, with the DEBUG ribbon.
+      # The Watch companion makes Flutter ask for a simulator device id, so
+      # boot the newest available iPhone simulator and build for it.
       - name: Build for the iOS simulator
-        run: flutter build ios --simulator --debug --dart-define-from-file=.env
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          ios=[(k,x) for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')]
+          print(sorted(ios,key=lambda t:t[0])[-1][1]['udid'])")
+          echo "Simulator: $udid"
+          xcrun simctl boot "$udid" || true
+          flutter build ios --simulator --debug -d "$udid" --dart-define-from-file=.env
 
       - name: Zip the app
         run: |
