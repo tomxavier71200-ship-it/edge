@@ -25,6 +25,7 @@ import '../compute/onehz_pipeline.dart' show kUnknownAbsenceNote, needInputNote;
 import '../compute/profile.dart';
 import 'package:openstrap_protocol/openstrap_protocol.dart' as proto;
 import 'package:openstrap_analytics/onehz.dart' as ana;
+import '../compute/quiet_level.dart' show kQuietHistoryDays, personalQuietHrr;
 
 import 'day_label.dart';
 import 'db.dart';
@@ -2206,6 +2207,17 @@ class LocalRepositoryImpl extends LocalRepository {
     }
   }
 
+  /// The quiet-waking level session strain subtracts — the same trailing
+  /// median the day's strain uses (quiet_level.dart).
+  Future<double> _quietHrr() async {
+    try {
+      return personalQuietHrr(
+          await LocalDb.trailingSeriesValues('quiet_hrr', kQuietHistoryDays));
+    } catch (_) {
+      return ana.quietWakingHrr;
+    }
+  }
+
   @override
   Future<Map<String, dynamic>> getWorkouts({String range = 'month'}) async {
     final now = DateTime.now();
@@ -2849,6 +2861,7 @@ class LocalRepositoryImpl extends LocalRepository {
       // calorie anchor; the two are named separately because they can now be
       // different ceilings.
       zoneSet: _zoneSetFor(deviceFamily, await _zoneAnchors()),
+      quietHrr: await _quietHrr(),
     );
 
     final row = buildManualSessionRow(
@@ -2960,6 +2973,7 @@ class LocalRepositoryImpl extends LocalRepository {
         restingHr: restingHrForSession,
         zoneSet: _zoneSetFor(
             row['device_family'] as String?, await _zoneAnchors()),
+        quietHrr: await _quietHrr(),
       );
       // The peak is smoothed inside `computeManualSessionStats` now — one
       // definition for the manual save, this re-score and the workout list

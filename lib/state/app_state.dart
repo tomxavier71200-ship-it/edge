@@ -18,6 +18,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:openstrap_analytics/onehz.dart' as ana;
+import '../compute/quiet_level.dart' show kQuietHistoryDays, personalQuietHrr;
 import 'package:openstrap_protocol/openstrap_protocol.dart' as proto;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6049,10 +6050,16 @@ class AppState extends ChangeNotifier {
   double? _observedCeilingBpm;
   List<double> _rhr28 = const [];
 
+  /// The quiet-waking level a live session's strain subtracts — the same
+  /// trailing median the day uses (quiet_level.dart).
+  double _quietHrrUsed = ana.quietWakingHrr;
+
   Future<void> _refreshNightlyRhr() async {
     try {
       _observedCeilingBpm = (await LocalDb.observedHrCeiling())?.bpm;
       _rhr28 = await LocalDb.trailingSeriesValues('rhr', 28);
+      _quietHrrUsed = personalQuietHrr(
+          await LocalDb.trailingSeriesValues('quiet_hrr', kQuietHistoryDays));
       final vals = await LocalDb.trailingSeriesValues('rhr', 7);
       if (vals.isEmpty) return;
       _nightlyRhr = vals.last;
@@ -6157,6 +6164,7 @@ class AppState extends ChangeNotifier {
     // screen sleep mid-set. Released unconditionally on both teardown paths.
     ScreenWake.hold('workout');
     activeWorkout = LiveWorkoutState(
+      quietHrr: _quietHrrUsed,
       startTime: start,
       targetKcal: targetKcal,
       workoutId: id,
@@ -6385,6 +6393,7 @@ class AppState extends ChangeNotifier {
           final startMs = startSec! * 1000;
           final id = row['id'] as String? ?? 'w$startMs';
           activeWorkout = LiveWorkoutState(
+            quietHrr: _quietHrrUsed,
             startTime: DateTime.fromMillisecondsSinceEpoch(startMs),
             targetKcal: 300,
             workoutId: id,
@@ -7195,6 +7204,10 @@ class LiveWorkoutState {
   /// fraction of a second after it started.
   double? restingHr;
 
+  /// The quiet-waking level strain subtracts, pinned at start like the
+  /// anchors above (quiet_level.dart).
+  final double quietHrr;
+
   /// Per-minute mean HR, the unit Banister TRIMP weights. Live HR arrives at
   /// 1 Hz, so it is folded into the current minute here rather than kept as
   /// thousands of raw samples.
@@ -7269,6 +7282,7 @@ class LiveWorkoutState {
     this.hrMax,
     this.zoneSet,
     this.restingHr,
+    this.quietHrr = ana.quietWakingHrr,
   })  : _hrPeak = RollingMaxHr(age: age),
         idleWatch = WorkoutIdleWatch(startedAt: startTime);
 
@@ -7333,6 +7347,7 @@ class LiveWorkoutState {
       profile: profile,
       restingHr: restingHr,
       hrMax: hrMax,
+      quietHrr: quietHrr,
     );
 
     // Calories re-score off the same series, through the same estimator the
@@ -7385,6 +7400,7 @@ class LiveWorkoutState {
       profile: profile,
       restingHr: restingHr,
       hrMax: hrMax,
+      quietHrr: quietHrr,
     );
     _scoreCalories();
   }

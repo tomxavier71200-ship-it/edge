@@ -35,9 +35,12 @@ import 'hr_max.dart'
         estimatedMaxHr,
         manualZoneBoundsFromProfile,
         smoothedMaxHr,
+        hrCeilingForAge,
+        kHrFloorBpm,
         smoothedMinHr,
         trainingZones;
 import 'night_hrv.dart' show weightedNightRmssd;
+import 'quiet_level.dart' show personalQuietHrr;
 import 'profile.dart' show workoutSex;
 import 'step_cadence.dart' show cadenceSpmForMinutes;
 // Same argument: a pure `DateTime` lookup, no DB / IO / Flutter binding. It is
@@ -45,6 +48,8 @@ import 'step_cadence.dart' show cadenceSpmForMinutes;
 // and a second copy here would be the exact drift SLP-09's timezone guard is
 // about.
 import 'substrate.dart' show tzOffsetSecondsAt;
+/// Below this nightly RMSSD (ms) the beat stream is stuck, not measured.
+const double kMinRmssdMs = 2.0;
 
 const MetricCfg _skinTempAdcCfg = MetricCfg(
   minVal: 1.0,
@@ -227,6 +232,10 @@ class DayBundleInput {
   /// matches today's raw mean (the old z-vs-z series was a unit mismatch bug).
   final List<double> skinTempAdcHistory;
 
+  /// Trailing per-day quiet-waking HRR (`quiet_hrr` series), oldest first —
+  /// the level strain subtracts, as this person's median (quiet_level.dart).
+  final List<double> quietHrrHistory;
+
   /// TS-03 — the highest heart rate the band has OBSERVED (held >=15 s with
   /// corroborating motion, `observed_max_hr.dart`) on any day STRICTLY BEFORE
   /// this one, or null when there is none. Not a physiological HRmax: if the
@@ -283,6 +292,7 @@ class DayBundleInput {
     this.respHistory = const [],
     this.rmssdHistory = const [],
     this.skinTempAdcHistory = const [],
+    this.quietHrrHistory = const [],
     this.observedHrCeilingBpm,
     this.dayConfidence = 0,
     this.dayFlags = const [],
@@ -313,6 +323,7 @@ class DayBundleInput {
     'resp_history': respHistory,
     'rmssd_history': rmssdHistory,
     'skin_temp_adc_history': skinTempAdcHistory,
+    'quiet_hrr_history': quietHrrHistory,
     'observed_hr_ceiling_bpm': observedHrCeilingBpm,
     'day_confidence': dayConfidence,
     'day_flags': dayFlags,
@@ -361,6 +372,7 @@ class DayBundleInput {
       respHistory: dbls('resp_history'),
       rmssdHistory: dbls('rmssd_history'),
       skinTempAdcHistory: dbls('skin_temp_adc_history'),
+      quietHrrHistory: dbls('quiet_hrr_history'),
       observedHrCeilingBpm: (m['observed_hr_ceiling_bpm'] as num?)?.toDouble(),
       dayConfidence: (m['day_confidence'] as num?)?.toDouble() ?? 0,
       dayFlags: strs('day_flags'),
@@ -401,7 +413,14 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   final wornMin = wornMinuteBuckets.length;
 
   // ── HR over the SLEEP WINDOW (RHR / dip night-side) ────────────────────────
-  final sleepHr = [for (final h in d.sleepHr) h.toDouble()];
+  // Impossible readings (below kHrFloorBpm, above the age ceiling) are off-skin
+  // glitches, not heart rates: they read as 0 — invalid — so a burst of 230s
+  // cannot lift the night's resting HR and drop readiness with it.
+  final sleepCeil = hrCeilingForAge((d.profile['age'] as num?)?.round());
+  final sleepHr = [
+    for (final h in d.sleepHr)
+      h >= kHrFloorBpm && h <= sleepCeil ? h.toDouble() : 0.0,
+  ];
   // The clock for that series — parallel by construction (both are `Substrate`
   // columns, 1:1 with `tsSec`). Seconds as doubles because that is what the
   // analytics window helpers take.
@@ -472,8 +491,12 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   final headlineRmssdMetric = weightedRmssdMetric.present
       ? weightedRmssdMetric
       : sleepSessionRmssdMetric;
-  final sleepSessionRmssd =
-      headlineRmssdMetric.present ? headlineRmssdMetric.value : null;
+  // An RMSSD under [kMinRmssdMs] is a stuck beat stream — identical
+  // intervals — not a heart: no headline rather than a confident 0 ms.
+  final sleepSessionRmssd = headlineRmssdMetric.present &&
+          (headlineRmssdMetric.value ?? 0) >= kMinRmssdMs
+      ? headlineRmssdMetric.value
+      : null;
   final hrvF = nn.length >= 20
       ? hrvFreq(nn, nnTimes, artifactFraction: artifactFraction)
       : Metric<HrvFreq>.absent(
@@ -790,6 +813,11 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // TRIMP, HR zones, and calories so all three see the same wake series).
   final wakeHr = _perMinuteWakeSeries(d);
   final perMin = [for (final p in wakeHr) p.hr];
+  // The cost of being awake that strain subtracts: THIS person's quiet-waking
+  // level from the days before (quiet_level.dart), and today's own measured
+  // level, stored so tomorrow's median has it. Today's never scores today.
+  final quietHrr = personalQuietHrr(d.quietHrrHistory);
+  final quietToday = dailyQuietWakingHrr(perMin, restingHr: rhrForTrimp, maxHr: hrMax);
   // ── WHY the activity family is absent, named AT THE GATE THAT CAUSED IT ────
   //
   // These four figures — strain/TRIMP, the zone minutes, the ceiling they were
@@ -931,7 +959,7 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     // bout subtracts its own effort away. That plumbing is edge#226.
     // ponytail: population constant, swap for the rolling personal median when
     // edge#226 lands — see the same comment at the other four call sites.
-    quietHrr: quietWakingHrr,
+    quietHrr: quietHrr,
     female: workoutSex(sex) == 'female',
   );
 
@@ -966,6 +994,7 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     restingHr: rhrForTrimp,
     maxHr: hrMax,
     sex: sex,
+    quietHrr: quietHrr,
   );
   final zoneTimeline = zoneSet == null
       ? const <Map<String, num>>[]
@@ -1152,13 +1181,11 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // HEADLINE RMSSD = mean of 5-min cleaned-window RMSSDs across the detected
   // sleep session. Fall back to the robust estimator, then the whole-window
   // RMSSD only when the canonical sleep-session value is absent.
-  final rmssdScalar =
-      sleepSessionRmssd ??
-      (robustRmssd.present
-          ? robustRmssd.value
-          : ((hrvT.present && hrvT.value!.rmssd != null)
-                ? hrvT.value!.rmssd
-                : null));
+  final rmssdFallback = robustRmssd.present
+      ? robustRmssd.value
+      : ((hrvT.present && hrvT.value!.rmssd != null) ? hrvT.value!.rmssd : null);
+  final rmssdScalar = sleepSessionRmssd ??
+      (rmssdFallback != null && rmssdFallback >= kMinRmssdMs ? rmssdFallback : null);
   // Whole-window RMSSD kept available as a secondary detail (NOT the headline).
   final rmssdWholeScalar = (hrvT.present && hrvT.value!.rmssd != null)
       ? hrvT.value!.rmssd
@@ -1251,22 +1278,18 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // ── NOCTURNAL detail: sleeping-HR nadir + waking HR. Both computable today
   //    with NO baseline; the "vs baseline" comparison is added at the seam from
   //    the rhr history series.
-  final nadir = rhr.present ? rhr.value!.p1 : null;
+  // The LOWEST MINUTE, not the lowest sample: the minimum of 1-minute
+  // medians of the valid (>= kHrFloorBpm) sleep HR, and that minute's time.
+  // The 1st-percentile sample took a dropout glitch as the night's nadir (a
+  // 25 bpm reading on a 51 bpm night), and its time came from a different
+  // sample than its value. Only on a night with a resting HR, as before.
+  final nadirMin = rhr.present ? _lowestMinute(d.sleepTsSec, d.sleepHr) : null;
+  final nadir = nadirMin?.bpm;
   final wakingHr = dip.present ? dip.value!.dayMean : null;
   // Nadir INSTANT: epoch-second of the lowest valid sleeping-HR second, so the
   // nocturnal card can render "@ HH:MM" instead of "@ -". From the sleep-window
   // HR series (parallel to sleepTsSec); null when no valid sleep HR.
-  int? nadirTs;
-  {
-    var lo = 1 << 30;
-    for (var i = 0; i < d.sleepHr.length && i < d.sleepTsSec.length; i++) {
-      final h = d.sleepHr[i];
-      if (h > 0 && h < lo) {
-        lo = h;
-        nadirTs = d.sleepTsSec[i];
-      }
-    }
-  }
+  final nadirTs = nadirMin?.tsSec;
 
   // ── HR stats over the day's valid HR (for the strain detail hr {max,avg,min}).
   //
@@ -1477,6 +1500,9 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       'sleep_seconds': inBedSec ?? 0,
     },
     'readiness_absent_diag': ?readinessAbsentDiag,
+    // The quiet-waking level this day's strain subtracted (quiet_level.dart),
+    // only on a day that scored strain.
+    'strain_quiet_hrr': ?(strainScalar == null ? null : quietHrr),
     'scalars': {
       // ONE resting HR. It is nocturnal or it is absent — `rhr` and
       // `rhr_nocturnal` are now the same number, and the second key survives
@@ -1500,6 +1526,11 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       // Headline 0–21 strain (the screens already expect a 0–21 scale); raw
       // Banister TRIMP stays under `trimp` as the secondary "training load".
       'strain': strainScalar,
+      // This day's measured quiet-waking HRR (null when it cannot be measured).
+      // The level its strain was scored against is `strain_quiet_hrr` on the
+      // bundle — a scalar that is always present would make an empty day look
+      // measured and lock it (derive_result_protection_test).
+      'quiet_hrr': quietToday,
       'max_hr_used': hrMax,
       'ln_rmssd': lnToday,
       'resp_rate': respToday,
@@ -1739,9 +1770,13 @@ class _WakeMinuteHr {
 }
 
 List<_WakeMinuteHr> _perMinuteWakeSeries(DayBundleInput d) {
+  // Impossible samples are dropped before the minute mean, the same bounds the
+  // engine's `_perMinuteMeanWake` applies: one 245 bpm glitch in a minute of 70s
+  // otherwise lifts that minute by ~3 bpm and bills it as effort.
+  final ceil = hrCeilingForAge((d.profile['age'] as num?)?.round());
   final buckets = <int, List<double>>{};
   for (var i = 0; i < d.dayHr.length; i++) {
-    if (d.dayHr[i] <= 0) continue;
+    if (d.dayHr[i] < kHrFloorBpm || d.dayHr[i] > ceil) continue;
     final t = d.dayTsSec[i];
     if (t >= d.sleepOnsetSec && t < d.sleepOffsetSec) continue; // skip sleep
     (buckets[t ~/ 60] ??= []).add(d.dayHr[i].toDouble());
@@ -1772,11 +1807,32 @@ List<Map<String, num>> _zoneTimeline(
   ];
 }
 
+/// The lowest 1-minute median of valid sleep HR and the minute's start.
+({double bpm, int tsSec})? _lowestMinute(List<int> ts, List<int> hr) {
+  final byMin = <int, List<int>>{};
+  for (var i = 0; i < hr.length && i < ts.length; i++) {
+    if (hr[i] >= kHrFloorBpm) (byMin[ts[i] ~/ 60] ??= <int>[]).add(hr[i]);
+  }
+  ({double bpm, int tsSec})? best;
+  for (final e in byMin.entries) {
+    // Half a minute of samples at least, so a lone surviving sample is not a
+    // "minute".
+    if (e.value.length < 30) continue;
+    final v = e.value..sort();
+    final m = v.length.isOdd
+        ? v[v.length ~/ 2].toDouble()
+        : (v[v.length ~/ 2 - 1] + v[v.length ~/ 2]) / 2;
+    if (best == null || m < best.bpm) best = (bpm: m, tsSec: e.key * 60);
+  }
+  return best;
+}
+
 List<Map<String, num>> _strainCurve(
   List<_WakeMinuteHr> wakeHr, {
   required double? restingHr,
   required double? maxHr,
   required String? sex,
+  required double quietHrr,
 }) {
   if (wakeHr.isEmpty ||
       restingHr == null ||
@@ -1813,7 +1869,7 @@ List<Map<String, num>> _strainCurve(
           wakeMinutes: wakeMin,
           // Reference level, not this user's — see onehz_pipeline's
           // `strainMetric` for why, and edge#226 for the fix.
-          quietHrr: quietWakingHrr,
+          quietHrr: quietHrr,
           female: female,
         ),
         2,

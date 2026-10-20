@@ -255,6 +255,7 @@ double? strainFromPerMinuteHr(
   required Profile profile,
   required double? restingHr,
   required double? hrMax,
+  double quietHrr = ana.quietWakingHrr,
 }) {
   final sex = profile.sex?.toLowerCase();
   if (perMinuteHr.isEmpty || hrMax == null || restingHr == null || sex == null) {
@@ -273,9 +274,9 @@ double? strainFromPerMinuteHr(
   final score = ana.strainScoreMetric(
     trimp.value,
     wakeMinutes: perMinuteHr.length.toDouble(),
-    // Reference level, not this user's — see onehz_pipeline's
-    // `strainMetric` for why, and edge#226 for the fix.
-    quietHrr: ana.quietWakingHrr,
+    // This person's quiet-waking level (quiet_level.dart), the same one the
+    // day's strain subtracts.
+    quietHrr: quietHrr,
     female: workoutSex(sex) == 'female',
   );
   return score.present ? score.value : null;
@@ -307,6 +308,7 @@ ManualSessionStats computeManualSessionStats({
   required double? hrMax,
   double? restingHr,
   ana.HeartRateZoneSet? zoneSet,
+  double quietHrr = ana.quietWakingHrr,
 }) {
   if (hrTs.isEmpty || hrTs.length != hrBpm.length) {
     return const ManualSessionStats();
@@ -343,7 +345,7 @@ ManualSessionStats computeManualSessionStats({
   final sex = profile.sex?.toLowerCase();
 
   final strain = strainFromPerMinuteHr(perMin,
-      profile: profile, restingHr: restingHr, hrMax: hrMax);
+      profile: profile, restingHr: restingHr, hrMax: hrMax, quietHrr: quietHrr);
 
   double? calories;
   if (profile.hasCalorieAnchors &&

@@ -47,13 +47,19 @@ import '../telemetry/telemetry_service.dart';
 import 'crossday_pipeline.dart';
 import 'derive_pacing.dart';
 import 'hr_max.dart'
-    show estimatedMaxHr, kHrFloorBpm, smoothedMaxHr, smoothedMinHr;
+    show
+        estimatedMaxHr,
+        hrCeilingForAge,
+        kHrFloorBpm,
+        smoothedMaxHr,
+        smoothedMinHr;
 import 'movement_floor_policy.dart' as mfp;
 import 'sleep_profile_policy.dart';
 import 'derive_prepare.dart';
 import 'onehz_pipeline.dart';
 import 'step_cadence.dart';
 import 'profile.dart';
+import 'quiet_level.dart' show personalQuietHrr;
 import 'substrate.dart';
 
 /// Analytics/bundle version — bump to force a recompute of non-finalized days.
@@ -1757,7 +1763,21 @@ import 'substrate.dart';
 // plain session mean when fewer than kHrvMinWindows windows qualify. Older
 // nights in the baseline keep the previous method's value (raw is gone), so
 // readiness settles over the following weeks. kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 102;
+// 102 → 103 (personal quiet-waking level for strain, edge#226/MOT-03): every
+// strain scorer subtracted the population 0.20 HRR as the cost of being awake,
+// which billed a nothing-day 7–12 strain for anyone whose ordinary waking sits
+// above it and subtracted easy workouts to 0 for anyone below. Each day now
+// stores its measured `quiet_hrr` (analytics' dailyQuietWakingHrr, refused
+// above 0.40) and strain — day headline, intraday curve, the served second
+// half and manual/live sessions — is scored against the median of the
+// previous 14 days' levels; under 3 days it is still 0.20, so new users do not
+// move. Found by the scenario bench (test/scenario_bench_test.dart), which
+// also caught: sleep HR outside [kHrFloorBpm, age ceiling] now reads invalid
+// before resting HR (a burst of 230s lifted RHR 3 bpm and cut readiness 15);
+// the sleeping-HR nadir is the lowest 1-minute median, not the 1st-percentile
+// sample (a 25 bpm glitch was the nadir); and an RMSSD under 2 ms — a stuck
+// beat stream — is absent, not a confident 0 ms. kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 103;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2278,6 +2298,9 @@ class _BaselineHistoryCache {
     // derive needs the PRIOR days' values of, which is exactly what this
     // snapshot is (see [maxBefore]).
     'hr_ceiling_bpm',
+    // This person's per-day quiet-waking HRR — strain subtracts the median of
+    // the days before (quiet_level.dart), never a population constant.
+    'quiet_hrr',
   ];
 
   /// DATED baseline samples, ascending by date, one entry per day (metric_series
@@ -4575,6 +4598,7 @@ class DerivationEngine {
         // had already refused to publish. `rhr_nocturnal` is null unless a
         // sleep session was detected — exactly the gate readiness uses.
         rhr: rhrTonight ?? rhrCarried?.value,
+        quietHrr: personalQuietHrr(history.valuesBefore('quiet_hrr', day.date)),
         maxHrUsed: (bundle['max_hr_used'] as num?)?.round(),
         liveStepsReal: liveSteps.total,
         liveStepsFromStrap: liveSteps.strap,
@@ -4880,6 +4904,7 @@ class DerivationEngine {
         'nap_min': sc('nap_min'),
         // Sleep-stage minutes + HRV freq/stability trends.
         'rem_min': sc('rem_min'),
+        'quiet_hrr': sc('quiet_hrr'),
         'deep_min': sc('deep_min'),
         'light_min': sc('light_min'),
         'tst_min': sc('tst_min'),
@@ -5185,6 +5210,7 @@ class DerivationEngine {
     // not a window (see [maxBefore]), and strictly before today so a day is
     // never banded on a ceiling its own session set.
     m['observed_hr_ceiling_bpm'] = history.maxBefore('hr_ceiling_bpm', date);
+    m['quiet_hrr_history'] = history.valuesBefore('quiet_hrr', date);
     return m;
   }
 
@@ -5862,11 +5888,16 @@ class DerivationEngine {
   static ({List<int> keys, List<double> hr}) _perMinuteMeanWake(
     Substrate s,
     int sleepOnsetSec,
-    int sleepOffsetSec,
-  ) {
+    int sleepOffsetSec, {
+    int? age,
+  }) {
+    // Impossible samples dropped before the minute mean — the same bounds as
+    // the pure pipeline's `_perMinuteWakeSeries`, so both halves price the same
+    // minutes.
+    final ceil = hrCeilingForAge(age);
     final buckets = <int, List<double>>{};
     for (var i = 0; i < s.hr.length && i < s.tsSec.length; i++) {
-      if (s.hr[i] <= 0) continue;
+      if (s.hr[i] < kHrFloorBpm || s.hr[i] > ceil) continue;
       final t = s.tsSec[i];
       if (sleepOffsetSec > sleepOnsetSec &&
           t >= sleepOnsetSec &&
@@ -6074,6 +6105,7 @@ class DerivationEngine {
     required int dayCalendarEndSec,
     required int dataNowSec,
     double? restingHr,
+    double quietHrr = ana.quietWakingHrr,
     double? dynFloorG,
     int liveStepsReal = 0,
     int liveStepsFromStrap = 0,
@@ -6093,6 +6125,7 @@ class DerivationEngine {
       dayCalendarEndSec: dayCalendarEndSec,
       dataNowSec: dataNowSec,
       restingHr: restingHr,
+      quietHrr: quietHrr,
       dynFloorG: dynFloorG,
       stepSpans: stepSpans,
     );
@@ -6630,6 +6663,7 @@ class DerivationEngine {
     required int dayCalendarEndSec,
     required int dataNowSec,
     double? restingHr,
+    double quietHrr = ana.quietWakingHrr,
     double? dynFloorG,
     List<List<int>> stepSpans = const [],
   }) {
@@ -6641,7 +6675,8 @@ class DerivationEngine {
       dataNowSec: dataNowSec,
     );
     final wakeSeries =
-        _perMinuteMeanWake(daySub, sleepOnsetSec, sleepOffsetSec);
+        _perMinuteMeanWake(daySub, sleepOnsetSec, sleepOffsetSec,
+            age: profile.ageYears?.round());
     final perMin = wakeSeries.hr;
     // The day's MEASURED walking cadence, minute-aligned to the same wake
     // buckets — from the resolved `live_coverage` spans, so band/phone overlap
@@ -6760,7 +6795,7 @@ class DerivationEngine {
             wakeMinutes: perMin.length.toDouble(),
             // Reference level, not this user's — see onehz_pipeline's
             // `strainMetric` for why, and edge#226 for the fix.
-            quietHrr: ana.quietWakingHrr,
+            quietHrr: quietHrr,
             female: _workoutSex(sex) == 'female',
           );
           if (score.present) strain = score.value;
@@ -8126,6 +8161,7 @@ class DerivationEngine {
       dayCalendarEndSec: localNextMidnightSecForDayLabel(inp.date),
       dataNowSec: inp.dataNowSec,
       restingHr: inp.rhr,
+      quietHrr: inp.quietHrr,
       dynFloorG: inp.dynFloorG,
       liveStepsReal: inp.liveStepsReal,
       liveStepsFromStrap: inp.liveStepsFromStrap,
@@ -8827,6 +8863,10 @@ class _DayBlocksInput {
   /// sleep session was detected. NOT `scalars.rhr`, which is allowed to fall
   /// back to daytime HR for the resting-HR card and is not a TRIMP reference.
   final double? rhr;
+
+  /// The quiet-waking HRR this day's strain subtracts (quiet_level.dart) —
+  /// the same level the pure pipeline was handed, so the two halves agree.
+  final double quietHrr;
   final int? maxHrUsed;
   final int liveStepsReal;
 
@@ -8890,6 +8930,7 @@ class _DayBlocksInput {
     required this.onsetSec,
     required this.offsetSec,
     required this.rhr,
+    this.quietHrr = ana.quietWakingHrr,
     required this.maxHrUsed,
     required this.liveStepsReal,
     this.liveStepsFromStrap = 0,
