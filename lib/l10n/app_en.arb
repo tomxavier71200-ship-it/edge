@@ -2071,11 +2071,11 @@
   "@napsNotANapLabel": {
     "description": "Visible button label to reject a detector-found nap."
   },
-  "readinessDetailTitle": "Readiness",
+  "readinessDetailTitle": "Recovery",
   "@readinessDetailTitle": {
     "description": "Readiness detail screen title, also used as the history chart title."
   },
-  "readinessDetailNotScoredTitle": "Readiness is not scored",
+  "readinessDetailNotScoredTitle": "Recovery is not scored",
   "@readinessDetailNotScoredTitle": {
     "description": "Status card title when readiness has no score for today."
   },
@@ -2129,7 +2129,7 @@
       }
     }
   },
-  "readinessDetailNoHistoryTitle": "No readiness history",
+  "readinessDetailNoHistoryTitle": "No recovery history",
   "@readinessDetailNoHistoryTitle": {
     "description": "Status card title when there is no readiness history at all."
   },
@@ -2541,7 +2541,7 @@
   "@driverBreakdownAbsenceTitle": {
     "description": "Title of the card shown when there is no readiness breakdown for the night."
   },
-  "driverBreakdownAbsenceAlgoVersion": "How readiness is worked out changed with the last update, and it is being rebuilt.",
+  "driverBreakdownAbsenceAlgoVersion": "How recovery is worked out changed with the last update, and it is being rebuilt.",
   "@driverBreakdownAbsenceAlgoVersion": {
     "description": "Absence card body when the breakdown is missing because the algorithm version changed and is rebuilding."
   },
@@ -6134,7 +6134,7 @@
       }
     }
   },
-  "cycleComparisonNotCorrection": "A comparison, not a correction. Nothing on your readiness has been rescaled by this, and nothing here is a training instruction.",
+  "cycleComparisonNotCorrection": "A comparison, not a correction. Nothing on your recovery has been rescaled by this, and nothing here is a training instruction.",
   "@cycleComparisonNotCorrection": {
     "description": "Disclaimer under the day-against-itself comparison."
   },
@@ -7407,7 +7407,7 @@
       }
     }
   },
-  "homeReadinessNotScoredTitle": "Readiness is not scored today",
+  "homeReadinessNotScoredTitle": "Recovery is not scored today",
   "@homeReadinessNotScoredTitle": {
     "description": "Title of the card shown when readiness has no score today."
   },
@@ -7799,7 +7799,7 @@
   "@wellnessWhatChargedAndDrained": {
     "description": "Section title for readiness drivers"
   },
-  "wellnessNoDriversTitle": "No readiness drivers yet",
+  "wellnessNoDriversTitle": "No recovery drivers yet",
   "@wellnessNoDriversTitle": {
     "description": "Status card title when no readiness drivers are available yet"
   },
@@ -8270,7 +8270,7 @@
   "@wellnessNoDayStandsOutBody": {
     "description": "Status card body explaining no weekday cleared the multiple-comparison bar"
   },
-  "wellnessWeekdayHeadline": "{weekday}: readiness runs {delta} {direction} than your overall median",
+  "wellnessWeekdayHeadline": "{weekday}: recovery runs {delta} {direction} than your overall median",
   "@wellnessWeekdayHeadline": {
     "description": "Finding headline naming which weekday's readiness differs from the median",
     "placeholders": {
@@ -9658,7 +9658,7 @@
   "@dayStrainInputsMeasuredCeilingNote": {
     "description": "Sentence noting the zone bar uses a different, measured ceiling than the strain score"
   },
-  "dayStrainInputsRhrAnchor": "The other anchor is your resting heart rate from the night before, so a night the band missed moves the whole day.",
+  "dayStrainInputsRhrAnchor": "The other anchors are your resting heart rate from the night before (or your most recent measured night, up to 7 days back) and your usual awake heart rate, so ordinary living does not count as strain.",
   "@dayStrainInputsRhrAnchor": {
     "description": "Sentence naming resting heart rate as the strain score's other anchor"
   },
@@ -11700,7 +11700,7 @@
   "@settingsNeverSendSectionTitle": {
     "description": "Section heading listing what the automation event never includes"
   },
-  "settingsNeverSendBody": "No readiness, no strain, no sleep score — on either platform. A number this app would have shown as absent, with a reason attached, becomes a bare zero the moment it leaves. Facts about the sync go out; measurements do not.",
+  "settingsNeverSendBody": "No recovery, no strain, no sleep score — on either platform. A number this app would have shown as absent, with a reason attached, becomes a bare zero the moment it leaves. Facts about the sync go out; measurements do not.",
   "@settingsNeverSendBody": {
     "description": "Section body listing what the automation event never includes"
   },

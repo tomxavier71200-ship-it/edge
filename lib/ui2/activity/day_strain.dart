@@ -637,8 +637,10 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
                     'not been moved onto it, because that would rewrite every '
                     'strain score you have ever seen.',
           l?.dayStrainInputsRhrAnchor ??
-              'The other anchor is your resting heart rate from the night before, '
-                  'so a night the band missed moves the whole day.',
+              'The other anchors are your resting heart rate from the night '
+                  'before (or your most recent measured night, up to 7 days '
+                  'back) and your usual awake heart rate, so ordinary living '
+                  'does not count as strain.',
         ].join(' '),
         style: F.cap.copyWith(color: p.ink3, height: 1.5),
       ),

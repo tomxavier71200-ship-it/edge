@@ -255,6 +255,18 @@ void main() {
     'home_long': HomeScreen(data: _home, hour: 9),
     'home_scrolled': HomeScreen(data: _home, hour: 9),
     'home_early': HomeScreen(data: _homeEarly, hour: 9),
+    // A brand-new user / a day nothing was worn: every screen must say so,
+    // never crash, never invent.
+    'empty_home': HomeScreen(data: HomeData(dayId: todayIso(), series: const {}), hour: 9),
+    'empty_overview': const OverviewScreen(series: {}),
+    'empty_sleep': SleepDetail(data: SleepData(day: todayIso(), days: [todayIso()])),
+    'empty_strain': DayStrainDetail(data: DayStrainData(day: DateTime.now())),
+    'empty_recovery': const ReadinessDetail(data: ReadinessData()),
+    'empty_dashboard': Builder(
+      builder: (c) => ListView(padding: const EdgeInsets.all(16), children: [
+        dashboardCard(c, HomeData(dayId: todayIso(), series: const {}), () {}),
+      ]),
+    ),
     'stress': ListView(padding: const EdgeInsets.all(16), children: [
       Surface(
         child: StressLine(

@@ -482,11 +482,14 @@ class ConsistencyChart extends StatelessWidget {
           if (sri != null) TrendHeadline('${sri!.round()}%'),
           const Spacer(),
           if (optimal)
-            Text('- - -  OPTIMAL BED/WAKE TIME',
-                style: F.over.copyWith(
-                    color: p.ink2,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.w700)),
+            Flexible(
+              child: Text('- - -  OPTIMAL BED/WAKE TIME',
+                  textAlign: TextAlign.right,
+                  style: F.over.copyWith(
+                      color: p.ink2,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w700)),
+            ),
         ]),
         const SizedBox(height: S.x4),
         SizedBox(

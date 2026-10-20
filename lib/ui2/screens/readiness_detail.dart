@@ -238,7 +238,7 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
           // with the real answer one line down and winning.
           StatusCard.forMetric(
                   l?.readinessDetailNotScoredTitle ??
-                      'Readiness is not scored',
+                      'Recovery is not scored',
                   d.readiness,
                   // Where the data stops, appended to whatever the pipeline
                   // said. Not a substitute for the reason and not a reading —
@@ -359,7 +359,7 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
           _historyTitle(c, d),
           !d.series.any((v) => v != null)
               ? StatusCard(
-                  l?.readinessDetailNoHistoryTitle ?? 'No readiness history',
+                  l?.readinessDetailNoHistoryTitle ?? 'No recovery history',
                   l?.readinessDetailNoHistoryBody ?? '0 days scored.',
                   fix: l?.readinessDetailWearOvernight ?? 'Wear the band overnight',
                   icon: LucideIcons.chartLine,
