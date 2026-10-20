@@ -25,6 +25,7 @@ import '../data/day_label.dart';
 // isolate safety. One grammar for "a required input was missing" across both
 // pipelines rather than a second one here.
 import 'onehz_pipeline.dart' show needInputNote;
+import 'whoop_calibration.dart' show calibratedSleepPerformance;
 
 /// Build the cross-day analytics bundle from a time-ordered (OLDEST FIRST) list
 /// of per-day records and the user profile.
@@ -375,8 +376,19 @@ Map<String, dynamic> buildCrossDayBundle(
       : ((need.value!.needSec - needNoStrain.value!.needSec) / 60).round();
   // last night's TST (sec) for performance.
   final lastTstMin = _lastNum(days, 'tst_min');
-  final perf = (need.present && lastTstMin != null)
-      ? ana.sleepPerformance(lastTstMin * 60.0, need.value!.needSec)
+  // WHOOP-matched (whoop_calibration.dart): hours against need AND sleep
+  // consistency, the combination WHOOP's own number follows.
+  final perfPct = (need.present && lastTstMin != null)
+      ? calibratedSleepPerformance(lastTstMin, need.value!.needSec / 60,
+          sri.present ? sri.value!.sri : null)
+      : null;
+  final perf = perfPct != null
+      ? ana.Metric<ana.SleepPerformance>(
+          value: ana.SleepPerformance(perfPct),
+          confidence: 0.7,
+          tier: ana.Tier.estimate,
+          inputs_used: const ['tst', 'sleep_need', 'sleep_consistency'],
+        )
       : ana.Metric<ana.SleepPerformance>.absent(
           tier: ana.Tier.estimate,
           inputs_used: const ['tst', 'sleep_need'],

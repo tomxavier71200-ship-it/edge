@@ -41,6 +41,8 @@ import 'hr_max.dart'
         trainingZones;
 import 'night_hrv.dart' show weightedNightRmssd;
 import 'quiet_level.dart' show personalQuietHrr;
+import 'whoop_calibration.dart'
+    show calibratedRecovery, calibratedSleepPerformance;
 import 'profile.dart' show workoutSex;
 import 'step_cadence.dart' show cadenceSpmForMinutes;
 // Same argument: a pure `DateTime` lookup, no DB / IO / Flutter binding. It is
@@ -236,6 +238,14 @@ class DayBundleInput {
   /// the level strain subtracts, as this person's median (quiet_level.dart).
   final List<double> quietHrrHistory;
 
+  /// Last night's sleep need (min) and sleep consistency (0–100), as the
+  /// cross-day pass stored them the day before, and the trailing sleep
+  /// performance series — the inputs of the WHOOP-matched recovery
+  /// (whoop_calibration.dart). Null / empty until that pass has run.
+  final double? prevSleepNeedMin;
+  final double? prevSleepConsistency;
+  final List<double> sleepPerfHistory;
+
   /// TS-03 — the highest heart rate the band has OBSERVED (held >=15 s with
   /// corroborating motion, `observed_max_hr.dart`) on any day STRICTLY BEFORE
   /// this one, or null when there is none. Not a physiological HRmax: if the
@@ -293,6 +303,9 @@ class DayBundleInput {
     this.rmssdHistory = const [],
     this.skinTempAdcHistory = const [],
     this.quietHrrHistory = const [],
+    this.prevSleepNeedMin,
+    this.prevSleepConsistency,
+    this.sleepPerfHistory = const [],
     this.observedHrCeilingBpm,
     this.dayConfidence = 0,
     this.dayFlags = const [],
@@ -324,6 +337,9 @@ class DayBundleInput {
     'rmssd_history': rmssdHistory,
     'skin_temp_adc_history': skinTempAdcHistory,
     'quiet_hrr_history': quietHrrHistory,
+    'prev_sleep_need_min': prevSleepNeedMin,
+    'prev_sleep_consistency': prevSleepConsistency,
+    'sleep_perf_history': sleepPerfHistory,
     'observed_hr_ceiling_bpm': observedHrCeilingBpm,
     'day_confidence': dayConfidence,
     'day_flags': dayFlags,
@@ -373,6 +389,9 @@ class DayBundleInput {
       rmssdHistory: dbls('rmssd_history'),
       skinTempAdcHistory: dbls('skin_temp_adc_history'),
       quietHrrHistory: dbls('quiet_hrr_history'),
+      prevSleepNeedMin: (m['prev_sleep_need_min'] as num?)?.toDouble(),
+      prevSleepConsistency: (m['prev_sleep_consistency'] as num?)?.toDouble(),
+      sleepPerfHistory: dbls('sleep_perf_history'),
       observedHrCeilingBpm: (m['observed_hr_ceiling_bpm'] as num?)?.toDouble(),
       dayConfidence: (m['day_confidence'] as num?)?.toDouble() ?? 0,
       dayFlags: strs('day_flags'),
@@ -703,6 +722,26 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     ),
   ];
   final composite = readinessComposite(readinessInputs);
+  // WHOOP-MATCHED RECOVERY (whoop_calibration.dart, the owner's choice): on a
+  // night the composite was allowed to score — every baseline and z-cap gate
+  // above still decides THAT — the published number is WHOOP's combination,
+  // which weighs last night's sleep performance as heavily as HRV. Without
+  // last night's sleep performance, the composite stands as before.
+  final perfNight = calibratedSleepPerformance(
+      tstSec == null ? null : tstSec / 60, d.prevSleepNeedMin, d.prevSleepConsistency);
+  final compositeScalar = headlineReadinessScalar(composite);
+  final recoveryWhoop = compositeScalar == null
+      ? null
+      : calibratedRecovery(
+          hrvLn: lnToday,
+          hrvLnHistory: d.lnRmssdHistory,
+          rhr: rhrToday,
+          rhrHistory: d.rhrHistory,
+          resp: respToday,
+          respHistory: d.respHistory,
+          sleepPerf: perfNight,
+          sleepPerfHistory: d.sleepPerfHistory,
+        );
   // EARLY ESTIMATE — the same composite, the same inputs, the same refusals,
   // over a shorter personal baseline ([kReadinessEarlyMinBaseline] nights).
   // Only while the full one is still COLD-STARTING (its note is the
@@ -1072,6 +1111,13 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     'prsa_ac': ac.toJson((v) => v.toJson()),
     'readiness_lnrmssd': lnReadiness.toJson((v) => v.toJson()),
     'readiness_composite': composite.toJson((v) => v.toJson()),
+    // Which formula produced the headline, and the inputs the WHOOP-matched
+    // one used, so a recovery can always be explained.
+    'readiness_method': {
+      'method': recoveryWhoop != null ? 'whoop_calibrated' : 'composite',
+      'composite_score': compositeScalar,
+      'sleep_performance': perfNight,
+    },
     // Headline 0–21 strain envelope; raw Banister TRIMP kept as `trimp`.
     // The ROOT cause replaces the shared scorer's "strain needs a TRIMP and the
     // wake window it was measured over" — true, and useless to a reader, since
@@ -1192,7 +1238,7 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       : null;
   // Abstain from a saturated, degenerate-baseline readiness rather than persist a
   // bogus ~100 that a cleaner re-derive would then snap back down (#117 bounce).
-  final readinessScalar = headlineReadinessScalar(composite);
+  final readinessScalar = recoveryWhoop ?? compositeScalar;
   // The z-cap can abstain even when the composite itself is `present` — a
   // saturated, degenerate-baseline artefact, not a cold-start — and that used
   // to leave `readinessAbsentDiag` null (only the `!composite.present` branch

@@ -1777,7 +1777,15 @@ import 'substrate.dart';
 // the sleeping-HR nadir is the lowest 1-minute median, not the 1st-percentile
 // sample (a 25 bpm glitch was the nadir); and an RMSSD under 2 ms — a stuck
 // beat stream — is absent, not a confident 0 ms. kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 103;
+// 103 → 104 (WHOOP-matched sleep performance and recovery, the owner's
+// choice; compute/whoop_calibration.dart): sleep performance is now WHOOP's
+// combination of hours-vs-need and sleep consistency, and recovery — on any
+// night the composite was allowed to score — is WHOOP's combination of HRV,
+// RHR, breathing and last night's sleep performance. Constants are fitted to
+// the owner's WHOOP export (MAE 10.0 → 3.5 and 13.2 → 7.0 on it). The cross-
+// day pass now stores sleep_need_min and sleep_consistency per day so the next
+// day can use them. kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 104;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2301,6 +2309,12 @@ class _BaselineHistoryCache {
     // This person's per-day quiet-waking HRR — strain subtracts the median of
     // the days before (quiet_level.dart), never a population constant.
     'quiet_hrr',
+    // The cross-day pass's sleep need and sleep consistency for each day, and
+    // the sleep performance series — last night's need/consistency and the
+    // performance baseline feed the WHOOP-matched recovery.
+    'sleep_need_min',
+    'sleep_consistency',
+    'sleep_perf',
   ];
 
   /// DATED baseline samples, ascending by date, one entry per day (metric_series
@@ -5211,6 +5225,12 @@ class DerivationEngine {
     // never banded on a ceiling its own session set.
     m['observed_hr_ceiling_bpm'] = history.maxBefore('hr_ceiling_bpm', date);
     m['quiet_hrr_history'] = history.valuesBefore('quiet_hrr', date);
+    // The need and consistency the cross-day pass stored YESTERDAY are last
+    // night's; anything older is not this night's need.
+    m['prev_sleep_need_min'] = history.latestBefore('sleep_need_min', date, 1)?.value;
+    m['prev_sleep_consistency'] =
+        history.latestBefore('sleep_consistency', date, 1)?.value;
+    m['sleep_perf_history'] = history.valuesBefore('sleep_perf', date);
     return m;
   }
 
@@ -5286,7 +5306,8 @@ class DerivationEngine {
       // one layer up on the output.
       final builtForDay = LocalDb.localDayLabelNow();
       final builtAtEpoch = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final (bundleJson, dropped, sleepPerf) = await _runIsolateCancellable(
+      final (bundleJson, dropped, sleepPerf, sleepNeedMin, sleepConsistency) =
+          await _runIsolateCancellable(
         () {
           final bundle =
               buildCrossDayBundle(
@@ -5309,10 +5330,19 @@ class DerivationEngine {
           final perfEnv = coach is Map ? coach['performance'] : null;
           final perfV = perfEnv is Map ? perfEnv['value'] : null;
           final perf = perfV is Map ? perfV['pct'] : null;
+          final needEnv = coach is Map ? coach['need'] : null;
+          final needV = needEnv is Map ? needEnv['value'] : null;
+          final needSec = needV is Map ? needV['need_sec'] : null;
+          final reg = bundle['regularity'];
+          final regV = reg is Map ? reg['value'] : null;
+          final sri = regV is Map ? regV['sri'] : null;
+          double? fin(Object? v) => v is num && v.isFinite ? v.toDouble() : null;
           return (
             jsonEncode(safe),
             paths,
-            perf is num && perf.isFinite ? perf.toDouble() : null,
+            fin(perf),
+            fin(needSec) == null ? null : fin(needSec)! / 60,
+            fin(sri),
           );
         },
         _crossDayTimeout,
@@ -5330,6 +5360,11 @@ class DerivationEngine {
           await LocalDb.metricValueOn(builtForDay, 'tst_min') != null;
       await LocalDb.putMetricSeriesValue(
           builtForDay, 'sleep_perf', ownNight ? sleepPerf : null);
+      // Tonight's need and the current consistency, so tomorrow's day pass can
+      // score last night's sleep performance into recovery (whoop_calibration).
+      await LocalDb.putMetricSeriesValue(builtForDay, 'sleep_need_min', sleepNeedMin);
+      await LocalDb.putMetricSeriesValue(
+          builtForDay, 'sleep_consistency', sleepConsistency);
       if (dropped.isNotEmpty) {
         // Loud, not debug-only: a dropped field is a metric the user will see
         // as absent, and the reason lives here and nowhere else.
