@@ -1738,7 +1738,20 @@ import 'substrate.dart';
 // approximate ADULT reference values (`kRoughRhrMean/Sd`, `kRoughRespMean/Sd`,
 // HRV deliberately excluded), the composite's weights and logistic map, the
 // same z-cap. Bundle-only, never the readiness series. UI: "Rough guide".
-const int kAlgoVersion = 100;
+// 100 → 101 (carried resting HR for day strain, edge-only orchestration): a
+// day whose night was not recorded had no nocturnal RHR, so TRIMP abstained
+// and strain was "—" all day (the "Strain needs a resting heart rate" report).
+// The person's own measured nocturnal RHR from a night within
+// kStrainRhrCarryDays (7) now anchors TRIMP and the activity energy on such a
+// day, the same anchor live workouts score on. Recorded as
+// `strain_rhr_carried` {value, date}; no measured night that recent, still no
+// strain. Readiness is untouched (it still needs tonight's own RHR).
+// kAnalyticsPin/kProtocolPin UNCHANGED.
+const int kAlgoVersion = 101;
+
+/// How far back a measured nocturnal resting HR may anchor a day's strain
+/// when that day's own night was not recorded.
+const int kStrainRhrCarryDays = 7;
 /// The sibling SHAs this version was derived against, asserted against
 /// pubspec.yaml in test/db_serve_version_and_reads_test.dart.
 ///
@@ -2388,6 +2401,18 @@ class _BaselineHistoryCache {
     // entries) — this is unreachable today, but `?[...]` costs nothing and
     // survives a future refactor that builds one map without the other.
     return _prefixMax[key]?[end - 1];
+  }
+
+  /// The newest stored value of [key] dated before [beforeDate] and at most
+  /// [maxDays] calendar days earlier, with its date — or null.
+  _DatedValue? latestBefore(String key, String beforeDate, int maxDays) {
+    final series = _series[key] ?? const <_DatedValue>[];
+    final end = _beforeIndex(series, beforeDate);
+    if (end == 0) return null;
+    final last = series[end - 1];
+    final a = DateTime.tryParse(last.date), b = DateTime.tryParse(beforeDate);
+    if (a == null || b == null) return null;
+    return calendarDaysBetween(a, b) <= maxDays ? last : null;
   }
 
   List<double> valuesBefore(String key, String beforeDate) {
@@ -4508,6 +4533,24 @@ class DerivationEngine {
           ),
       ];
 
+      // A day whose night was not recorded (band off overnight, no sleep
+      // detected) has no resting HR of its own, and every waking minute of it
+      // then went unscored: strain "—" all day. The person's own MEASURED
+      // nocturnal RHR from a night within [kStrainRhrCarryDays] stands in —
+      // the anchor live workouts already score on, and a quantity that moves
+      // over weeks, not days. Never a default: no measured night that recent,
+      // no strain. Recorded on the bundle so the day says which night it used.
+      final rhrTonight = (scMap?['rhr_nocturnal'] as num?)?.toDouble();
+      final rhrCarried = rhrTonight == null
+          ? history.latestBefore('rhr', day.date, kStrainRhrCarryDays)
+          : null;
+      if (rhrCarried != null) {
+        bundle['strain_rhr_carried'] = {
+          'value': rhrCarried.value,
+          'date': rhrCarried.date,
+        };
+      }
+
       final blocksInput = _DayBlocksInput(
         daySub: daySub,
         napSub: day.napSub,
@@ -4521,7 +4564,7 @@ class DerivationEngine {
         // against an awake reference and published a strain the pure pipeline
         // had already refused to publish. `rhr_nocturnal` is null unless a
         // sleep session was detected — exactly the gate readiness uses.
-        rhr: (scMap?['rhr_nocturnal'] as num?)?.toDouble(),
+        rhr: rhrTonight ?? rhrCarried?.value,
         maxHrUsed: (bundle['max_hr_used'] as num?)?.round(),
         liveStepsReal: liveSteps.total,
         liveStepsFromStrap: liveSteps.strap,
@@ -4616,6 +4659,21 @@ class DerivationEngine {
           // TRIMP", naming a sibling metric instead of the missing input.
           strainEnv['note'] =
               blocks.wake['strain_absent'] ?? kUnknownAbsenceNote;
+        }
+      } else if (scMap != null &&
+          scMap['strain'] is num &&
+          bundle['strain_rhr_carried'] is Map) {
+        // The pure half abstained (no resting HR tonight) and the recompute
+        // scored off a carried one: the envelope takes the scalar, and says
+        // which night's resting HR it rests on.
+        final strainEnv = (bundle['clinical'] as Map?)?['strain'];
+        if (strainEnv is Map) {
+          final c = bundle['strain_rhr_carried'] as Map;
+          strainEnv['value'] = scMap['strain'];
+          strainEnv['confidence'] = .6;
+          strainEnv['note'] =
+              'No sleep recorded last night; scored against your resting heart '
+              'rate of ${(c['value'] as num).round()} bpm from ${c['date']}.';
         }
       }
 
