@@ -1747,7 +1747,17 @@ import 'substrate.dart';
 // `strain_rhr_carried` {value, date}; no measured night that recent, still no
 // strain. Readiness is untouched (it still needs tonight's own RHR).
 // kAnalyticsPin/kProtocolPin UNCHANGED.
-const int kAlgoVersion = 101;
+// 101 → 102 (WHOOP-formulated nightly HRV, edge-only orchestration): the
+// headline RMSSD (→ ln_rmssd → readiness) is now WHOOP's published method —
+// overlapping 5-min windows stepping 30 s across the sleep, wake windows
+// removed, a weighted mean with deep-sleep and later-night windows weighted up
+// (compute/night_hrv.dart). Each window is still analytics'
+// sleepSessionWindowedRmssd (same RR cleaner, same jitter refusal); the
+// weights are provisional (WHOOP does not publish them). Falls back to the
+// plain session mean when fewer than kHrvMinWindows windows qualify. Older
+// nights in the baseline keep the previous method's value (raw is gone), so
+// readiness settles over the following weeks. kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 102;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.

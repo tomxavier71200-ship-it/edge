@@ -37,6 +37,7 @@ import 'hr_max.dart'
         smoothedMaxHr,
         smoothedMinHr,
         trainingZones;
+import 'night_hrv.dart' show weightedNightRmssd;
 import 'profile.dart' show workoutSex;
 import 'step_cadence.dart' show cadenceSpmForMinutes;
 // Same argument: a pure `DateTime` lookup, no DB / IO / Flutter binding. It is
@@ -454,9 +455,25 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     startSec: d.sleepOnsetSec,
     endSec: d.sleepOffsetSec,
   );
-  final sleepSessionRmssd = sleepSessionRmssdMetric.present
-      ? sleepSessionRmssdMetric.value
-      : null;
+  // THE HEADLINE is WHOOP's formulation (night_hrv.dart): overlapping 5-min
+  // windows, wake removed, deep sleep and later night weighted up. It is only
+  // tried on a night the session estimator accepted — same cleaner, and its
+  // night-level jitter refusal still gates — and when it abstains (too few
+  // staged windows) the session mean stands, which measures the same thing.
+  final weightedRmssdMetric = sleepSessionRmssdMetric.present
+      ? weightedNightRmssd(
+          d.sleepRrMs,
+          d.sleepRrTsMs,
+          startSec: d.sleepOnsetSec,
+          endSec: d.sleepOffsetSec,
+          stages: d.hypnoStages,
+        )
+      : sleepSessionRmssdMetric;
+  final headlineRmssdMetric = weightedRmssdMetric.present
+      ? weightedRmssdMetric
+      : sleepSessionRmssdMetric;
+  final sleepSessionRmssd =
+      headlineRmssdMetric.present ? headlineRmssdMetric.value : null;
   final hrvF = nn.length >= 20
       ? hrvFreq(nn, nnTimes, artifactFraction: artifactFraction)
       : Metric<HrvFreq>.absent(
@@ -1005,12 +1022,18 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     // retained alongside it as a secondary detail for comparison/debugging.
     'rmssd_sleep_session': {
       'value': sleepSessionRmssd == null ? '—' : _round(sleepSessionRmssd, 1),
-      'confidence': sleepSessionRmssdMetric.present
-          ? _round(sleepSessionRmssdMetric.confidence, 4)
+      'confidence': headlineRmssdMetric.present
+          ? _round(headlineRmssdMetric.confidence, 4)
           : 0,
       'tier': Tier.high,
-      'inputs_used': const ['rr_sleep_window'],
-      'note': sleepSessionRmssdMetric.note,
+      'inputs_used': headlineRmssdMetric.inputs_used,
+      'note': headlineRmssdMetric.note,
+      // Which formulation produced the headline, and the plain session mean
+      // beside it, so a change in method is visible on the day it happened.
+      'method': weightedRmssdMetric.present ? 'weighted_overlap' : 'session_mean',
+      'session_mean': sleepSessionRmssdMetric.present
+          ? _round(sleepSessionRmssdMetric.value!, 1)
+          : null,
     },
     'rmssd_nocturnal': robustRmssd.toJson(),
     'hrv_freq': hrvF.toJson((v) => v.toJson()),
