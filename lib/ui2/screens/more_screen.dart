@@ -29,6 +29,7 @@ import 'healthspan_screen.dart';
 import 'monthly_report.dart';
 import 'strength_screen.dart';
 import 'vo2max_screen.dart';
+import 'blood_pressure_screen.dart' show BloodPressureScreen;
 import 'wellness_screen.dart' show JournalFindings;
 
 class MoreScreen extends StatelessWidget {
@@ -113,6 +114,9 @@ class MoreScreen extends StatelessWidget {
             onTap: () => go(c, const HealthspanScreen())),
         DoorTile(LucideIcons.gauge, C.green, 'VO2 max', 'From your GPS runs',
             onTap: () => go(c, const Vo2maxScreen())),
+        DoorTile(LucideIcons.heartPulse, C.red, 'Blood pressure',
+            'Your cuff readings',
+            onTap: () => go(c, const BloodPressureScreen())),
         DoorTile(LucideIcons.dumbbell, C.strain, 'Strength',
             'Sets per muscle group',
             onTap: () => go(c, const StrengthScreen())),

@@ -32,6 +32,7 @@ import 'package:openstrap_edge/ui2/screens/stress_detail.dart';
 import 'package:openstrap_edge/ui2/screens/stress_monitor.dart';
 import 'package:openstrap_edge/ui2/screens/health_monitor.dart';
 import 'package:openstrap_edge/ui2/screens/overview_screen.dart';
+import 'package:openstrap_edge/ui2/screens/blood_pressure_screen.dart';
 import 'package:openstrap_edge/ui2/screens/screens.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
@@ -299,6 +300,14 @@ void main() {
       ]),
     ),
     'overview': OverviewScreen(series: _home.series),
+    'blood_pressure': ListView(padding: const EdgeInsets.all(16), children: [
+      BpLatestCard(reading: (at: DateTime.now(), sys: 128, dia: 82, source: 'Omron')),
+      const SizedBox(height: 12),
+      for (final (s, d, src) in [(128.0, 82.0, 'Omron'), (121.0, 78.0, 'Entered by you'), (117.0, 74.0, 'Omron')]) ...[
+        BpRow(reading: (at: DateTime.now(), sys: s, dia: d, source: src)),
+        const SizedBox(height: 8),
+      ],
+    ]),
     'health_overview': HealthScreen(data: _health, tab: 0),
     'health_monitor': HealthMonitorScreen(tiles: [
       RangeTile(icon: LucideIcons.wind, name: 'Respiratory rate', value: 12.8,

@@ -55,6 +55,21 @@ double? whoActivityMinutes(List<List<int>?> days) {
   return total * 7 / seen.length;
 }
 
+/// Weekly minutes in zones [from]..[to] (1-based, inclusive), scaled to a full
+/// week from the worn days — WHOOP's "HR zones 1-3 / 4-5 (weekly)". Null
+/// without [kHabitMinDays] days of zones.
+double? weeklyZoneMinutes(List<List<int>?> days, int from, int to) {
+  final seen = [for (final z in days) if (z != null && z.length == 5) z];
+  if (seen.length < kHabitMinDays) return null;
+  var total = 0.0;
+  for (final z in seen) {
+    for (var k = from - 1; k < to; k++) {
+      total += z[k];
+    }
+  }
+  return total * 7 / seen.length;
+}
+
 /// The mean of a series over the last 7 local days, or null under the floor.
 double? weekMean(List<({int t, double v})> pts, DateTime now) {
   final to = DateTime(now.year, now.month, now.day + 1);
@@ -117,6 +132,16 @@ class _HealthspanScreenState extends State<HealthspanScreen> {
       out.add(Habit('Activity', act == null ? '—' : '${act.round()} min/wk',
           '150 min/wk', 'WHO', against(act, 150)));
 
+      // WHOOP's two Healthspan zone rows. Zones 4–5 are vigorous, judged
+      // against WHO's 75 vigorous minutes; zones 1–3 mix light with moderate,
+      // so no guideline sets a number for them and they are shown as a value.
+      final z13 = weeklyZoneMinutes(zones, 1, 3);
+      final z45 = weeklyZoneMinutes(zones, 4, 5);
+      out.add(Habit('HR zones 1–3', z13 == null ? '—' : '${z13.round()} min/wk',
+          'More is better', '', z13 == null ? HabitState.noData : HabitState.noTarget));
+      out.add(Habit('HR zones 4–5', z45 == null ? '—' : '${z45.round()} min/wk',
+          '75 min/wk', 'WHO', against(z45, 75)));
+
       // Strength: WHO, muscle-strengthening on 2 or more days a week.
       int? strengthDays;
       try {
@@ -172,6 +197,10 @@ class _HealthspanScreenState extends State<HealthspanScreen> {
       out.add(Habit('Sleep regularity',
           sri == null ? '—' : '${sri.round()} / 100', 'Higher is better', '',
           sri == null ? HabitState.noData : HabitState.noTarget));
+      // WHOOP's ninth measure. The band cannot measure body composition, and
+      // there is no import of it yet: it stays "—" rather than guessed.
+      out.add(const Habit('Lean body mass', '—',
+          'Needs a body-composition scale', '', HabitState.noData));
     }
     if (mounted) setState(() => _habits = out);
   }

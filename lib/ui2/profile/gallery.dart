@@ -62,6 +62,7 @@ import '../screens/home_sections.dart'
     show CoachBubble, DayInReviewCard, MonitorTiles, StressDashRow, WeekPlanCard;
 import 'app_health.dart' show HealthChecksCard, appHealthChecks;
 import '../screens/records_screen.dart' show RecordTile;
+import '../screens/blood_pressure_screen.dart' show BpLatestCard, BpRow, DoorRowLite;
 import '../screens/overview_screen.dart' show ActivityGroup, BandHistogram;
 import '../activity/whoop_summary.dart'
     show
@@ -823,6 +824,12 @@ Map<String, Widget> _nutritionAndWellnessCases() {
       (name: '92%+ Sleep efficiency', met: 4, days: 7),
       (name: '8,000+ steps', met: 0, days: 7),
     ]),
+    'bp_latest': BpLatestCard(
+        reading: (at: DateTime(2026, 10, 18, 8, 5), sys: 128, dia: 82, source: 'Omron')),
+    'bp_row': BpRow(
+        reading: (at: DateTime(2026, 10, 17, 21, 40), sys: 118, dia: 76, source: 'Entered by you')),
+    'door_row_lite': DoorRowLite(
+        icon: LucideIcons.download, title: 'Import from Apple Health', onTap: () {}),
     'record_tile': const RecordTile(
         icon: LucideIcons.activity,
         color: C.green,
