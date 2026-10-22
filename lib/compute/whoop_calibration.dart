@@ -41,6 +41,10 @@ const double kPerfFitMedian = 71.0;
 const double kPerfFitSpread = 10.38;
 const int kPerfBaselineMin = 7;
 
+/// Largest |z| any recovery input may contribute — the same rail
+/// `kReadinessZCap` (onehz_pipeline.dart) puts on the composite.
+const double kCalZCap = 5.0;
+
 /// WHOOP-matched sleep performance (0–100) from asleep and needed minutes and
 /// sleep consistency (0–100). Null without asleep or need; asleep ÷ need alone
 /// — the previous formula — when consistency is unknown.
@@ -70,13 +74,22 @@ double? calibratedRecovery({
   required double? sleepPerf,
   required List<double> sleepPerfHistory,
 }) {
-  final zH = hrvLn == null ? null : robustZ(hrvLn, hrvLnHistory);
+  // Every z is capped at ±[kCalZCap]: a baseline whose spread is tiny but not
+  // zero turns an ordinary night into a z of 20+, and one input must not be
+  // able to throw the score to the rail on its own.
+  double? cap(double? z) => z?.clamp(-kCalZCap, kCalZCap).toDouble();
+  final zH = cap(hrvLn == null ? null : robustZ(hrvLn, hrvLnHistory));
   if (zH == null || sleepPerf == null) return null;
-  final zR = rhr == null ? null : robustZ(rhr, rhrHistory);
-  final zB = resp == null ? null : robustZ(resp, respHistory);
-  final zS = sleepPerfHistory.length >= kPerfBaselineMin
-      ? robustZ(sleepPerf, sleepPerfHistory)
-      : (sleepPerf - kPerfFitMedian) / kPerfFitSpread;
+  final zR = cap(rhr == null ? null : robustZ(rhr, rhrHistory));
+  final zB = cap(resp == null ? null : robustZ(resp, respHistory));
+  // Sleep performance is capped at 100, so a run of full nights has a MAD of
+  // exactly 0 and robustZ abstains — and `zS ?? 0` then scored a 30 % night
+  // as an ordinary one. With no usable personal spread (too few nights, or
+  // none), the fit's own median and spread scale it.
+  final zS = cap((sleepPerfHistory.length >= kPerfBaselineMin
+          ? robustZ(sleepPerf, sleepPerfHistory)
+          : null) ??
+      (sleepPerf - kPerfFitMedian) / kPerfFitSpread);
   final v = kRecIntercept +
       kRecHrv * zH +
       kRecRhr * -(zR ?? 0) + // lower resting HR is better

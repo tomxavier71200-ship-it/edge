@@ -18,6 +18,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:openstrap_analytics/onehz.dart' as ana;
+import '../compute/workout_autolog.dart';
 import '../compute/quiet_level.dart' show kQuietHistoryDays, personalQuietHrr;
 import 'package:openstrap_protocol/openstrap_protocol.dart' as proto;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -6581,8 +6582,9 @@ class AppState extends ChangeNotifier {
 
   /// Every settled, unanswered workout detection becomes a session marked
   /// `detected` — the "Auto-detected" chip — the way WHOOP adds an activity
-  /// without asking. Skipped while it may still be going (ended under 10 min
-  /// ago), when it overlaps a session already logged, or when an answered
+  /// without asking ([autoLogDecision]). Waits while it may still be going or
+  /// a live workout is being recorded; skipped when it overlaps a session
+  /// already logged (an open one included), or when an answered
   /// suggestion covers it (a deleted auto-log stays deleted: logging marks the
   /// suggestion answered, and a re-detection of the same bout is caught by the
   /// overlap). Off with [kAutoLogWorkoutsKey]. Returns how many were added.
@@ -6595,17 +6597,24 @@ class AppState extends ChangeNotifier {
       final id = s['id'] as String?;
       final st = (s['start_ts'] as num?)?.toInt();
       final en = (s['end_ts'] as num?)?.toInt();
-      if (id == null || st == null || en == null || en <= st) continue;
-      if (nowSec - en < 10 * 60) continue;
-      final logged = await LocalDb.sessionsInRange(st - 12 * 3600, en);
-      bool overlaps(Map<String, dynamic> o) {
-        var a = (o['start_ts'] as num?)?.toInt(), b = (o['end_ts'] as num?)?.toInt();
-        if (a == null || b == null) return false;
-        if (a > 1000000000000) a ~/= 1000;
-        if (b > 1000000000000) b ~/= 1000;
-        return a < en && b > st;
+      if (id == null || st == null || en == null) continue;
+      int? sec(Object? v) {
+        final t = (v as num?)?.toInt();
+        return t != null && t > 1000000000000 ? t ~/ 1000 : t;
       }
-      if (logged.any(overlaps) || await LocalDb.answeredSuggestionOverlaps(st, en)) {
+      final logged = await LocalDb.sessionsInRange(st - 12 * 3600, en);
+      final decision = autoLogDecision(
+        startSec: st,
+        endSec: en,
+        nowSec: nowSec,
+        sessions: [for (final o in logged) (sec(o['start_ts']), sec(o['end_ts']))],
+        answeredOverlap: await LocalDb.answeredSuggestionOverlaps(st, en),
+        liveStartSec: activeWorkout == null
+            ? null
+            : activeWorkout!.startTime.millisecondsSinceEpoch ~/ 1000,
+      );
+      if (decision == AutoLogDecision.wait) continue;
+      if (decision == AutoLogDecision.skip) {
         await LocalDb.dismissWorkoutSuggestion(id);
         continue;
       }

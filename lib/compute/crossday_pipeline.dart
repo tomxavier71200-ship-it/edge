@@ -53,6 +53,7 @@ Map<String, dynamic> buildCrossDayBundle(
   Map<String, dynamic> profile, {
   List<String> cycleStartDates = const [],
   Map<String, List<String>> sessionTypesByDate = const {},
+  double? lastNightNeedMin,
 }) {
   final days = daysOldestFirst;
   final n = days.length;
@@ -374,12 +375,17 @@ Map<String, dynamic> buildCrossDayBundle(
           !needNoStrain.present)
       ? null
       : ((need.value!.needSec - needNoStrain.value!.needSec) / 60).round();
-  // last night's TST (sec) for performance.
-  final lastTstMin = _lastNum(days, 'tst_min');
-  // WHOOP-matched (whoop_calibration.dart): hours against need AND sleep
-  // consistency, the combination WHOOP's own number follows.
-  final perfPct = (need.present && lastTstMin != null)
-      ? calibratedSleepPerformance(lastTstMin, need.value!.needSec / 60,
+  // LAST NIGHT against LAST NIGHT'S need. `need` above is TONIGHT's (it adds
+  // today's strain and subtracts today's naps), so dividing last night's sleep
+  // by it scored the night against a target set after it ended — and gave the
+  // Sleep screen a different performance from the one recovery used for the
+  // same night (recovery reads the need the cross-day pass stored the day
+  // before). [lastNightNeedMin] is that stored need. And only TODAY's own
+  // night: `_lastNum` walked back to the last night it could find, scoring an
+  // unrecorded night with an old one.
+  final lastTstMin = _todayNum(days, 'tst_min');
+  final perfPct = (lastNightNeedMin != null && lastTstMin != null)
+      ? calibratedSleepPerformance(lastTstMin, lastNightNeedMin,
           sri.present ? sri.value!.sri : null)
       : null;
   final perf = perfPct != null
@@ -396,7 +402,12 @@ Map<String, dynamic> buildCrossDayBundle(
           // itself, carry the need's own reason forward rather than restating
           // it as "no sleep need" — that would name a sibling metric, which is
           // the failure this whole convention exists to stop.
-          note: need.present ? needInputNote('tst_min') : need.note,
+          note: lastTstMin == null
+              ? needInputNote('tst_min')
+              : (lastNightNeedMin == null
+                  ? 'needs the sleep need set for last night, stored the day '
+                      'before; it starts once one day has passed'
+                  : null),
         );
   // typical wake clock-minute + efficiency from recent days (medians).
   final wakeMins = <double>[
@@ -648,7 +659,7 @@ double? _median(List<double> xs) {
 /// The value of [key] on the MOST RECENT day only, or null if that day did not
 /// produce one.
 ///
-/// Unlike [_lastNum] this never reaches back to an earlier day. For a
+/// Unlike the removed `_lastNum`, this never reaches back to an earlier day. For a
 /// TODAY-scoped quantity that is the difference between "we have no reading"
 /// and a fabricated one: `_lastNum(days, 'nap_min')` would credit YESTERDAY's
 /// naps against tonight's sleep need whenever today's nap detection abstained,
@@ -663,15 +674,6 @@ double? _todayNum(List<Map<String, dynamic>> days, String key) {
   final last = days.last;
   if (last['is_today'] != true) return null;
   return _numOrNull(last[key]);
-}
-
-/// The last non-null value of [key] across the (oldest-first) day records.
-double? _lastNum(List<Map<String, dynamic>> days, String key) {
-  for (var i = days.length - 1; i >= 0; i--) {
-    final v = _numOrNull(days[i][key]);
-    if (v != null) return v;
-  }
-  return null;
 }
 
 /// Sat/Sun => free day. We lack a real work/free calendar; the weekday split is

@@ -750,8 +750,27 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // own key and NEVER written to the `readiness` series: the 28-day baseline,
   // streaks, alerts and exports read that series, and a calibrating number
   // in it would be a fabricated history. The UI labels it "Early estimate".
-  final readinessEarlyScalar =
+  //
+  // THE SAME FORMULA AS THE FULL SCORE. The early composite only decides THAT
+  // an early number may be shown; its value is the WHOOP-matched recovery over
+  // the same short histories. Otherwise the composite's logistic (centred on
+  // 50) handed over to the calibrated formula (centred near 61) on night 15,
+  // and an ordinary night jumped ~10 points for no physiological reason.
+  final readinessEarlyComposite =
       earlyReadinessScalar(composite, readinessInputs);
+  final readinessEarlyScalar = readinessEarlyComposite == null
+      ? null
+      : (calibratedRecovery(
+            hrvLn: lnToday,
+            hrvLnHistory: d.lnRmssdHistory,
+            rhr: rhrToday,
+            rhrHistory: d.rhrHistory,
+            resp: respToday,
+            respHistory: d.respHistory,
+            sleepPerf: perfNight,
+            sleepPerfHistory: d.sleepPerfHistory,
+          ) ??
+          readinessEarlyComposite);
   // Rough guide: only while cold-starting AND before the early estimate can
   // exist (fewer than kReadinessEarlyMinBaseline nights of history).
   final readinessRoughScalar = !composite.present &&

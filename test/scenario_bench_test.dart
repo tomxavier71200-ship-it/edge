@@ -130,6 +130,8 @@ const _profile = {'age': 35, 'sex': 'm', 'weight_kg': 78, 'height_cm': 180};
 List<Map<String, dynamic>> derive(Scene s,
     {Map<String, dynamic> profile = _profile,
     bool history = true,
+    int nights = 20,
+    double? prevNeedMin,
     List<double> quiet = const []}) {
   final payload = prepareDerivationPayload(build(s));
   return [
@@ -159,13 +161,14 @@ List<Map<String, dynamic>> derive(Scene s,
         // A realistic personal history around this scene's own night: real
         // spread, so readiness has a baseline to stand on.
         if (history) ...{
-          'ln_rmssd_history': [for (var i = 0; i < 20; i++) math.log(60.0 + 3 * (i % 7))],
-          'rhr_history': [for (var i = 0; i < 20; i++) 49.0 + (i % 5)],
-          'resp_history': [for (var i = 0; i < 20; i++) 12.6 + (i % 4) * .3],
-          'rmssd_history': [for (var i = 0; i < 20; i++) 60.0 + 3 * (i % 7)],
-          'skin_temp_adc_history': [for (var i = 0; i < 20; i++) 30480.0 + 10 * (i % 5)],
+          'ln_rmssd_history': [for (var i = 0; i < nights; i++) math.log(60.0 + 3 * (i % 7))],
+          'rhr_history': [for (var i = 0; i < nights; i++) 49.0 + (i % 5)],
+          'resp_history': [for (var i = 0; i < nights; i++) 12.6 + (i % 4) * .3],
+          'rmssd_history': [for (var i = 0; i < nights; i++) 60.0 + 3 * (i % 7)],
+          'skin_temp_adc_history': [for (var i = 0; i < nights; i++) 30480.0 + 10 * (i % 5)],
         },
         'quiet_hrr_history': quiet,
+        'prev_sleep_need_min': ?prevNeedMin,
       }),
   ];
 }
@@ -284,6 +287,18 @@ void main() {
     final n = night(results['normal']!);
     // ignore: avoid_print
     print('DIAG ${n['readiness_absent_diag']} early=${sc(n)['readiness_early']} rough=${sc(n)['readiness_rough']} tempz=${sc(n)['skin_temp_z']} quiet=${sc(n)['quiet_hrr']}');
+  });
+
+  test('no jump from the early estimate to the full score (night 14 → 15)', () {
+    // Same night, same data; only the history length differs. 13 nights of
+    // history is still an early estimate, 14 is the full score. Both use the
+    // WHOOP-matched formula, so the number moves only as much as the baseline.
+    final early = sc(night(derive(scenes['normal']!, nights: 13, prevNeedMin: 480)));
+    final full = sc(night(derive(scenes['normal']!, nights: 14, prevNeedMin: 480)));
+    expect(early['readiness'], isNull);
+    final e = early['readiness_early'] as num;
+    final f = full['readiness'] as num;
+    expect((e - f).abs(), lessThan(5), reason: 'early $e vs full $f');
   });
 
   test('a normal night is found and measured', () {

@@ -29,8 +29,8 @@ import '../data/day_label.dart';
 /// mostly absent would reliably hand the answer to the missing data.
 const double kMinAccelCoverageForVanHees = 0.5;
 
-/// Most steps per hour an HR-led (fallback) sleep window may contain. Turning
-/// over in bed registers a few; an hour at work registers hundreds.
+/// Most steps per hour a detected sleep window may contain (either detector).
+/// Turning over in bed registers a few; an hour at work registers hundreds.
 const double kFallbackMaxStepsPerHour = 60;
 
 /// Physiological bound on a 1 Hz heart rate (bpm), inclusive.
@@ -1184,6 +1184,16 @@ List<PhysioDay> calendarDays(
           s = ana.SleepSegmentation.absent;
         }
         src = 'auto';
+        // The stillness-led window gets the same walking check: very still
+        // waking (a long desk stretch) can satisfy the angle rule, and a
+        // window the pedometer counted real walking in was not slept.
+        if (s.present &&
+            s.window?.onsetMs != null &&
+            s.window?.offsetMs != null &&
+            _walkedThrough(sub, s.window!.onsetMs! ~/ 1000,
+                s.window!.offsetMs! ~/ 1000)) {
+          s = ana.SleepSegmentation.absent;
+        }
         if (!s.present) {
           // Approach 2: accel-led detection found nothing → HR-led fallback.
           // Propose the longest sustained nocturnal HR dip, then STAGE it via the
@@ -1191,24 +1201,11 @@ List<PhysioDay> calendarDays(
           final tsSlice = [for (var i = loS; i < hiS; i++) sub.tsSec[i]];
           final cand =
               ana.hrLedSleepWindow(hrSlice, tsSlice, hrBaseline: hrBaseline);
-          // WALKING IS NOT SLEEP. The HR-led guess only asks "was HR low for
-          // 2 h", and a calm desk morning after a night the band never
-          // recorded passes that: the owner was shown 06:34–09:21 asleep
-          // while at the office with ~2,000 steps counted in it. A window in
-          // which the band's own pedometer counted real walking is rejected.
-          // Gen4 has no pedometer (null): unchanged there.
-          final candSteps = cand == null
-              ? null
-              : hardwareStepsFromCounter(
-                  sub.slice(cand.onsetSec, cand.offsetSec),
-                  cumulativeCounterModulus: 65536,
-                );
+          // WALKING IS NOT SLEEP (see [_walkedThrough]): the HR-led guess
+          // only asks "was HR low for 2 h", and a calm desk morning after a
+          // night the band never recorded passes that.
           final walked = cand != null &&
-              candSteps != null &&
-              candSteps >
-                  kFallbackMaxStepsPerHour *
-                      (cand.offsetSec - cand.onsetSec) /
-                      3600;
+              _walkedThrough(sub, cand.onsetSec, cand.offsetSec);
           if (cand != null && !walked) {
             final s2 = ana.segmentSleep(
               accelSlice,
@@ -1278,6 +1275,20 @@ List<PhysioDay> calendarDays(
     dayStart = dayEnd;
   }
   return days;
+}
+
+/// Whether the band's own pedometer counted real walking in [onsetSec,
+/// offsetSec): more than [kFallbackMaxStepsPerHour] on average. The owner was
+/// shown 06:34–09:21 asleep while at the office with ~2,000 steps counted in
+/// it. Gen4 has no pedometer (null steps): never "walked" there, unchanged.
+bool _walkedThrough(Substrate sub, int onsetSec, int offsetSec) {
+  if (offsetSec <= onsetSec) return false;
+  final steps = hardwareStepsFromCounter(
+    sub.slice(onsetSec, offsetSec),
+    cumulativeCounterModulus: 65536,
+  );
+  return steps != null &&
+      steps > kFallbackMaxStepsPerHour * (offsetSec - onsetSec) / 3600;
 }
 
 /// The LOCAL UTC offset in effect AT [epochSec] — not the offset in effect now.

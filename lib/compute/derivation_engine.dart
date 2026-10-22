@@ -1790,7 +1790,15 @@ import 'substrate.dart';
 // kFallbackMaxStepsPerHour in it. After a night the band never recorded, the
 // fallback had published a calm desk morning (06:34–09:21, ~2,000 steps) as
 // the owner's sleep. Gen4 (no pedometer) unchanged. kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 105;
+// 105 → 106 (audit fixes): recovery caps each input's z at ±5 and scales a
+// sleep performance whose personal history has no spread (a run of 100 %
+// nights, MAD 0) by the fit's spread instead of ignoring it; the early
+// estimate (nights 5–14) uses the same WHOOP-matched formula as the full score
+// (no ~10-point jump on night 15); sleep performance scores last night against
+// LAST NIGHT's stored need and only today's own night (crossday_pipeline); the
+// walking check rejects stillness-detected sleep windows too (substrate.dart).
+// kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 106;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -5311,6 +5319,11 @@ class DerivationEngine {
       // one layer up on the output.
       final builtForDay = LocalDb.localDayLabelNow();
       final builtAtEpoch = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      // The need this pass stored YESTERDAY is last night's target — the one
+      // its sleep performance is scored against (and the one recovery reads).
+      final bd = DateTime.parse(builtForDay);
+      final lastNightNeedMin = await LocalDb.metricValueOn(
+          dayLabelOf(DateTime(bd.year, bd.month, bd.day - 1)), 'sleep_need_min');
       final (bundleJson, dropped, sleepPerf, sleepNeedMin, sleepConsistency) =
           await _runIsolateCancellable(
         () {
@@ -5320,6 +5333,7 @@ class DerivationEngine {
                   profileMap,
                   cycleStartDates: cycleStarts,
                   sessionTypesByDate: sessionTypes,
+                  lastNightNeedMin: lastNightNeedMin,
                 )
                 ..['algo_version'] = kAlgoVersion
                 ..['built_for_day'] = builtForDay

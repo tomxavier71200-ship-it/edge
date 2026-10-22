@@ -601,4 +601,40 @@ void _wiredFamilies() {
       expect(sc['value'], '—');
     });
   });
+
+  group('sleep performance scores last night against last night\'s need', () {
+    double? perfOf(Map<String, dynamic> b) {
+      final perf = (b['sleep_coach'] as Map)['performance'] as Map;
+      final v = perf['value'];
+      return v is Map ? (v['pct'] as num?)?.toDouble() : null;
+    }
+
+    test('the stored last-night need is the divisor, not tonight\'s', () {
+      final days = _synthDays(30);
+      days.last['is_today'] = true;
+      // 450 min asleep against a 450 min need: the hours term is full.
+      final a = perfOf(buildCrossDayBundle(days, const {}, lastNightNeedMin: 450));
+      final b = perfOf(buildCrossDayBundle(days, const {}, lastNightNeedMin: 900));
+      expect(a, isNotNull);
+      expect(b, isNotNull);
+      expect(a!, greaterThan(b!), reason: 'twice the need, half the hours term');
+    });
+
+    test('no stored need for last night: absent, with the reason', () {
+      final days = _synthDays(30);
+      days.last['is_today'] = true;
+      final b = buildCrossDayBundle(days, const {});
+      expect(perfOf(b), isNull);
+      final perf = (b['sleep_coach'] as Map)['performance'] as Map;
+      expect(perf['note'], contains('last night'));
+    });
+
+    test('an unrecorded night is not scored with an older one', () {
+      final days = _synthDays(30);
+      days.last
+        ..['is_today'] = true
+        ..remove('tst_min');
+      expect(perfOf(buildCrossDayBundle(days, const {}, lastNightNeedMin: 450)), isNull);
+    });
+  });
 }
