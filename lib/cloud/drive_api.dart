@@ -17,6 +17,10 @@ const kDriveScope = 'https://www.googleapis.com/auth/drive.file';
 const kDriveFolderName = 'Koop';
 const kDriveFileName = 'koop-cloud.kbak';
 
+/// The phone's diagnostics log (its latest part), locked with the same
+/// passphrase, so a problem on the phone can be read from the dashboard.
+const kDriveLogName = 'koop-log.kbak';
+
 /// A WHOOP export the web dashboard sent, locked with the Koop Cloud
 /// passphrase. The sending phone imports and bins it (CloudSync).
 const kDriveWhoopFileName = 'whoop-import.kbak';
@@ -156,7 +160,8 @@ class DriveApi {
   /// pile. Resumable protocol: a session is opened with the metadata, then the
   /// bytes are STREAMED from disk in one PUT. The file is the whole database;
   /// it is never read into memory.
-  Future<DriveFile> upload(File src, String parent, {String? existingId}) async {
+  Future<DriveFile> upload(File src, String parent,
+      {String? existingId, String name = kDriveFileName}) async {
     final len = await src.length();
     final start = existingId == null
         ? http.Request('POST', Uri.parse('$_upload?uploadType=resumable&fields=id,modifiedTime,size'))
@@ -168,7 +173,7 @@ class DriveApi {
       'X-Upload-Content-Length': '$len',
     });
     start.body = jsonEncode({
-      'name': kDriveFileName,
+      'name': name,
       if (existingId == null) 'parents': [parent],
     });
     final opened = await http.Response.fromStream(

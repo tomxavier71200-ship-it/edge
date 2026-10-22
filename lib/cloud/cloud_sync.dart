@@ -32,6 +32,7 @@ import 'package:path_provider/path_provider.dart';
 import '../data/db.dart';
 import '../import/backup_crypto.dart';
 import '../state/prefs.dart';
+import '../sync/file_log.dart';
 import 'drive_api.dart';
 
 /// OAuth client ids from the Google Cloud project. Empty means Koop Cloud is
@@ -493,6 +494,12 @@ class CloudSync extends ChangeNotifier {
       final folder = await api.folder();
       final existing = await api.find(kDriveFileName, parent: folder);
       final up = await api.upload(File(enc), folder, existingId: existing?.id);
+      // The diagnostics log rides along — best effort, never failing the data.
+      try {
+        await _uploadLog(api, folder, pass);
+      } catch (e) {
+        debugPrint('[cloud] log upload skipped: $e');
+      }
       Prefs.setInt(kCloudLastUpKey, DateTime.now().millisecondsSinceEpoch);
       if (gen == _dirtyGen) Prefs.setBool(kCloudDirtyKey, false);
       Prefs.setString(kCloudUpMarkKey, mark);
@@ -504,6 +511,43 @@ class CloudSync extends ChangeNotifier {
       for (final f in [plain, enc]) {
         try {
           await File(f).delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Bytes of the log's newest end that go to Drive with each upload.
+  static const int kCloudLogBytes = 512 * 1024;
+
+  /// The newest [kCloudLogBytes] of the app log (the rotated `.1` file first
+  /// when the live one is short), gzipped and locked with [pass] exactly like
+  /// the data, as [kDriveLogName]. The log can hold health numbers, so it gets
+  /// the same protection as the database and goes only to the person's Drive.
+  Future<void> _uploadLog(DriveApi api, String folder, String pass) async {
+    final path = await FileLog.path();
+    if (path == null) return;
+    final tmp = await getTemporaryDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final plain = File('${tmp.path}/koop-log-$stamp.gz');
+    final enc = File('${tmp.path}/koop-log-$stamp.kbak');
+    try {
+      final parts = <List<int>>[];
+      for (final f in [File('$path.1'), File(path)]) {
+        if (await f.exists()) parts.add(await f.readAsBytes());
+      }
+      final all = parts.expand((b) => b).toList();
+      if (all.isEmpty) return;
+      final tail = all.length > kCloudLogBytes
+          ? all.sublist(all.length - kCloudLogBytes)
+          : all;
+      await plain.writeAsBytes(gzip.encode(tail));
+      await Isolate.run(() => encryptBackupFile(plain, enc, pass));
+      final existing = await api.find(kDriveLogName, parent: folder);
+      await api.upload(enc, folder, existingId: existing?.id, name: kDriveLogName);
+    } finally {
+      for (final f in [plain, enc]) {
+        try {
+          if (await f.exists()) await f.delete();
         } catch (_) {}
       }
     }

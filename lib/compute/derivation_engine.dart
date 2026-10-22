@@ -4467,7 +4467,19 @@ class DerivationEngine {
           (existingNight['rhr'] != null ||
               existingNight['rmssd'] != null ||
               existingNight['readiness'] != null);
-      if (existingHadNight) {
+      // PRUNED, OR DECLINED? "A day that never had real sleep never had real
+      // night scalars" stops holding the moment a newer version REJECTS a
+      // window an older one accepted (v105's walking check threw out a desk
+      // morning the v104 fallback had scored as sleep). The guard then kept
+      // that false night for good and froze the whole day. So it protects only
+      // when the night it would protect is really gone: the 1 Hz record that
+      // covered the older result's window has aged out. Still recorded means
+      // this version looked at the same night and found no sleep — write it.
+      if (existingHadNight &&
+          await _nightStillRecorded(existingNight['window_json'])) {
+        _log('derive ${day.date}: the older result\'s night is still recorded '
+            'and this version finds no sleep in it — writing the new result');
+      } else if (existingHadNight) {
         _log('derive ${day.date}: sleep-window substrate pruned out from '
             "under a day that already had real night scalars — kept the "
             'existing result rather than nulling the readiness baseline '
@@ -5057,6 +5069,47 @@ class DerivationEngine {
     required bool sleepSubEmpty,
     required bool nightScalarsNull,
   }) => sleepSubEmpty && nightScalarsNull;
+
+  /// Share of an older result's sleep window the 1 Hz record must still cover
+  /// for that night to count as "still recorded" (not pruned).
+  static const double kNightStillRecordedFraction = 0.8;
+
+  /// Whether the 1 Hz record still covers the sleep window stored in an older
+  /// result's [windowJson] (`onset_ms`/`offset_ms`). False when the window is
+  /// missing or unreadable — then nobody can tell, and the guard protects.
+  static Future<bool> _nightStillRecorded(Object? windowJson) async {
+    if (windowJson is! String || windowJson.isEmpty) return false;
+    Object? w;
+    try {
+      w = jsonDecode(windowJson);
+    } catch (_) {
+      return false;
+    }
+    if (w is! Map) return false;
+    final on = (w['onset_ms'] as num?)?.toInt();
+    final off = (w['offset_ms'] as num?)?.toInt();
+    return nightStillRecorded(
+      onsetSec: on == null ? null : on ~/ 1000,
+      offsetSec: off == null ? null : off ~/ 1000,
+      recordedSec: on == null || off == null || off <= on
+          ? 0
+          : await LocalDb.onehzSecondsBetween(on ~/ 1000, off ~/ 1000),
+    );
+  }
+
+  /// Pure half of [_nightStillRecorded]: [recordedSec] 1 Hz seconds found in
+  /// [onsetSec, offsetSec) cover at least [kNightStillRecordedFraction] of it.
+  @visibleForTesting
+  static bool nightStillRecorded({
+    required int? onsetSec,
+    required int? offsetSec,
+    required int recordedSec,
+  }) {
+    if (onsetSec == null || offsetSec == null || offsetSec <= onsetSec) {
+      return false;
+    }
+    return recordedSec >= kNightStillRecordedFraction * (offsetSec - onsetSec);
+  }
 
   /// Whether [row] is a REAL derived day result worth protecting — i.e. not a
   /// skip marker and not an all-absent shell.

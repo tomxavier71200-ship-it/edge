@@ -150,7 +150,7 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
   <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span class="calic" id="calic">1</span><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><button class="today" id="today" hidden>Today</button></div>
   <form class="loader" id="loader"><span class="tag" id="source">Example data</span>
     <span id="passwrap"><input id="pass" type="password" placeholder="Koop Cloud passphrase" autocomplete="current-password" aria-label="Koop Cloud passphrase"><label class="rem"><input type="checkbox" id="remember">Remember</label></span>
-    <span id="saved" hidden></span><button type="button" class="forget" id="forget" hidden>Forget passphrase</button>
+    <span id="saved" hidden></span><button type="button" class="forget" id="forget" hidden>Forget passphrase</button><button type="button" class="forget" id="glog" hidden>Diagnostics log</button>
     <button class="open google" type="button" id="gsign"><svg width="15" height="15" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Sign in with Google</button>
     <label class="filelink" title="Open a Koop backup, or a WHOOP export (.zip or its CSV files)">Open file<input id="file" type="file" accept=".kbak,.osbk,.db,.gz,.zip,.csv" multiple hidden></label>
     <button type="button" class="filelink" id="wsend" hidden title="Encrypt this WHOOP export with your passphrase and put it in your Koop Cloud; the phone with the band imports it on its next sync">Send to Koop Cloud</button></form>
@@ -217,7 +217,11 @@ function exampleSessions(d){const [b]=dayBounds(d),{rides}=exampleShape(d);
     return {id:"ex"+i,type:"Cycling",start:b+a*60,end:b+z*60,strain:i?5.5:6.4,max_hr:i?138:146,avg_hr:i?124:131,calories:i?140:385,duration_min:z-a,zones:i?[2,6,4,2,0,0]:[3,9,14,10,2,0],hr};});}
 
 // ---------- reading a backup ----------
-async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuffer());
+async function readBackup(file,pass){const buf=await unlockKbak(new Uint8Array(await file.arrayBuffer()),pass);
+  const SQL=await initSqlJs();return loadDb(new SQL.Database(buf));}
+// An OSBK file decrypted (and gunzipped when it is gzip) — the database and the
+// phone's diagnostics log share this, so they share the same protection.
+async function unlockKbak(buf,pass){
   if(String.fromCharCode(...buf.slice(0,4))==="OSBK"){ // magic4 ver1 kdf1 iter4(BE) salt16 nonce12 | AES-256-GCM, header as AAD
     if(!pass)throw new Error("This file is encrypted. Enter your Koop Cloud passphrase.");
     const hdr=buf.slice(0,38),dv=new DataView(hdr.buffer),iter=dv.getUint32(6),salt=hdr.slice(10,26),iv=hdr.slice(26,38);
@@ -227,7 +231,7 @@ async function readBackup(file,pass){let buf=new Uint8Array(await file.arrayBuff
     try{buf=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv,additionalData:hdr,tagLength:128},key,buf.slice(38)));}
     catch{throw new Error("Wrong passphrase, or the file is damaged.");}}
   if(buf[0]===0x1f&&buf[1]===0x8b){buf=new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());}
-  const SQL=await initSqlJs();return loadDb(new SQL.Database(buf));}
+  return buf;}
 
 // Everything below reads an open database the same way, whether it came from a Koop
 // backup or was built in memory from a WHOOP export (readWhoop).
@@ -687,6 +691,25 @@ function askToken(){return new Promise((ok,fail)=>{
 async function drive(url,asBlob){let r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
   if(r.status===401){token=await askToken();r=await fetch(url,{headers:{Authorization:"Bearer "+token}});}
   if(!r.ok)throw new Error(`Google Drive answered ${r.status}.`);return asBlob?r.blob():r.json();}
+// The phone's diagnostics log (koop-log.kbak, its newest 512 KB), decrypted here
+// with the same passphrase and shown as text. window.koopLog keeps it for reading.
+document.getElementById("glog").addEventListener("click",async()=>{
+  try{if(!token||!passphrase()){status("Sign in with Google first.");return;}
+    status("Looking for the phone's log…");
+    const q=encodeURIComponent("name = 'koop-log.kbak' and trashed = false");
+    const f=(await drive(`${DRIVE}?q=${q}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=1&fields=files(id,modifiedTime)`)).files?.[0];
+    if(!f){status("No log in Drive yet. It is sent with the next upload from the phone (Koop 0.10.52 or newer).");return;}
+    const blob=await drive(`${DRIVE}/${f.id}?alt=media`,true);
+    const text=new TextDecoder().decode(await unlockKbak(new Uint8Array(await blob.arrayBuffer()),passphrase()));
+    window.koopLog=text;
+    let box=document.getElementById("logbox");
+    if(!box){box=document.createElement("div");box.id="logbox";
+      box.style.cssText="position:fixed;inset:5% 5%;z-index:50;background:var(--card,#fff);color:inherit;border:1px solid #ccc;border-radius:12px;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.25)";
+      box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #ddd"><b>Phone log</b><button type="button" id="logclose">Close</button></div><pre id="logtext" style="margin:0;padding:12px 14px;overflow:auto;flex:1;font-size:12px;white-space:pre-wrap"></pre>';
+      document.body.appendChild(box);document.getElementById("logclose").onclick=()=>box.remove();}
+    document.getElementById("logtext").textContent=text;
+    status(`Phone log saved ${new Date(f.modifiedTime).toLocaleString()}. Decrypted in this browser; nothing was sent anywhere.`);}
+  catch(err){status(err.message||String(err));}});
 document.getElementById("gsign").addEventListener("click",async()=>{
   if(location.protocol==="file:"){status("Google sign-in works on the hosted dashboard page, not on a file opened from disk. Use 'a backup file' here instead.");return;}
   if(!passphrase()){status("Type your Koop Cloud passphrase first (the one set in the app under Koop Cloud), then sign in.");document.getElementById("pass").focus();return;}
@@ -700,7 +723,8 @@ document.getElementById("gsign").addEventListener("click",async()=>{
     const blob=await drive(`${DRIVE}/${f.id}?alt=media`,true);
     await load(blob,`Koop Cloud copy saved ${new Date(f.modifiedTime).toLocaleString()}`);
     cloudAt=f.modifiedTime;cloudLabel();
-    document.getElementById("gsign").textContent="Reload from Drive";}
+    document.getElementById("gsign").textContent="Reload from Drive";
+    document.getElementById("glog").hidden=false;}
   catch(err){const msg=err.message||String(err);
     // A remembered passphrase that no longer opens the file (changed in the app): forget it and ask.
     if(/Wrong passphrase/.test(msg)&&savedPass()){try{localStorage.removeItem(PASS_KEY);}catch{}showSaved();status("The remembered passphrase no longer opens your Koop Cloud copy. Type the current one.");}

@@ -4498,6 +4498,17 @@ class LocalDb {
   /// Read from the band that synced most recently. A later WRIST_ON, a
   /// CHARGING_ON (taken off to charge), or any stored 1 Hz record after it
   /// (some firmware resumes without a WRIST_ON) means it is recording again.
+  /// 1 Hz seconds stored in [fromSec, toSec) — how much of a span is still
+  /// recorded (decoded_onehz holds one row per second, UNIQUE(rec_ts)).
+  static Future<int> onehzSecondsBetween(int fromSec, int toSec) async {
+    final db = await instance;
+    final r = await db.rawQuery(
+      'SELECT COUNT(*) AS n FROM decoded_onehz WHERE rec_ts >= ? AND rec_ts < ?',
+      [fromSec, toSec],
+    );
+    return (r.first['n'] as num?)?.toInt() ?? 0;
+  }
+
   static Future<int?> offWristNotRecordingSince() async {
     final db = await instance;
     final dev = await db.rawQuery(
