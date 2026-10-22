@@ -1733,6 +1733,14 @@ class AppState extends ChangeNotifier {
       // recent sessions against the substrate now that it is here, so the
       // workout LIST is corrected too and not just a detail screen someone
       // happens to open. Monotone and idempotent — see reconcileSessionScore.
+      // WHOOP adds a detected activity by itself; Koop used to leave it as a
+      // suggestion nobody saw. Logged here, after the drain that found it.
+      try {
+        final added = await _autoLogDetectedWorkouts();
+        if (added > 0) _log('[derive] auto-logged $added detected workout(s)');
+      } catch (e) {
+        _log('[derive] auto-log failed: $e');
+      }
       try {
         final fixed = await repo?.rescoreRecentSessions() ?? 0;
         if (fixed > 0) {
@@ -6528,6 +6536,49 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       _log('[workout] reconcile orphaned live session failed: $e');
     }
+  }
+
+  /// Prefs key: log detected workouts automatically (WHOOP's behaviour).
+  static const kAutoLogWorkoutsKey = 'workout.auto_log';
+
+  /// Every settled, unanswered workout detection becomes a session marked
+  /// `detected` — the "Auto-detected" chip — the way WHOOP adds an activity
+  /// without asking. Skipped while it may still be going (ended under 10 min
+  /// ago), when it overlaps a session already logged, or when an answered
+  /// suggestion covers it (a deleted auto-log stays deleted: logging marks the
+  /// suggestion answered, and a re-detection of the same bout is caught by the
+  /// overlap). Off with [kAutoLogWorkoutsKey]. Returns how many were added.
+  Future<int> _autoLogDetectedWorkouts() async {
+    final r = repo;
+    if (r == null || !Prefs.getBool(kAutoLogWorkoutsKey, true)) return 0;
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    var added = 0;
+    for (final s in await LocalDb.activeWorkoutSuggestions()) {
+      final id = s['id'] as String?;
+      final st = (s['start_ts'] as num?)?.toInt();
+      final en = (s['end_ts'] as num?)?.toInt();
+      if (id == null || st == null || en == null || en <= st) continue;
+      if (nowSec - en < 10 * 60) continue;
+      final logged = await LocalDb.sessionsInRange(st - 12 * 3600, en);
+      bool overlaps(Map<String, dynamic> o) {
+        var a = (o['start_ts'] as num?)?.toInt(), b = (o['end_ts'] as num?)?.toInt();
+        if (a == null || b == null) return false;
+        if (a > 1000000000000) a ~/= 1000;
+        if (b > 1000000000000) b ~/= 1000;
+        return a < en && b > st;
+      }
+      if (logged.any(overlaps) || await LocalDb.answeredSuggestionOverlaps(st, en)) {
+        await LocalDb.dismissWorkoutSuggestion(id);
+        continue;
+      }
+      await r.logManualWorkout(
+          startTs: st, endTs: en, type: 'general_workout', source: 'detected');
+      // logManualWorkout retires the suggestions this window covers; this one
+      // too, in case its window rounding left it out.
+      await LocalDb.dismissWorkoutSuggestion(id);
+      added++;
+    }
+    return added;
   }
 
   /// Retire the auto-detected suggestion(s) a just-finalized session covers,

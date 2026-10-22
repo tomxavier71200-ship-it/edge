@@ -1069,6 +1069,21 @@ class NotificationSettingsView extends StatelessWidget {
                         chevron: false,
                         onTap: () => set(prefs.copyWith(
                             autoDetectEnabled: !prefs.autoDetectEnabled))),
+                    // WHOOP's behaviour: a detected effort is logged as an
+                    // activity on its own (marked Auto-detected) instead of
+                    // waiting to be confirmed. Delete one and it stays gone.
+                    StatefulBuilder(builder: (c, setRow) => SetRow(LucideIcons.listPlus, C.green,
+                        'Add detected workouts automatically',
+                        sub: 'Log efforts the band spotted as activities, '
+                            'marked Auto-detected, like WHOOP. Off leaves them '
+                            'as suggestions to confirm',
+                        value: Prefs.getBool(AppState.kAutoLogWorkoutsKey, true)
+                            ? on
+                            : off,
+                        chevron: false,
+                        onTap: () => setRow(() => Prefs.setBool(
+                            AppState.kAutoLogWorkoutsKey,
+                            !Prefs.getBool(AppState.kAutoLogWorkoutsKey, true))))),
                     // Off by default, and it is the switch that lets the nudge
                     // be scheduled at all — see
                     // NotificationService.schedulableIds. It had none, so it

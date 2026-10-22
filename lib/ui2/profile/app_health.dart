@@ -11,6 +11,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../../cloud/cloud_sync.dart';
+import '../../data/db.dart' show LocalDb;
 import '../../data/day_label.dart';
 import '../../state/app_state.dart';
 import '../../state/prefs.dart';
@@ -55,6 +56,7 @@ List<HealthCheck> appHealthChecks({
   required String cloudLine,
   required bool cloudError,
   bool? hrBroadcast,
+  double? syncedEmptyHours,
 }) {
   final dataAge = dataThrough == null ? null : now.difference(dataThrough);
   return [
@@ -93,6 +95,21 @@ List<HealthCheck> appHealthChecks({
           ? 'Open Koop near the band to sync. If it stays behind, check '
               'Bluetooth and that the band is charged.'
           : null,
+    ),
+    (
+      icon: LucideIcons.shieldAlert,
+      title: 'All your data reaches Koop',
+      answer: syncedEmptyHours == null
+          ? 'Yes, nothing missing in the last 2 days'
+          : 'No — ${syncedEmptyHours.round()} h missing',
+      state: syncedEmptyHours == null ? CheckState.ok : CheckState.warn,
+      fix: syncedEmptyHours == null
+          ? null
+          : 'The band synced but gave Koop nothing for '
+              '${syncedEmptyHours.round()} hours. Another app connected to the '
+              'same band — most likely the WHOOP app — takes its data first, '
+              'and the band then deletes it. Use one app at a time: sign out '
+              'of WHOOP, or turn off its Bluetooth access on this phone.',
     ),
     (
       icon: LucideIcons.moon,
@@ -183,6 +200,7 @@ class AppHealthScreen extends StatefulWidget {
 
 class _AppHealthScreenState extends State<AppHealthScreen> {
   int? _wornMin;
+  double? _emptyHours;
 
   @override
   void initState() {
@@ -201,7 +219,17 @@ class _AppHealthScreenState extends State<AppHealthScreen> {
         worn = (w['worn_min'] as num?)?.round();
       } catch (_) {}
     }
-    if (mounted) setState(() => _wornMin = worn);
+    double? empty;
+    try {
+      empty = await LocalDb.syncedButEmptyHours(
+          DateTime.now().millisecondsSinceEpoch ~/ 1000 - 2 * 86400);
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _wornMin = worn;
+        _emptyHours = empty;
+      });
+    }
   }
 
   @override
@@ -228,6 +256,7 @@ class _AppHealthScreenState extends State<AppHealthScreen> {
           cloudAgo(cs.role == CloudRole.send ? cs.lastUp : cs.remoteSeen),
       cloudError: cs.lastError != null,
       hrBroadcast: app?.device.hrBroadcast,
+      syncedEmptyHours: _emptyHours,
     );
     final warns = checks.where((x) => x.state == CheckState.warn).length;
     return detailScaffold(c, 'App health', [

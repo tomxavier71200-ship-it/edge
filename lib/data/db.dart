@@ -4470,6 +4470,59 @@ class LocalDb {
     );
   }
 
+  /// Whether a suggestion that was already answered (logged or dismissed)
+  /// overlaps [startSec, endSec) — a re-derive can re-detect the same bout
+  /// with a slightly different start, and an answered bout stays answered.
+  static Future<bool> answeredSuggestionOverlaps(int startSec, int endSec) async {
+    final db = await instance;
+    final r = await db.rawQuery(
+      'SELECT 1 FROM workout_suggestions WHERE dismissed = 1 '
+      'AND start_ts < ? AND end_ts > ? LIMIT 1',
+      [endSec, startSec],
+    );
+    return r.isNotEmpty;
+  }
+
+  /// The longest stretch since [sinceSec] (hours) in which the band was
+  /// synced but handed over NO 1 Hz data — a hole in `decoded_onehz` with at
+  /// least one history batch received inside it. A band that is worn records
+  /// continuously, so this is data that went to another app syncing the same
+  /// band (it drains the band's memory first). Holes the phone never synced
+  /// across are not counted: those are just a band out of reach. Null when
+  /// there is no such stretch of at least [minHours].
+  static Future<double?> syncedButEmptyHours(int sinceSec, {double minHours = 2}) async {
+    final db = await instance;
+    final rows = await db.rawQuery(
+      'SELECT rec_ts FROM decoded_onehz WHERE rec_ts >= ? ORDER BY rec_ts',
+      [sinceSec],
+    );
+    final ts = [for (final r in rows) (r['rec_ts'] as num).toInt()];
+    if (ts.isEmpty) return null;
+    final batches = await db.rawQuery(
+      "SELECT created_at FROM sync_ledger WHERE kind = 'historical_batch' "
+      'AND created_at >= ? ORDER BY created_at',
+      [sinceSec * 1000],
+    );
+    final syncs = [
+      for (final r in batches) ((r['created_at'] as num) / 1000).floor(),
+    ];
+    bool syncedIn(int a, int b) => syncs.any((s) => s > a + 600 && s < b);
+    var worst = 0.0;
+    for (var i = 1; i < ts.length; i++) {
+      final gap = ts[i] - ts[i - 1];
+      if (gap >= minHours * 3600 && syncedIn(ts[i - 1], ts[i])) {
+        worst = gap / 3600 > worst ? gap / 3600 : worst;
+      }
+    }
+    // The open end: synced since the last stored second, and still nothing.
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (now - ts.last >= minHours * 3600 && syncedIn(ts.last + 3600, now)) {
+      final open = (now - ts.last) / 3600;
+      worst = open > worst ? open : worst;
+    }
+    return worst >= minHours ? worst : null;
+  }
+
   static Future<void> dismissWorkoutSuggestion(String id) async {
     final db = await instance;
     await db.update(
