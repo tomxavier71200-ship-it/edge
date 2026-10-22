@@ -332,14 +332,12 @@ void main() {
         'readinessBand is the ring\'s own band, folded to three words — a '
         'second set of cuts here is how the briefing and Home came to '
         'disagree about the same number', () {
-      // Every ring boundary (26/37/61), from below and at.
-      expect(readinessBand(0), 'low'); // ring: "Rest today"
-      expect(readinessBand(25.9), 'low'); // ring: "Rest today"
-      expect(readinessBand(26), 'low'); // ring: "Take it easy"
-      expect(readinessBand(36.9), 'low'); // ring: "Take it easy"
-      expect(readinessBand(37), 'moderate'); // ring: "Steady"
-      expect(readinessBand(60.9), 'moderate'); // ring: "Steady"
-      expect(readinessBand(61), 'good'); // ring: "Good to go"
+      // Every ring boundary — WHOOP's published 34/67 — from below and at.
+      expect(readinessBand(0), 'low'); // ring: "Rest today" (red)
+      expect(readinessBand(33.9), 'low'); // ring: "Rest today" (red)
+      expect(readinessBand(34), 'moderate'); // ring: "Steady" (yellow)
+      expect(readinessBand(66.9), 'moderate'); // ring: "Steady" (yellow)
+      expect(readinessBand(67), 'good'); // ring: "Good to go" (green)
       expect(readinessBand(100), 'good');
     });
 

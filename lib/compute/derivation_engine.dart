@@ -1798,7 +1798,15 @@ import 'substrate.dart';
 // LAST NIGHT's stored need and only today's own night (crossday_pipeline); the
 // walking check rejects stillness-detected sleep windows too (substrate.dart).
 // kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 106;
+// 106 → 107 (WHOOP export fits, compute/whoop_calibration.dart, the owner's
+// choice; fitted on WHOOP's own numbers only, leave-one-out errors in that
+// file): sleep need = baseline + 0.166·strain² + debt − naps; sleep debt =
+// min(127, 0.65 × last night's shortfall); recovery weights 64.40 / 6.07 HRV /
+// 3.18 RHR / 0 breathing / 5.61 sleep. UI: WHOOP's recovery cut-offs (67 /
+// 34) and strain band names. Workout strain is NOT changed: the export holds
+// one minute of zone 4–5 time in 48 workouts, so a zone-minutes fit says
+// nothing about hard efforts. kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 107;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.

@@ -12,7 +12,7 @@ void main() {
 
   test('bandCounts skips missing days and keeps band edges', () {
     expect(bandCounts([null, 9.9, 10, 13.9, 14, 21], kStrainBands), [1, 2, 1, 1]);
-    expect(bandCounts([36, 37, 60.9, 61, 100], kRecoveryZones), [1, 2, 2]);
+    expect(bandCounts([33, 34, 66.9, 67, 100], kRecoveryZones), [1, 2, 2]);
   });
 
   test('rangeMean needs two measured days', () {

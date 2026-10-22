@@ -25,7 +25,8 @@ import '../data/day_label.dart';
 // isolate safety. One grammar for "a required input was missing" across both
 // pipelines rather than a second one here.
 import 'onehz_pipeline.dart' show needInputNote;
-import 'whoop_calibration.dart' show calibratedSleepPerformance;
+import 'whoop_calibration.dart'
+    show calibratedSleepPerformance, whoopSleepDebtMin, whoopSleepNeedMin;
 
 /// Build the cross-day analytics bundle from a time-ordered (OLDEST FIRST) list
 /// of per-day records and the user profile.
@@ -300,24 +301,39 @@ Map<String, dynamic> buildCrossDayBundle(
   // once enough nights exist to estimate an OSD.
   final double? baselineNeedSec =
       osdH == null ? null : (osdH.clamp(7.0, 9.5)) * 3600.0;
-  final debtSec =
-      (sleepDebt.present ? (sleepDebt.value!.debtHours ?? 0.0) : 0.0) * 3600.0;
+  // SLEEP DEBT, WHOOP's way (whoop_calibration.dart): a share of last night's
+  // shortfall against last night's need, capped. The habitual-vs-free-nights
+  // estimate above still sets the BASELINE; it no longer sets the debt. Null
+  // without last night's stored need or today's own night — then no debt is
+  // added, and `debt_hours` below says so by being absent.
+  final whoopDebtMin =
+      whoopSleepDebtMin(lastNightNeedMin, _todayNum(days, 'tst_min'));
+  final debtSec = (whoopDebtMin ?? 0.0) * 60.0;
   const noOsd = ana.Metric<ana.SleepNeed>.absent(
     tier: ana.Tier.estimate,
     inputs_used: ['osd_hours'],
     note: 'need_baseline:have=0,need=1',
   );
+  // WHOOP's four parts (whoop_calibration.dart): baseline + debt + a strain
+  // bonus that grows with strain squared − naps minute for minute.
   ana.Metric<ana.SleepNeed> needAt({
     required double dayStrain,
     required double napCreditSec,
   }) =>
       baselineNeedSec == null
           ? noOsd
-          : ana.sleepNeed(
-              baselineNeedSec: baselineNeedSec,
-              sleepDebtSec: debtSec < 0 ? 0.0 : debtSec,
-              dayStrain: dayStrain,
-              napCreditSec: napCreditSec,
+          : ana.Metric<ana.SleepNeed>(
+              value: ana.SleepNeed(whoopSleepNeedMin(
+                    baselineMin: baselineNeedSec / 60,
+                    debtMin: debtSec / 60,
+                    strain: dayStrain,
+                    napMin: napCreditSec / 60,
+                  ) *
+                  60),
+              confidence: 0.6,
+              tier: ana.Tier.estimate,
+              inputs_used: const ['osd_hours', 'sleep_debt', 'strain', 'naps'],
+              note: 'baseline + debt + strain bonus − naps (WHOOP-matched)',
             );
   // TODAY's strain only. `_lastNum` walked backward to the last non-null, so a
   // day whose strain compute abstained built tonight's bonus out of an EARLIER
@@ -325,7 +341,7 @@ Map<String, dynamic> buildCrossDayBundle(
   // lands inside `need_sec` with nothing surfacing it.
   //
   // Unlike the nap credit below, 0 here is NOT the cautious direction: strain is
-  // ADDED (up to 45 min via sleepNeed's strainBonusSec), so abstaining removes
+  // ADDED (up to 73 min: 0.166 x strain squared, whoop_calibration.dart), so abstaining removes
   // sleep from the recommendation rather than adding it. It is still right, on
   // two grounds that are not "it's safe":
   //   - Carrying yesterday forward is not a safety margin either. It inflates
@@ -338,7 +354,7 @@ Map<String, dynamic> buildCrossDayBundle(
   // Because that direction is not the cautious one, the substitution is not
   // allowed to be silent: `strain_bonus_min` below reports what the bonus
   // actually added, and stays NULL (never 0) when today produced no reading —
-  // which is the case where up to 45 min of need went missing.
+  // which is the case where up to 73 min of need went missing.
   final todayStrainNum = _todayNum(days, 'strain');
   final todayStrain = todayStrainNum ?? 0.0;
   // TODAY's naps only, and minutes ASLEEP (the analytics detector reports TST
@@ -367,7 +383,7 @@ Map<String, dynamic> buildCrossDayBundle(
   // Null when today produced no strain reading. That is the ONE case that
   // matters most here: a confident 0 says "you rested today", while null says
   // "we could not measure today's strain, so tonight's need is short by up to
-  // 45 min". Collapsing the two would re-hide exactly what the today-scoping
+  // 73 min". Collapsing the two would re-hide exactly what the today-scoping
   // fix above exposed.
   final needNoStrain = needAt(dayStrain: 0.0, napCreditSec: todayNapSec);
   final appliedStrainBonusMin = (todayStrainNum == null ||
@@ -540,7 +556,18 @@ Map<String, dynamic> buildCrossDayBundle(
     // that was admitted, and the phase reference. Lets the UI say "5 of 7
     // nights" without re-deriving it from the note.
     'circadian_coverage': circadian.coverage,
-    'sleep_debt': sleepDebt.toJson((v) => v.toJson()),
+    // The debt the need above added: WHOOP's carry rule. The habitual and
+    // free-night figures stay (they set the baseline); `debt_hours` is the
+    // carried debt, absent when it could not be computed.
+    'sleep_debt': () {
+      final j = sleepDebt.toJson((v) => v.toJson());
+      final v = j['value'];
+      final value = v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
+      value.remove('debt_hours');
+      if (whoopDebtMin != null) value['debt_hours'] = whoopDebtMin / 60;
+      value['debt_method'] = 'last_night_carry';
+      return {...j, 'value': value};
+    }(),
     'readiness_glassbox': glassBox.toJson((v) => v.toJson()),
     'brv': brv.toJson((v) => v.toJson()),
     // ── Coaching + fitness (forward-looking, today) ──
@@ -556,7 +583,7 @@ Map<String, dynamic> buildCrossDayBundle(
       // was-applied rule as `nap_credit_min` (the clamp can swallow part of it).
       // Null means today produced no strain reading — NOT a rest day. The UI
       // must not render "+0m" for "we do not know", and the missing bonus is
-      // worth up to 45 min of need.
+      // worth up to 73 min of need.
       'strain_bonus_min': appliedStrainBonusMin,
       'performance': perf.toJson((v) => v.toJson()),
       'bedtime': bedtime.toJson((v) => v.toJson()),

@@ -149,15 +149,15 @@ void main() {
   // here and yellow there. They now render the published tier and label, which
   // makes these boundaries a four-surface contract.
   group('readiness banding', () {
+    // WHOOP's published cut-offs since v107: green 67–99, yellow 34–66, red
+    // 1–33 — one red tier (0), no tier 1.
     test('tiers at the boundaries', () {
       expect(readinessBand(100).tier, 3);
-      expect(readinessBand(61).tier, 3);
-      expect(readinessBand(60.9).tier, 2);
+      expect(readinessBand(67).tier, 3);
+      expect(readinessBand(66.9).tier, 2);
       expect(readinessBand(50).tier, 2);
-      expect(readinessBand(37).tier, 2);
-      expect(readinessBand(36.9).tier, 1);
-      expect(readinessBand(26).tier, 1);
-      expect(readinessBand(25.9).tier, 0);
+      expect(readinessBand(34).tier, 2);
+      expect(readinessBand(33.9).tier, 0);
       expect(readinessBand(0).tier, 0);
     });
 

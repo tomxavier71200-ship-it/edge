@@ -637,4 +637,45 @@ void _wiredFamilies() {
       expect(perfOf(buildCrossDayBundle(days, const {}, lastNightNeedMin: 450)), isNull);
     });
   });
+
+  group('sleep need and debt, WHOOP\'s way', () {
+    double? needMin(Map<String, dynamic> b) {
+      final v = ((b['sleep_coach'] as Map)['need'] as Map)['value'];
+      return v is Map ? (v['need_sec'] as num) / 60 : null;
+    }
+
+    double? debtH(Map<String, dynamic> b) =>
+        (((b['sleep_debt'] as Map)['value'] as Map)['debt_hours'] as num?)
+            ?.toDouble();
+
+    test('last night\'s shortfall carries 65 % into tonight\'s need', () {
+      // Every synthetic night is 450 min asleep, so the personal baseline is
+      // 450 min. Last night's need was 600: a 150 min shortfall, 97.5 carried.
+      final days = _synthDays(30);
+      days.last['is_today'] = true;
+      final b = buildCrossDayBundle(days, const {}, lastNightNeedMin: 600);
+      expect(debtH(b)! * 60, closeTo(97.5, 1e-6));
+      final rested = buildCrossDayBundle(days, const {}, lastNightNeedMin: 450);
+      expect(debtH(rested), 0);
+      expect(needMin(b)! - needMin(rested)!, closeTo(97.5, 1e-6),
+          reason: 'the debt shown is the debt the need added');
+    });
+
+    test('today\'s strain adds 0.166 x strain squared', () {
+      final days = _synthDays(30);
+      days.last['is_today'] = true;
+      final rest = needMin(buildCrossDayBundle(days, const {}, lastNightNeedMin: 450))!;
+      days.last['strain'] = 15.0;
+      final hard = needMin(buildCrossDayBundle(days, const {}, lastNightNeedMin: 450))!;
+      expect(hard - rest, closeTo(0.166 * 225, 1e-6));
+    });
+
+    test('no stored need for last night: no debt figure, none added', () {
+      final days = _synthDays(30);
+      days.last['is_today'] = true;
+      final b = buildCrossDayBundle(days, const {});
+      expect(debtH(b), isNull);
+      expect(needMin(b), isNotNull, reason: 'the baseline still stands');
+    });
+  });
 }

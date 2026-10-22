@@ -1034,7 +1034,6 @@ Widget? morningCard(BuildContext c, HomeData d) {
   final recovery = switch (tier) {
     3 => 'You are well recovered',
     2 => 'Your recovery is steady',
-    1 => 'Your recovery is lower than usual',
     _ => 'Your body is asking for rest',
   };
   final slept = d.sleepMin.value, need = d.sleepNeedMin.value;
@@ -1049,7 +1048,6 @@ Widget? morningCard(BuildContext c, HomeData d) {
   final advice = switch (tier) {
     3 => 'A harder day is fine.',
     2 => 'A normal day suits you.',
-    1 => 'Keep today on the lighter side.',
     _ => 'Keep today easy and get to bed early.',
   };
   return Padding(

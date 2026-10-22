@@ -803,7 +803,7 @@ Map<String, Widget> _nutritionAndWellnessCases() {
         onTap: () {}),
     'band_histogram': const BandHistogram(
         title: 'DAY STRAIN',
-        labels: ['Light', 'Moderate', 'Strenuous', 'All out'],
+        labels: ['Light', 'Moderate', 'High', 'All out'],
         counts: [3, 2, 2, 0],
         colors: [C.strain, C.strain, C.strain, C.strain]),
     'activity_group': ActivityGroup(

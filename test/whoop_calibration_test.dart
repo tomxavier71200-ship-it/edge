@@ -93,8 +93,8 @@ void main() {
   test('one input against a near-flat baseline cannot rail the score', () {
     // HRV history with a tiny but non-zero spread: a slightly low night is a
     // z of minus hundreds, which uncapped rails recovery to 1. Capped at -5
-    // the HRV term takes 9 x 5 = 45 off; RHR, breathing and sleep sit at their
-    // medians here, so the score is 60.67 - 45.
+    // the HRV term takes 5 HRV steps off; RHR, breathing and sleep sit at
+    // their medians here, so the score is the intercept minus those 5 steps.
     final flat = [for (var i = 0; i < 20; i++) math.log(60.0) + (i.isEven ? 1e-6 : -1e-6)];
     final r = calibratedRecovery(
       hrvLn: math.log(59),
@@ -106,6 +106,55 @@ void main() {
       sleepPerf: 71,
       sleepPerfHistory: const [],
     )!;
-    expect(r, closeTo(60.67 - 9.0 * kCalZCap, 0.5));
+    expect(r, closeTo(kRecIntercept - kRecHrv * kCalZCap, 0.5));
+    expect(r, greaterThan(1), reason: 'not railed');
+  });
+
+  test('breathing carries no weight since the 2026-10-21 refit', () {
+    final a = rec(resp: 12.7)!, b = rec(resp: 14.5)!;
+    expect(a, b);
+  });
+
+  group('sleep debt: a share of last night\'s shortfall, capped', () {
+    test('65 % of the shortfall against last night\'s need', () {
+      expect(whoopSleepDebtMin(500, 400), closeTo(65, 1e-9));
+    });
+    test('capped at 127 min', () {
+      expect(whoopSleepDebtMin(700, 300), kDebtCapMin);
+    });
+    test('sleeping past the need leaves no debt, never a negative one', () {
+      expect(whoopSleepDebtMin(450, 520), 0);
+    });
+    test('without last night\'s need or sleep there is no debt figure', () {
+      expect(whoopSleepDebtMin(null, 400), isNull);
+      expect(whoopSleepDebtMin(500, null), isNull);
+    });
+  });
+
+  group('sleep need: baseline + debt + strain bonus - naps', () {
+    double need({double debt = 0, double strain = 0, double nap = 0}) =>
+        whoopSleepNeedMin(
+            baselineMin: 464, debtMin: debt, strain: strain, napMin: nap);
+
+    test('a rest day with no debt is the baseline', () {
+      expect(need(), 464);
+    });
+    test('the strain bonus grows with strain squared', () {
+      expect(need(strain: 10) - 464, closeTo(16.6, 1e-9));
+      expect(need(strain: 15) - 464, closeTo(37.35, 1e-9));
+      expect(need(strain: 30) - 464, closeTo(kNeedStrainSq * 21 * 21, 1e-9),
+          reason: 'strain is held to 0-21');
+    });
+    test('debt adds minute for minute, naps subtract minute for minute', () {
+      expect(need(debt: 60), 524);
+      expect(need(nap: 45), 419);
+    });
+    test('held to 6-11 h', () {
+      expect(need(nap: 400), 360);
+      expect(
+          whoopSleepNeedMin(
+              baselineMin: 600, debtMin: 127, strain: 21, napMin: 0),
+          660);
+    });
   });
 }

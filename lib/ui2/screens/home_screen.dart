@@ -879,43 +879,14 @@ String prettyDay(String? dayId, [AppLocalizations? l]) {
   return '${_weekdayName(d.weekday, l)}, ${d.day} ${monthName(d.month, l)}';
 }
 
-/// The readiness band. `readiness_glassbox` carries no label of its own, so the
-/// banding is ours and lives in one place — this one.
-///
-/// [tier] is that same banding in a form the native surfaces can read.
-/// `WidgetService.push` publishes it as `readiness_tier` (and [label] as
-/// `readiness_band`) so the widget, the Watch and Siri paint it in their own
-/// palettes instead of each keeping a private copy of the cut-offs. They did,
-/// and a 65 rendered green on the phone, orange on the widget and yellow on
-/// the wrist. -1 = not scored.
-///
-/// THE CUT-OFFS ARE THE SCORE'S OWN QUANTILES, NOT ROUND NUMBERS (issue #250).
-/// `readinessComposite` is `100 / (1 + exp(-z̄))` with no scale parameter, and
-/// z̄ is a weight-renormalised mean of per-input robust z's — each ~N(0,1)
-/// against that person's OWN baseline. So the score is a percentile of self
-/// whose CENTRE IS 50 BY CONSTRUCTION: a night exactly at personal median
-/// scores 50, and the old 40/60/80 bands filed that median night under "Take it
-/// easy". Roughly a quarter of all nights fell under "Rest today" and 1.7 %
-/// could ever reach "Good to go" — it needed every input ~1.4 SD above median
-/// at once. A warning that fires on the typical night is not a warning.
-///
-/// z̄'s own SD is NOT 1: averaging the disclosed weights (.40/.30/.20/.10,
-/// renormalised over present inputs) gives σ ≈ 0.55-0.60 if the inputs were
-/// independent, ~0.70 at the positive correlation HRV/RHR/RR actually have.
-/// σ ≈ 0.65 is the middle of that, and the cut-offs below are its quantiles:
-///
-///   score = 100 / (1 + exp(-0.65 · Φ⁻¹(p)))
-///     p=.05 → 26   p=.20 → 37   p=.75 → 61
-///
-/// which lands 5 % of nights on "Rest today", 15 % on "Take it easy", 55 % on
-/// "Steady" and 25 % on "Good to go". The median night is now the neutral band,
-/// which is the whole point. Under the old cut-offs the same distribution read
-/// 27 / 47 / 25 / 2.
-///
-/// σ is the one soft number here — it is a property of how correlated a given
-/// person's four inputs are, and it moves with how many of them are present.
-/// Re-derive it from a real `metric_series` readiness distribution when there
-/// is one long enough to measure; do not nudge the cut-offs by feel.
+/// WHOOP's published recovery cut-offs: green from 67, yellow from 34.
+const double kRecoveryGreenFrom = 67;
+const double kRecoveryYellowFrom = 34;
+
+/// The recovery band for [v]: WHOOP's green / yellow / red at WHOOP's
+/// published cut-offs ([kRecoveryGreenFrom], [kRecoveryYellowFrom]). Tier 3 =
+/// green, 2 = yellow, 0 = red, -1 = not scored. (Before v107 this app used
+/// its own four bands at 26/37/61, derived for the old composite's spread.)
 ({String label, Color color, int tier}) readinessBand(
   num? v, [
   AppLocalizations? l,
@@ -927,28 +898,21 @@ String prettyDay(String? dayId, [AppLocalizations? l]) {
       tier: -1,
     );
   }
-  // WHOOP's three recovery colours: green, yellow, red. The cut-offs are this
-  // app's own (above); only the paint is WHOOP's convention, so the dial says
-  // good, middling or low before the number is read.
-  if (v >= 61) {
+  // WHOOP's three recovery colours AND its published cut-offs: green 67–99,
+  // yellow 34–66, red 1–33. The score itself is now WHOOP-matched
+  // (whoop_calibration.dart), so WHOOP's bands mean what they mean there.
+  if (v >= kRecoveryGreenFrom) {
     return (
       label: l?.homeReadinessGoodToGo ?? 'Good to go',
       color: C.green,
       tier: 3,
     );
   }
-  if (v >= 37) {
+  if (v >= kRecoveryYellowFrom) {
     return (
       label: l?.homeReadinessSteady ?? 'Steady',
       color: C.yellow,
       tier: 2,
-    );
-  }
-  if (v >= 26) {
-    return (
-      label: l?.homeReadinessTakeItEasy ?? 'Take it easy',
-      color: C.red,
-      tier: 1,
     );
   }
   return (

@@ -44,7 +44,8 @@ void main() {
           sleepMin: Metric(value: 300, confidence: .8),
         ));
     expect(find.textContaining('needed'), findsNothing);
-    expect(find.textContaining('lower than usual'), findsOneWidget);
+    // 30 is red at WHOOP's cut-offs (1–33).
+    expect(find.textContaining('asking for rest'), findsOneWidget);
   });
 
   Future<Widget?> tip(WidgetTester t, HomeData d) async {

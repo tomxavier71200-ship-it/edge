@@ -25,20 +25,21 @@ import 'records_screen.dart' show prettyDayLabel;
 /// WHOOP web's range pills: label, days.
 const kOverviewRanges = [('1W', 7), ('2W', 14), ('1M', 30), ('3M', 91), ('6M', 182)];
 
-/// WHOOP's strain bands: label, from (inclusive), to (exclusive).
+/// WHOOP's published strain bands (Light 0–9, Moderate 10–13, High 14–17,
+/// All out 18–21): label, from (inclusive), to (exclusive).
 const kStrainBands = [
   ('Light', 0.0, 10.0),
   ('Moderate', 10.0, 14.0),
-  ('Strenuous', 14.0, 18.0),
+  ('High', 14.0, 18.0),
   ('All out', 18.0, 21.01),
 ];
 
-/// Recovery zones in this app's own colours (see `readinessBand`): label,
-/// from (inclusive), to (exclusive).
+/// Recovery zones at WHOOP's published cut-offs (see `readinessBand`):
+/// label, from (inclusive), to (exclusive).
 const kRecoveryZones = [
-  ('0–36%', 0.0, 37.0),
-  ('37–60%', 37.0, 61.0),
-  ('61–100%', 61.0, 100.01),
+  ('0–33%', 0.0, 34.0),
+  ('34–66%', 34.0, 67.0),
+  ('67–100%', 67.0, 100.01),
 ];
 
 /// [pts] as one value per calendar day of the [days] days ending on [end]
