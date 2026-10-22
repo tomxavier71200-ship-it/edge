@@ -29,6 +29,10 @@ import '../data/day_label.dart';
 /// mostly absent would reliably hand the answer to the missing data.
 const double kMinAccelCoverageForVanHees = 0.5;
 
+/// Most steps per hour an HR-led (fallback) sleep window may contain. Turning
+/// over in bed registers a few; an hour at work registers hundreds.
+const double kFallbackMaxStepsPerHour = 60;
+
 /// Physiological bound on a 1 Hz heart rate (bpm), inclusive.
 ///
 /// HUMAN PHYSIOLOGY, NOT A SENSOR PROPERTY, so it is the same number on every
@@ -1187,7 +1191,25 @@ List<PhysioDay> calendarDays(
           final tsSlice = [for (var i = loS; i < hiS; i++) sub.tsSec[i]];
           final cand =
               ana.hrLedSleepWindow(hrSlice, tsSlice, hrBaseline: hrBaseline);
-          if (cand != null) {
+          // WALKING IS NOT SLEEP. The HR-led guess only asks "was HR low for
+          // 2 h", and a calm desk morning after a night the band never
+          // recorded passes that: the owner was shown 06:34–09:21 asleep
+          // while at the office with ~2,000 steps counted in it. A window in
+          // which the band's own pedometer counted real walking is rejected.
+          // Gen4 has no pedometer (null): unchanged there.
+          final candSteps = cand == null
+              ? null
+              : hardwareStepsFromCounter(
+                  sub.slice(cand.onsetSec, cand.offsetSec),
+                  cumulativeCounterModulus: 65536,
+                );
+          final walked = cand != null &&
+              candSteps != null &&
+              candSteps >
+                  kFallbackMaxStepsPerHour *
+                      (cand.offsetSec - cand.onsetSec) /
+                      3600;
+          if (cand != null && !walked) {
             final s2 = ana.segmentSleep(
               accelSlice,
               hrSlice,

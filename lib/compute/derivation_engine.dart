@@ -1785,7 +1785,12 @@ import 'substrate.dart';
 // the owner's WHOOP export (MAE 10.0 → 3.5 and 13.2 → 7.0 on it). The cross-
 // day pass now stores sleep_need_min and sleep_consistency per day so the next
 // day can use them. kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 104;
+// 104 → 105 (walking is not sleep; compute/substrate.dart): the HR-led
+// fallback sleep window is rejected when the band's pedometer counted more than
+// kFallbackMaxStepsPerHour in it. After a night the band never recorded, the
+// fallback had published a calm desk morning (06:34–09:21, ~2,000 steps) as
+// the owner's sleep. Gen4 (no pedometer) unchanged. kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 105;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
