@@ -91,4 +91,48 @@ void main() {
     expect(await LocalDb.metricValueOn(_day, 'rmssd'), 88.0);
     expect(await LocalDb.metricValueOn(_day, 'tst_min'), 360.0);
   });
+
+  test('sleep performance and sleep efficiency are two numbers, kept apart',
+      () async {
+    // An imported day (no band data) with WHOOP's real pair: performance 28,
+    // efficiency 88. One field used to carry both, performance first.
+    const wake = '2026-03-08 07:10:00';
+    final day =
+        localDateLabel(DateTime.parse(wake).millisecondsSinceEpoch ~/ 1000);
+    final csv = File(p.join(tmp.path, 'physiological_cycles_2.csv'))
+      ..writeAsStringSync(
+        'Cycle start time,Wake onset,Asleep duration (min),'
+        'Sleep performance %,Sleep efficiency %,Energy burned (cal)\n'
+        '$wake,$wake,136,28,88,2511\n',
+      );
+    await WhoopImporter.importFiles([csv.path]);
+    expect(await LocalDb.metricValueOn(day, 'efficiency'), 88.0);
+    expect(await LocalDb.metricValueOn(day, 'sleep_perf'), 28.0);
+
+    // An older export with efficiency only: no performance is invented.
+    const wake2 = '2026-03-09 07:10:00';
+    final day2 =
+        localDateLabel(DateTime.parse(wake2).millisecondsSinceEpoch ~/ 1000);
+    final csv2 = File(p.join(tmp.path, 'physiological_cycles_3.csv'))
+      ..writeAsStringSync(
+        'Cycle start time,Wake onset,Asleep duration (min),Sleep efficiency %\n'
+        '$wake2,$wake2,400,91\n',
+      );
+    await WhoopImporter.importFiles([csv2.path]);
+    expect(await LocalDb.metricValueOn(day2, 'efficiency'), 91.0);
+    expect(await LocalDb.metricValueOn(day2, 'sleep_perf'), isNull);
+  });
+
+  test('a measured day keeps WHOOP\'s performance and calories for comparison',
+      () async {
+    final csv = File(p.join(tmp.path, 'physiological_cycles_4.csv'))
+      ..writeAsStringSync(
+        'Cycle start time,Wake onset,Recovery score %,Sleep performance %,'
+        'Sleep efficiency %,Energy burned (cal)\n'
+        '$_wake,$_wake,42,77,93,2678\n',
+      );
+    await WhoopImporter.importFiles([csv.path]);
+    expect(await LocalDb.metricValueOn(_day, 'whoop_sleep_perf'), 77.0);
+    expect(await LocalDb.metricValueOn(_day, 'whoop_calories'), 2678.0);
+  });
 }

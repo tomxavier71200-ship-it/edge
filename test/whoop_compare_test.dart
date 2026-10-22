@@ -26,4 +26,35 @@ void main() {
     expect(agreementOf({'d1': 50}, {'d2': 50}), isNull);
     expect(agreementOf({}, {}), isNull);
   });
+
+  test('limits of agreement: bias ± 1.96 SD of the differences', () {
+    // Differences 2, 4, 6: bias 4, SD (n-1) 2.
+    final a = agreementOf(
+      {'2026-10-01': 52, '2026-10-02': 54, '2026-10-03': 56},
+      {'2026-10-01': 50, '2026-10-02': 50, '2026-10-03': 50},
+    )!;
+    expect(a.bias, 4);
+    expect(a.limits!.$1, closeTo(4 - 1.96 * 2, 1e-9));
+    expect(a.limits!.$2, closeTo(4 + 1.96 * 2, 1e-9));
+  });
+
+  test('two nights are too few for a range', () {
+    expect(agreementOf({'d1': 1, 'd2': 2}, {'d1': 1, 'd2': 1})!.limits, isNull);
+  });
+
+  test('WHOOP nights Koop missed inside its own span are counted', () {
+    final a = agreementOf(
+      {'2026-10-01': 60, '2026-10-05': 61},
+      {
+        '2026-09-30': 55, // before Koop's first night: not Koop's to miss
+        '2026-10-01': 59,
+        '2026-10-02': 58,
+        '2026-10-03': 57,
+        '2026-10-05': 60,
+      },
+    )!;
+    expect(a.nights, 2);
+    expect(a.whoopNightsInSpan, 4);
+    expect(a.missed, 2);
+  });
 }

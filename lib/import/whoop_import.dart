@@ -235,7 +235,13 @@ class WhoopImporter {
       'deepMin': n(['deep (sws) duration (min)', 'deep sleep duration (min)', 'deep (sws) duration (minutes)']),
       'remMin': n(['rem duration (min)', 'rem duration (minutes)']),
       'awakeMin': n(['awake duration (min)', 'awake duration (minutes)']),
-      'effPct': n(['sleep performance %', 'sleep efficiency %', 'sleep performance']),
+      // TWO different WHOOP numbers. This used to be one field that took
+      // "sleep performance %" first and fell back to "sleep efficiency %", so
+      // an imported night's efficiency showed WHOOP's performance (28 % for an
+      // 88 %-efficient night) and an older export's "performance" was really
+      // its efficiency.
+      'perfPct': n(['sleep performance %', 'sleep performance']),
+      'effPct': n(['sleep efficiency %', 'sleep efficiency']),
       'sleepOnset': _parseTs(get(['sleep onset'])),
       'sleepWake': _parseTs(get(['wake onset'])),
     });
@@ -256,7 +262,8 @@ class WhoopImporter {
       'strain': 'whoop_strain',
       'resp': 'whoop_resp_rate',
       'asleepMin': 'whoop_tst_min',
-      'effPct': 'whoop_sleep_perf',
+      'perfPct': 'whoop_sleep_perf',
+      'calories': 'whoop_calories',
       'inBedMin': 'whoop_in_bed_min',
       'lightMin': 'whoop_light_min',
       'deepMin': 'whoop_deep_min',
@@ -302,6 +309,7 @@ class WhoopImporter {
     final remMin = f['remMin'] as num?;
     final awakeMin = f['awakeMin'] as num?;
     final effPct = f['effPct'] as num?;
+    final perfPct = f['perfPct'] as num?;
     final sleepOnset = f['sleepOnset'] as int?;
     final sleepWake = f['sleepWake'] as int?;
 
@@ -369,6 +377,7 @@ class WhoopImporter {
         'deep_min': deepMin,
         'light_min': lightMin,
         'efficiency': effPct,
+        'sleep_perf': perfPct,
       },
     };
 
@@ -404,6 +413,7 @@ class WhoopImporter {
         'deep_min': d(deepMin),
         'light_min': d(lightMin),
         'efficiency': d(effPct),
+        'sleep_perf': d(perfPct),
       },
     );
     return _DayWrite.written;

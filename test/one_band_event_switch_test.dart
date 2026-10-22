@@ -20,7 +20,7 @@ void main() {
         .listSync(recursive: true)
         .whereType<File>()
         .where((f) => f.path.endsWith('.dart'))) {
-      final rel = f.path.replaceFirst(RegExp(r'^\./'), '');
+      final rel = f.path.replaceAll(r'\', '/').replaceFirst(RegExp(r'^\./'), '');
       if (_allowlist.contains(rel)) continue;
       for (final line in f.readAsStringSync().split('\n')) {
         if (_pureComment.hasMatch(line)) continue;

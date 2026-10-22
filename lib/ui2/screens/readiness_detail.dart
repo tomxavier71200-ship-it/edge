@@ -1,9 +1,11 @@
-// READINESS — the one composite, taken apart.
+// RECOVERY — the headline, taken apart.
 //
 // Two producers meet on this screen and the copy says so rather than blending
-// them: the headline number is the weighted composite, and the breakdown is a
-// parallel percentile view of the same four inputs. Presenting the second as
-// if it decomposed the first would be a small lie that is very hard to catch.
+// them. "How today's number was made" IS the headline's own arithmetic (the
+// WHOOP-matched formula's stored parts, shown only when they sum to the dial);
+// "What went into it" is a parallel percentile view of the inputs from the
+// cross-day glass box. Presenting the second as if it decomposed the first
+// would be a small lie that is very hard to catch.
 
 import 'dart:convert' show jsonDecode;
 
@@ -62,6 +64,10 @@ class ReadinessData {
   /// The stored series behind the contributors and the weekly trends.
   final Map<String, List<ChartPoint>> trends;
 
+  /// `readiness_method` off today's bundle: which formula made the number and,
+  /// for the WHOOP-matched one, its `parts` (see [recoveryPartRows]).
+  final Map<String, dynamic>? method;
+
   const ReadinessData({
     this.readiness = Metric.empty,
     this.early = Metric.empty,
@@ -72,20 +78,22 @@ class ReadinessData {
     this.series = const [],
     this.trends = const {},
     this.absentDiag,
+    this.method,
   });
 
-  /// The absence diagnostic off a stored day bundle. Read straight from
-  /// `day_result` the way `InvestigateData.load` reads `imported` — no
-  /// repository accessor exists and this is the only screen that wants it.
-  static Future<Map<String, dynamic>?> _absentDiag(String? day) async {
+  /// One block off a stored day bundle — the absence diagnostic or the
+  /// recovery method. Read straight from `day_result` the way
+  /// `InvestigateData.load` reads `imported` — no repository accessor exists
+  /// and this is the only screen that wants them.
+  static Future<Map<String, dynamic>?> _bundleBlock(String? day, String key,
+      {String? under}) async {
     if (day == null) return null;
     final payload = (await LocalDb.dayResult(day))?['payload_json'];
-    if (payload is! String || !payload.contains('"readiness_absent_diag"')) {
-      return null;
-    }
+    if (payload is! String || !payload.contains('"$key"')) return null;
     final b = jsonDecode(payload);
-    final diag = b is Map ? b['readiness_absent_diag'] : null;
-    return diag is Map ? diag.cast<String, dynamic>() : null;
+    final parent = under == null ? b : (b is Map ? b[under] : null);
+    final block = parent is Map ? parent[key] : null;
+    return block is Map ? block.cast<String, dynamic>() : null;
   }
 
   static Future<ReadinessData> load(LocalRepository repo) async {
@@ -140,8 +148,110 @@ class ReadinessData {
       // null, which is correct — the note on the metric is the reason then.
       absentDiag: readiness.value != null
           ? null
-          : await _absentDiag(
-              (today['status'] as Map?)?['today_day']?.toString()),
+          : await _bundleBlock(
+              (today['status'] as Map?)?['today_day']?.toString(),
+              'readiness_absent_diag'),
+      method: await _bundleBlock(
+          (today['status'] as Map?)?['today_day']?.toString(),
+          'readiness_method',
+          under: 'clinical'),
+    );
+  }
+}
+
+/// The rows of "How today's number was made", from a stored
+/// `readiness_method` block, or null when the number was not made by the
+/// WHOOP-matched formula (no parts) or [shown] is not the number the parts
+/// add up to — an explanation that does not sum to the dial is not shown.
+///
+/// Each row: label, how the input compared with the person's usual, and the
+/// points it added (null for an input that could not be measured). Inputs the
+/// formula weights 0 are left out; [RecoveryMadeOf.zeroWeighted] names them.
+({double intercept, double score, List<(String, String, double?)> rows})?
+    recoveryPartRows(Map<String, dynamic>? method, double? shown) {
+  final parts = method?['parts'];
+  if (parts is! Map || shown == null) return null;
+  final score = (parts['score'] as num?)?.toDouble();
+  final intercept = (parts['intercept'] as num?)?.toDouble();
+  final list = parts['parts'];
+  if (score == null || intercept == null || list is! List) return null;
+  if ((score - shown).abs() > 1.0) return null;
+  const labels = {
+    'hrv': ('HRV', 'higher', 'lower'),
+    'rhr': ('Resting heart rate', 'higher', 'lower'),
+    'sleep': ('Sleep performance', 'better', 'worse'),
+    'resp': ('Breathing rate', 'higher', 'lower'),
+  };
+  final rows = <(String, String, double?)>[];
+  for (final p in list) {
+    if (p is! Map) continue;
+    final key = p['key']?.toString();
+    final l = labels[key];
+    if (l == null || key == 'resp') continue; // weighted 0
+    final z = (p['z'] as num?)?.toDouble();
+    final points = (p['points'] as num?)?.toDouble() ?? 0;
+    final how = z == null
+        ? 'not measured, adds nothing'
+        : z.abs() < 0.5
+            ? 'about your usual'
+            : '${z > 0 ? l.$2 : l.$3} than your usual';
+    rows.add((l.$1, how, z == null ? null : points));
+  }
+  return (intercept: intercept, score: score, rows: rows);
+}
+
+/// "How today's number was made": the baseline, each input's points, the
+/// total — the same arithmetic that produced the dial (whoop_calibration.dart).
+class RecoveryMadeOf extends StatelessWidget {
+  final ({double intercept, double score, List<(String, String, double?)> rows})
+      made;
+  const RecoveryMadeOf(this.made, {super.key});
+
+  /// Inputs measured but given no weight by the current formula.
+  static const zeroWeighted =
+      'Breathing rate is measured but carries no weight: in your WHOOP export '
+      'it did not help predict Recovery.';
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    Widget line(String label, String? sub, String value, {Color? color}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: S.x3),
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: F.body.copyWith(color: p.ink)),
+                  if (sub != null)
+                    Text(sub, style: F.cap.copyWith(color: p.ink3)),
+                ],
+              ),
+            ),
+            Text(value, style: F.body.copyWith(color: color ?? p.ink)),
+          ]),
+        );
+    String pts(double v) => '${v >= 0 ? '+' : '−'}${v.abs().toStringAsFixed(1)}';
+    return Surface(
+      pad: const EdgeInsets.symmetric(horizontal: S.x4),
+      child: Column(children: [
+        line('Your starting point', 'a typical night for you',
+            made.intercept.toStringAsFixed(1)),
+        for (final (label, how, points) in made.rows) ...[
+          Divider(color: p.line, height: 1),
+          line(label, how, points == null ? '0' : pts(points),
+              color: points == null
+                  ? p.ink3
+                  : p.on(points >= 0 ? C.green : C.orange)),
+        ],
+        Divider(color: p.line, height: 1),
+        line('Recovery', null, '${made.score.round()}%'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: S.x3),
+          child: Text(zeroWeighted, style: F.cap.copyWith(color: p.ink3)),
+        ),
+      ]),
     );
   }
 }
@@ -272,6 +382,13 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
                   style: F.head.copyWith(color: p.on(band.color))),
             ]),
           ),
+
+        // The arithmetic behind the dial — shown only when it sums to it.
+        if (recoveryPartRows(d.method, (v ?? d.early.value)?.toDouble()) case final made?
+            when !d.rough) ...[
+          Section("How today's number was made", RecoveryMadeOf(made)),
+          const SizedBox(height: S.x3),
+        ],
 
         // WHOOP's contributor list: each input today, your 30-day average
         // under it, the arrow coloured by whether the move is good for you.

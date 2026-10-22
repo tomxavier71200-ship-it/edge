@@ -83,10 +83,70 @@ double? calibratedSleepPerformance(
   return v.clamp(0.0, 100.0).toDouble();
 }
 
+/// One input's share of a WHOOP-matched recovery: its z against the person's
+/// own earlier nights (null when it could not be formed — not measured, or no
+/// usable baseline) and the score points it added (0 when z is null).
+class RecoveryPart {
+  /// 'hrv', 'rhr', 'resp' or 'sleep'.
+  final String key;
+
+  /// The measure's own z (+ = higher than usual), capped at ±[kCalZCap].
+  final double? z;
+
+  /// Score points this input added; negative pulled the score down.
+  final double points;
+
+  const RecoveryPart(this.key, this.z, this.points);
+
+  Map<String, dynamic> toJson() => {'key': key, 'z': z, 'points': points};
+}
+
+/// A WHOOP-matched recovery taken apart: [intercept] plus every part's
+/// [RecoveryPart.points] is [raw]; [score] is [raw] held to 1–99. The SAME
+/// arithmetic as the headline — the Recovery screen explains this object, so
+/// the explanation cannot drift from the number.
+class RecoveryParts {
+  final double intercept;
+  final List<RecoveryPart> parts;
+  const RecoveryParts(this.intercept, this.parts);
+
+  double get raw => parts.fold(intercept, (a, p) => a + p.points);
+  double get score => raw.clamp(1.0, 99.0).toDouble();
+
+  Map<String, dynamic> toJson() => {
+        'intercept': intercept,
+        'parts': [for (final p in parts) p.toJson()],
+        'raw': raw,
+        'score': score,
+      };
+}
+
 /// WHOOP-matched recovery (1–99), or null without tonight's HRV z or sleep
 /// performance. [hrvLn]/[rhr]/[resp] are tonight's values with their trailing
 /// histories; a driver whose z cannot be formed contributes nothing.
 double? calibratedRecovery({
+  required double? hrvLn,
+  required List<double> hrvLnHistory,
+  required double? rhr,
+  required List<double> rhrHistory,
+  required double? resp,
+  required List<double> respHistory,
+  required double? sleepPerf,
+  required List<double> sleepPerfHistory,
+}) =>
+    calibratedRecoveryParts(
+      hrvLn: hrvLn,
+      hrvLnHistory: hrvLnHistory,
+      rhr: rhr,
+      rhrHistory: rhrHistory,
+      resp: resp,
+      respHistory: respHistory,
+      sleepPerf: sleepPerf,
+      sleepPerfHistory: sleepPerfHistory,
+    )?.score;
+
+/// [calibratedRecovery] with its parts, or null under the same conditions.
+RecoveryParts? calibratedRecoveryParts({
   required double? hrvLn,
   required List<double> hrvLnHistory,
   required double? rhr,
@@ -112,12 +172,13 @@ double? calibratedRecovery({
           ? robustZ(sleepPerf, sleepPerfHistory)
           : null) ??
       (sleepPerf - kPerfFitMedian) / kPerfFitSpread);
-  final v = kRecIntercept +
-      kRecHrv * zH +
-      kRecRhr * -(zR ?? 0) + // lower resting HR is better
-      kRecResp * -(zB ?? 0) + // lower breathing rate is better
-      kRecSleep * (zS ?? 0);
-  return v.clamp(1.0, 99.0).toDouble();
+  return RecoveryParts(kRecIntercept, [
+    RecoveryPart('hrv', zH, kRecHrv * zH),
+    // Lower resting HR and breathing rate are better, hence the minus.
+    RecoveryPart('rhr', zR, kRecRhr * -(zR ?? 0)),
+    RecoveryPart('resp', zB, kRecResp * -(zB ?? 0)),
+    RecoveryPart('sleep', zS, kRecSleep * (zS ?? 0)),
+  ]);
 }
 
 // ── sleep need and sleep debt ───────────────────────────────────────────────

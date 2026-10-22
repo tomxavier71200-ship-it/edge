@@ -42,7 +42,7 @@ import 'hr_max.dart'
 import 'night_hrv.dart' show weightedNightRmssd;
 import 'quiet_level.dart' show personalQuietHrr;
 import 'whoop_calibration.dart'
-    show calibratedRecovery, calibratedSleepPerformance;
+    show calibratedRecoveryParts, calibratedSleepPerformance;
 import 'profile.dart' show workoutSex;
 import 'step_cadence.dart' show cadenceSpmForMinutes;
 // Same argument: a pure `DateTime` lookup, no DB / IO / Flutter binding. It is
@@ -730,18 +730,20 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   final perfNight = calibratedSleepPerformance(
       tstSec == null ? null : tstSec / 60, d.prevSleepNeedMin, d.prevSleepConsistency);
   final compositeScalar = headlineReadinessScalar(composite);
-  final recoveryWhoop = compositeScalar == null
-      ? null
-      : calibratedRecovery(
-          hrvLn: lnToday,
-          hrvLnHistory: d.lnRmssdHistory,
-          rhr: rhrToday,
-          rhrHistory: d.rhrHistory,
-          resp: respToday,
-          respHistory: d.respHistory,
-          sleepPerf: perfNight,
-          sleepPerfHistory: d.sleepPerfHistory,
-        );
+  // One computation for the full score AND the early estimate (same inputs,
+  // same histories), kept with its parts so the Recovery screen explains the
+  // very arithmetic that made the number.
+  final calParts = calibratedRecoveryParts(
+    hrvLn: lnToday,
+    hrvLnHistory: d.lnRmssdHistory,
+    rhr: rhrToday,
+    rhrHistory: d.rhrHistory,
+    resp: respToday,
+    respHistory: d.respHistory,
+    sleepPerf: perfNight,
+    sleepPerfHistory: d.sleepPerfHistory,
+  );
+  final recoveryWhoop = compositeScalar == null ? null : calParts?.score;
   // EARLY ESTIMATE — the same composite, the same inputs, the same refusals,
   // over a shorter personal baseline ([kReadinessEarlyMinBaseline] nights).
   // Only while the full one is still COLD-STARTING (its note is the
@@ -754,23 +756,18 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // THE SAME FORMULA AS THE FULL SCORE. The early composite only decides THAT
   // an early number may be shown; its value is the WHOOP-matched recovery over
   // the same short histories. Otherwise the composite's logistic (centred on
-  // 50) handed over to the calibrated formula (centred near 61) on night 15,
-  // and an ordinary night jumped ~10 points for no physiological reason.
+  // 50) handed over to the calibrated formula on night 15, and an ordinary
+  // night jumped (43 points in the scenario bench) for no physiological reason.
   final readinessEarlyComposite =
       earlyReadinessScalar(composite, readinessInputs);
   final readinessEarlyScalar = readinessEarlyComposite == null
       ? null
-      : (calibratedRecovery(
-            hrvLn: lnToday,
-            hrvLnHistory: d.lnRmssdHistory,
-            rhr: rhrToday,
-            rhrHistory: d.rhrHistory,
-            resp: respToday,
-            respHistory: d.respHistory,
-            sleepPerf: perfNight,
-            sleepPerfHistory: d.sleepPerfHistory,
-          ) ??
-          readinessEarlyComposite);
+      : (calParts?.score ?? readinessEarlyComposite);
+  // The parts behind whichever WHOOP-matched number is published, else none.
+  final shownParts = (recoveryWhoop != null ||
+          (readinessEarlyComposite != null && calParts != null))
+      ? calParts
+      : null;
   // Rough guide: only while cold-starting AND before the early estimate can
   // exist (fewer than kReadinessEarlyMinBaseline nights of history).
   final readinessRoughScalar = !composite.present &&
@@ -1133,9 +1130,14 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     // Which formula produced the headline, and the inputs the WHOOP-matched
     // one used, so a recovery can always be explained.
     'readiness_method': {
-      'method': recoveryWhoop != null ? 'whoop_calibrated' : 'composite',
+      'method': recoveryWhoop != null
+          ? 'whoop_calibrated'
+          : (shownParts != null ? 'whoop_calibrated_early' : 'composite'),
       'composite_score': compositeScalar,
       'sleep_performance': perfNight,
+      // intercept + each input's points = the published number (before the
+      // 1–99 hold). Null when the composite produced the number.
+      'parts': shownParts?.toJson(),
     },
     // Headline 0–21 strain envelope; raw Banister TRIMP kept as `trimp`.
     // The ROOT cause replaces the shared scorer's "strain needs a TRIMP and the

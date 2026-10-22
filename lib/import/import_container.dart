@@ -666,18 +666,35 @@ Future<List<String>> _extractCsvMembers(
   required String flavor,
   required Directory dir,
 }) async {
-  final name = p.basename(path);
-  final Archive archive;
   // STREAMED, not `decodeBytes(readAsBytes())`. A 90-day NOOP raw export is
   // hundreds of megabytes; buffering the whole archive AND then each member in
   // memory would OOM the phone on exactly the export this path exists to
   // import — and the rest of the import pipeline is carefully streamed for the
   // same reason. `InputFileStream` reads the archive off disk as it decodes.
+  //
+  // CLOSED ON EVERY PATH. The refusals in [_unpackCsvMembers] (too many
+  // entries, too large, no CSV) used to throw without closing it, leaking the
+  // open file each time — and on Windows the open handle also blocked deleting
+  // the archive.
   final input = InputFileStream(path);
+  try {
+    return await _unpackCsvMembers(input,
+        name: p.basename(path), flavor: flavor, dir: dir);
+  } finally {
+    await input.close();
+  }
+}
+
+Future<List<String>> _unpackCsvMembers(
+  InputFileStream input, {
+  required String name,
+  required String flavor,
+  required Directory dir,
+}) async {
+  final Archive archive;
   try {
     archive = ZipDecoder().decodeStream(input);
   } catch (e) {
-    await input.close();
     throw ImportFormatException(
       'Could not read “$name” as an archive: $e',
     );
@@ -715,33 +732,29 @@ Future<List<String>> _extractCsvMembers(
 
   final out = <String>[];
   final used = <String>{};
-  try {
-    for (final f in csvFiles) {
+  for (final f in csvFiles) {
     // Members can share a basename (`daily/data.csv`, `workouts/data.csv`).
     // Flattening them onto one destination silently dropped one file and
     // parsed the survivor twice.
-      var base = p.basename(f.name);
-      if (!used.add(base)) {
-        final stem = p.basenameWithoutExtension(base);
-        final ext = p.extension(base);
-        var n = 2;
-        while (!used.add(base = '$stem-$n$ext')) {
-          n++;
-        }
+    var base = p.basename(f.name);
+    if (!used.add(base)) {
+      final stem = p.basenameWithoutExtension(base);
+      final ext = p.extension(base);
+      var n = 2;
+      while (!used.add(base = '$stem-$n$ext')) {
+        n++;
       }
-      final destPath = p.join(dir.path, base);
-      // `writeContent` decompresses straight to disk — never materialising the
-      // member, which for a raw sensor export is the big one.
-      final sink = OutputFileStream(destPath);
-      try {
-        f.writeContent(sink);
-      } finally {
-        await sink.close();
-      }
-      out.add(destPath);
     }
-  } finally {
-    await input.close();
+    final destPath = p.join(dir.path, base);
+    // `writeContent` decompresses straight to disk — never materialising the
+    // member, which for a raw sensor export is the big one.
+    final sink = OutputFileStream(destPath);
+    try {
+      f.writeContent(sink);
+    } finally {
+      await sink.close();
+    }
+    out.add(destPath);
   }
   return out;
 }

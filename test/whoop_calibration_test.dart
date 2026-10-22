@@ -115,6 +115,40 @@ void main() {
     expect(a, b);
   });
 
+  group('the parts add up to the score', () {
+    RecoveryParts? parts({double? rhr = 57}) => calibratedRecoveryParts(
+          hrvLn: math.log(72),
+          hrvLnHistory: hrvHist,
+          rhr: rhr,
+          rhrHistory: rhrHist,
+          resp: 12.7,
+          respHistory: respHist,
+          sleepPerf: 80,
+          sleepPerfHistory: const [],
+        );
+
+    test('intercept + every part = raw; score is raw held to 1–99', () {
+      final p = parts()!;
+      final sum = p.parts.fold<double>(p.intercept, (a, e) => a + e.points);
+      expect(p.raw, closeTo(sum, 1e-9));
+      expect(p.score, closeTo(p.raw.clamp(1, 99), 1e-9));
+      expect(p.score, rec(hrv: 72, sleep: 80),
+          reason: 'one arithmetic for the number and its explanation');
+    });
+
+    test('an input that could not be measured adds nothing and says so', () {
+      final p = parts(rhr: null)!;
+      final rhr = p.parts.firstWhere((e) => e.key == 'rhr');
+      expect(rhr.z, isNull);
+      expect(rhr.points, 0);
+    });
+
+    test('breathing is measured but weighted 0', () {
+      final resp = parts()!.parts.firstWhere((e) => e.key == 'resp');
+      expect(resp.points.abs(), 0);
+    });
+  });
+
   group('sleep debt: a share of last night\'s shortfall, capped', () {
     test('65 % of the shortfall against last night\'s need', () {
       expect(whoopSleepDebtMin(500, 400), closeTo(65, 1e-9));

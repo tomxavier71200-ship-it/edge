@@ -11,7 +11,10 @@
 // move the PROCESS timezone with libc setenv("TZ")+tzset() before asserting.
 // Dart's DateTime reads the C library's local time on every call (it does not
 // cache a zone), so this genuinely re-homes the local calendar. POSIX only —
-// the test self-skips on Windows.
+// the test self-skips on Windows (the @TestOn below: Windows has no setenv,
+// and the setup used to throw there instead of skipping).
+@TestOn('!windows')
+library;
 
 import 'dart:ffi';
 import 'dart:io';

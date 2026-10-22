@@ -301,6 +301,34 @@ void main() {
     expect((e - f).abs(), lessThan(5), reason: 'early $e vs full $f');
   });
 
+  test('the stored parts add up to the published recovery, full and early', () {
+    for (final (nights, key, method) in [
+      (14, 'readiness', 'whoop_calibrated'),
+      (13, 'readiness_early', 'whoop_calibrated_early'),
+    ]) {
+      final n = night(derive(scenes['normal']!, nights: nights, prevNeedMin: 480));
+      final m = (n['clinical'] as Map)['readiness_method'] as Map;
+      expect(m['method'], method, reason: '$nights nights');
+      final parts = m['parts'] as Map;
+      final sum = (parts['parts'] as List).fold<double>(
+          (parts['intercept'] as num).toDouble(),
+          (a, p) => a + ((p as Map)['points'] as num).toDouble());
+      expect(sum, closeTo((parts['raw'] as num).toDouble(), 1e-6));
+      expect((parts['score'] as num).toDouble(),
+          closeTo((sc(n)[key] as num).toDouble(), 0.6),
+          reason: 'the explanation is the number ($nights nights)');
+    }
+  });
+
+  test('no WHOOP-matched number, no parts', () {
+    // Without last night's stored need there is no sleep performance, so the
+    // composite publishes and there is nothing of the formula's to explain.
+    final m = (night(derive(scenes['normal']!, nights: 14))['clinical']
+        as Map)['readiness_method'] as Map;
+    expect(m['method'], 'composite');
+    expect(m['parts'], isNull);
+  });
+
   test('a normal night is found and measured', () {
     final n = sc(night(results['normal']!));
     expect(n['tst_min'] as num, inInclusiveRange(380, 500));

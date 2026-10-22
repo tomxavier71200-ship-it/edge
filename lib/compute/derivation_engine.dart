@@ -1806,7 +1806,13 @@ import 'substrate.dart';
 // 34) and strain band names. Workout strain is NOT changed: the export holds
 // one minute of zone 4–5 time in 48 workouts, so a zone-minutes fit says
 // nothing about hard efforts. kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 107;
+// 107 → 108 (explainable recovery, onehz_pipeline.dart): the bundle's
+// `clinical.readiness_method` now stores `parts` — the WHOOP-matched
+// formula's intercept and each input's points — for the full score and the
+// early estimate, which the Recovery screen shows when they sum to the dial.
+// No published number changes; the bump re-derives days so they carry it.
+// kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 108;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.

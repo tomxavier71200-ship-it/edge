@@ -440,7 +440,7 @@ Map<String, Widget> goldenCases() => {
         readings: [
           for (var i = 0; i < 30; i++)
             (
-              at: DateTime(2026, 10, 3, 5, 44).add(Duration(minutes: 15 * i)),
+              at: DateTime(2026, 10, 3, 5, 44 + 15 * i),
               v: i == 27 ? 2.3 : (i % 7 == 0 ? 1.2 : .4),
             ),
         ],
@@ -798,6 +798,15 @@ Map<String, Widget> _nutritionAndWellnessCases() {
       ('Resting HR', 58, 59, (x) => '${x.round()}'),
       ('Sleep', 73, null, (x) => '${x.round()}%'),
     ]),
+    'recovery_made_of': const RecoveryMadeOf((
+      intercept: 64.4,
+      score: 70,
+      rows: [
+        ('HRV', 'higher than your usual', 7.3),
+        ('Resting heart rate', 'not measured, adds nothing', null),
+        ('Sleep performance', 'about your usual', -1.1),
+      ],
+    )),
     'day_in_review': DayInReviewCard(
         text: 'Two rides pushed strain to 14.7 on a 57% recovery. Aim for bed by 22:40.',
         onTap: () {}),
@@ -1199,7 +1208,7 @@ Map<String, Widget> extraCases() => {
           readings: [
             for (var i = 0; i < 40; i++)
               (
-                at: DateTime(2026, 10, 2, 8).add(Duration(minutes: 15 * i)),
+                at: DateTime(2026, 10, 2, 8, 15 * i),
                 v: 1.5 + (i % 7 - 3) * .35,
               ),
           ],

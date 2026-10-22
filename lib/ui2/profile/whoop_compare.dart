@@ -7,6 +7,8 @@
 // them. Nothing is changed and nothing is scored. A metric with no shared
 // night says so instead of showing a zero.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -23,8 +25,17 @@ const kCompareMetrics = [
   ('resp_rate', 'whoop_resp_rate', 'Respiratory rate', 'br/min', 1),
   ('tst_min', 'whoop_tst_min', 'Hours of sleep', 'min', 0),
   ('sleep_perf', 'whoop_sleep_perf', 'Sleep performance', '%', 0),
+  ('deep_min', 'whoop_deep_min', 'Deep sleep', 'min', 0),
+  ('rem_min', 'whoop_rem_min', 'REM sleep', 'min', 0),
   ('strain', 'whoop_strain', 'Strain', '', 1),
+  // WHOOP's day runs sleep to sleep, Koop's midnight to midnight: totals
+  // compare similar, not identical, spans.
+  ('calories_total', 'whoop_calories', 'Calories (whole day)', 'kcal', 0),
 ];
+
+/// Fewest shared nights before a 95 % range of differences is shown: the SD
+/// of two differences is not a spread anyone should read.
+const int kAgreementLoaMinNights = 3;
 
 /// One metric's agreement over the nights both measured.
 class Agreement {
@@ -40,7 +51,20 @@ class Agreement {
   /// The newest shared nights, newest first: (date, Koop, WHOOP).
   final List<(String, double, double)> recent;
 
-  const Agreement(this.nights, this.bias, this.typical, this.recent);
+  /// Bland–Altman 95 % limits of agreement, bias ± 1.96 × SD of the
+  /// differences (n − 1): where 95 % of single-night differences are expected
+  /// to fall. Null under [kAgreementLoaMinNights] nights.
+  final (double, double)? limits;
+
+  /// WHOOP nights inside the span Koop measured (first to last Koop night)
+  /// that have no Koop value for this metric — Koop's own failure rate.
+  final int missed;
+
+  /// WHOOP nights inside that span: the denominator of [missed].
+  final int whoopNightsInSpan;
+
+  const Agreement(this.nights, this.bias, this.typical, this.recent,
+      {this.limits, this.missed = 0, this.whoopNightsInSpan = 0});
 }
 
 /// Pair [own] and [whoop] by date. Null when no night has both — never a
@@ -52,13 +76,26 @@ Agreement? agreementOf(Map<String, double> own, Map<String, double> whoop,
       if (whoop[d] case final w?) (d, own[d]!, w),
   ]..sort((a, b) => b.$1.compareTo(a.$1));
   if (both.isEmpty) return null;
-  var sum = 0.0, abs = 0.0;
-  for (final (_, k, w) in both) {
-    sum += k - w;
-    abs += (k - w).abs();
+  final diffs = [for (final (_, k, w) in both) k - w];
+  final n = diffs.length;
+  final bias = diffs.fold<double>(0, (a, d) => a + d) / n;
+  final typical = diffs.fold<double>(0, (a, d) => a + d.abs()) / n;
+  (double, double)? limits;
+  if (n >= kAgreementLoaMinNights) {
+    final sd = math.sqrt(
+        diffs.fold<double>(0, (a, d) => a + (d - bias) * (d - bias)) / (n - 1));
+    limits = (bias - 1.96 * sd, bias + 1.96 * sd);
   }
-  return Agreement(both.length, sum / both.length, abs / both.length,
-      both.take(recentCount).toList());
+  // Day labels are YYYY-MM-DD, so string order is date order.
+  final ownDays = own.keys.toList()..sort();
+  final inSpan = [
+    for (final d in whoop.keys)
+      if (d.compareTo(ownDays.first) >= 0 && d.compareTo(ownDays.last) <= 0) d,
+  ];
+  return Agreement(n, bias, typical, both.take(recentCount).toList(),
+      limits: limits,
+      missed: inSpan.where((d) => !own.containsKey(d)).length,
+      whoopNightsInSpan: inSpan.length);
 }
 
 class WhoopCompareScreen extends StatefulWidget {
@@ -166,6 +203,15 @@ class AgreementCard extends StatelessWidget {
                   : 'Koop reads ${_f(x.bias.abs())}$u '
                       '${x.bias > 0 ? 'higher' : 'lower'} on average',
               style: F.cap.copyWith(color: p.ink2)),
+          if (x.limits case (final lo, final hi))
+            Text(
+                '95% of nights within ${_f(lo)} to ${_f(hi)}$u of WHOOP',
+                style: F.cap.copyWith(color: p.ink2)),
+          if (x.missed > 0)
+            Text(
+                'No Koop value on ${x.missed} of ${x.whoopNightsInSpan} '
+                'WHOOP nights in this period',
+                style: F.cap.copyWith(color: p.ink3)),
           const SizedBox(height: S.x3),
           Row(children: [
             Expanded(

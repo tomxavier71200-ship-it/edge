@@ -192,7 +192,7 @@ void main() {
       final out = await resolveImportCsvPaths([path], flavor: 'WHOOP');
       expect(out.paths, hasLength(2));
       expect(
-        out.paths.map((p) => p.split('/').last).toSet(),
+        out.paths.map((x) => x.split(RegExp(r'[\\/]')).last).toSet(),
         {'physiological_cycles.csv', 'sleeps.csv'},
       );
       expect(
