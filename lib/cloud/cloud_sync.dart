@@ -93,6 +93,19 @@ bool cloudDue(CloudRole role, DateTime now,
   return (dirty && since >= kCloudSendGap) || since >= kCloudSendEvery;
 }
 
+/// How long until new data on a SENDING phone may be uploaded, when it cannot
+/// go now: the rest of the [kCloudSendGap] spacing, or that gap again while an
+/// upload is already running (it read the data before this arrived). Null when
+/// there is nothing to wait for — no new data, a receiving phone, or due now.
+Duration? cloudRetryIn(CloudRole role, DateTime now,
+    {DateTime? lastUp, required bool dirty, required bool busy}) {
+  if (role != CloudRole.send || !dirty) return null;
+  if (busy) return kCloudSendGap;
+  if (lastUp == null) return null;
+  final left = kCloudSendGap - now.difference(lastUp);
+  return left > Duration.zero ? left + const Duration(seconds: 1) : null;
+}
+
 /// "Synced 3 min ago", the way WHOOP says it. [at] is the last upload (sending
 /// phone) or the newest copy merged (receiving phone); null has never synced.
 String cloudAgo(DateTime? at, [DateTime? now]) {
@@ -124,6 +137,7 @@ class CloudSync extends ChangeNotifier {
   final FlutterSecureStorage _secure = const FlutterSecureStorage();
   bool _inited = false;
   bool _busy = false;
+  Timer? _retry;
   bool get busy => _busy;
   String? lastError;
 
@@ -243,12 +257,24 @@ class CloudSync extends ChangeNotifier {
     await Prefs.reload();
     notifyListeners();
     final r = role;
-    if (!on || !cloudConfigured || _busy || r == null) return;
+    if (!on || !cloudConfigured || r == null) return;
     final now = DateTime.now();
+    final dirty = r == CloudRole.send && await _hasNewData();
+    // New data that has to wait — for the 2-minute spacing, or for an upload
+    // already running — gets ONE retry at the moment it may go. Without it the
+    // drain that lands a minute after the on-open upload never reached Drive
+    // until the next sync, and the dashboard stayed a step behind.
+    final wait = cloudRetryIn(r, now, lastUp: lastUp, dirty: dirty, busy: _busy);
+    if (wait != null) {
+      _retry?.cancel();
+      _retry = Timer(wait, () {
+        _retry = null;
+        unawaited(runIfDue(importBackup, importWhoop: importWhoop));
+      });
+    }
+    if (_busy) return;
     final due = cloudDue(r, now,
-        lastUp: lastUp,
-        lastCheck: lastCheck,
-        dirty: r == CloudRole.send && await _hasNewData());
+        lastUp: lastUp, lastCheck: lastCheck, dirty: dirty);
     final check = r == CloudRole.send &&
         importWhoop != null &&
         cloudDue(CloudRole.receive, now, lastCheck: lastCheck);
