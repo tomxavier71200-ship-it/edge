@@ -1727,12 +1727,6 @@ class AppState extends ChangeNotifier {
       // A drain can bank band coverage and a day can have rolled over since the
       // last read — both change which source owns today's steps.
       unawaited(_refreshPhoneStepsToday());
-      // The drain that triggered this pass may have landed the 1 Hz window of a
-      // workout the app slept through, whose strain/calories were scored from
-      // whatever few minutes the foreground tally saw (issue #206). Re-score
-      // recent sessions against the substrate now that it is here, so the
-      // workout LIST is corrected too and not just a detail screen someone
-      // happens to open. Monotone and idempotent — see reconcileSessionScore.
       // WHOOP adds a detected activity by itself; Koop used to leave it as a
       // suggestion nobody saw. Logged here, after the drain that found it.
       try {
@@ -1741,6 +1735,13 @@ class AppState extends ChangeNotifier {
       } catch (e) {
         _log('[derive] auto-log failed: $e');
       }
+      unawaited(_warnOffWristNotRecording());
+      // The drain that triggered this pass may have landed the 1 Hz window of a
+      // workout the app slept through, whose strain/calories were scored from
+      // whatever few minutes the foreground tally saw (issue #206). Re-score
+      // recent sessions against the substrate now that it is here, so the
+      // workout LIST is corrected too and not just a detail screen someone
+      // happens to open. Monotone and idempotent — see reconcileSessionScore.
       try {
         final fixed = await repo?.rescoreRecentSessions() ?? 0;
         if (fixed > 0) {
@@ -6535,6 +6536,43 @@ class AppState extends ChangeNotifier {
       if (resumed) notifyListeners();
     } catch (e) {
       _log('[workout] reconcile orphaned live session failed: $e');
+    }
+  }
+
+  /// The band records only while it believes it is on the wrist. When it has
+  /// said WRIST_OFF and saved nothing for [kOffWristWarnMin] while still
+  /// talking to the phone, buzz it and say so once per removal: if it is on
+  /// the wrist, the wearer feels the buzz and can re-seat it, instead of
+  /// finding a blank day in the evening. A band really taken off just buzzes
+  /// on the table.
+  static const kOffWristWarnMin = 45;
+
+  Future<void> _warnOffWristNotRecording() async {
+    try {
+      final since = await LocalDb.offWristNotRecordingSince();
+      if (since == null) return;
+      final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      if (nowSec - since < kOffWristWarnMin * 60) return;
+      final at = DateTime.fromMillisecondsSinceEpoch(since * 1000);
+      final hhmm = '${at.hour.toString().padLeft(2, '0')}:'
+          '${at.minute.toString().padLeft(2, '0')}';
+      final shown = await NotificationCenter.instance.emit(
+        NotificationEvent(
+          dedupeKey: 'off_wrist:$since',
+          category: NotifCategory.device,
+          priority: NotifPriority.normal,
+          title: 'Your band is not recording',
+          body: 'It thinks it is off your wrist and has saved nothing since '
+              '$hhmm. If you are wearing it, slide it a little higher and '
+              'snug the strap, or take it off and put it back on.',
+          date: todayLabel(),
+          route: '/profile',
+        ),
+        allowPermissionPrompt: false,
+      );
+      if (shown) unawaited(engine.buzz());
+    } catch (e) {
+      _log('[wrist] off-wrist check skipped: $e');
     }
   }
 

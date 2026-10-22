@@ -5,6 +5,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:openstrap_protocol/openstrap_protocol.dart' as proto;
 import 'package:openstrap_edge/data/db.dart';
 
 void main() {
@@ -52,5 +53,29 @@ void main() {
         reason: 'no sync happened inside the hole yet: band out of reach');
     await batchAt(t0 + 8 * 3600, 'b1');
     expect(await LocalDb.syncedButEmptyHours(t0), closeTo(10, .1));
+  });
+
+  test('a band that said off-wrist and saved nothing since is caught', () async {
+    final db = await LocalDb.instance;
+    Future<void> ev(int ts, int id) => db.insert('band_events', {
+          'device_id': 'band1',
+          'hex': 'h$ts$id',
+          'event_id': id,
+          'name': 'E$id',
+          'ts': ts,
+          'payload_json': '{}',
+          'captured_at': ts * 1000,
+        });
+    final off = now + 60;
+    await ev(off - 600, proto.EventId.wristOn);
+    await ev(off, proto.EventId.wristOff);
+    expect(await LocalDb.offWristNotRecordingSince(), off);
+    // Records after it: recording again even without a WRIST_ON.
+    await rows(off + 300, off + 600);
+    expect(await LocalDb.offWristNotRecordingSince(), isNull);
+    // Taken off to charge is not a false off-wrist.
+    await ev(off + 700, proto.EventId.wristOff);
+    await ev(off + 710, proto.EventId.chargingOn);
+    expect(await LocalDb.offWristNotRecordingSince(), isNull);
   });
 }

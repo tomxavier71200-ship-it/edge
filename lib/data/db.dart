@@ -4490,6 +4490,42 @@ class LocalDb {
   /// band (it drains the band's memory first). Holes the phone never synced
   /// across are not counted: those are just a band out of reach. Null when
   /// there is no such stretch of at least [minHours].
+  /// When the band last told us it came OFF the wrist and has recorded
+  /// nothing since (epoch sec), else null. The band saves data only while it
+  /// believes it is worn, so a false WRIST_OFF on a worn band — a loose fit, a
+  /// sensor that lost skin contact — silently costs the whole day: the owner's
+  /// band reported WRIST_OFF at 05:20 and saved nothing for 24 h while worn.
+  /// Read from the band that synced most recently. A later WRIST_ON, a
+  /// CHARGING_ON (taken off to charge), or any stored 1 Hz record after it
+  /// (some firmware resumes without a WRIST_ON) means it is recording again.
+  static Future<int?> offWristNotRecordingSince() async {
+    final db = await instance;
+    final dev = await db.rawQuery(
+        'SELECT device_id FROM band_events ORDER BY captured_at DESC LIMIT 1');
+    if (dev.isEmpty) return null;
+    final last = await db.query(
+      'band_events',
+      columns: ['ts', 'event_id'],
+      where: 'device_id = ? AND event_id IN (?, ?, ?)',
+      whereArgs: [
+        dev.first['device_id'],
+        proto.EventId.wristOn,
+        proto.EventId.wristOff,
+        proto.EventId.chargingOn,
+      ],
+      orderBy: 'ts DESC',
+      limit: 1,
+    );
+    if (last.isEmpty ||
+        (last.first['event_id'] as num).toInt() != proto.EventId.wristOff) {
+      return null;
+    }
+    final ts = (last.first['ts'] as num).toInt();
+    final after = await db.rawQuery(
+        'SELECT 1 FROM decoded_onehz WHERE rec_ts > ? LIMIT 1', [ts + 60]);
+    return after.isEmpty ? ts : null;
+  }
+
   static Future<double?> syncedButEmptyHours(int sinceSec, {double minHours = 2}) async {
     final db = await instance;
     final rows = await db.rawQuery(

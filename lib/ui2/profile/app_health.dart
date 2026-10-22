@@ -105,11 +105,13 @@ List<HealthCheck> appHealthChecks({
       state: syncedEmptyHours == null ? CheckState.ok : CheckState.warn,
       fix: syncedEmptyHours == null
           ? null
-          : 'The band synced but gave Koop nothing for '
-              '${syncedEmptyHours.round()} hours. Another app connected to the '
-              'same band — most likely the WHOOP app — takes its data first, '
-              'and the band then deletes it. Use one app at a time: sign out '
-              'of WHOOP, or turn off its Bluetooth access on this phone.',
+          : 'The band synced but had nothing saved for '
+              '${syncedEmptyHours.round()} hours. Most often it thought it was '
+              'off your wrist (it only records while it feels skin): wear it '
+              'a little higher and snug, and take it off and put it back on '
+              'if Koop warns you. Less often another app connected to the '
+              'same band (the WHOOP app) took the data first: use one app at '
+              'a time.',
     ),
     (
       icon: LucideIcons.moon,
