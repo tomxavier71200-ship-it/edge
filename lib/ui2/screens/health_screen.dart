@@ -495,6 +495,7 @@ class HealthScreen extends StatefulWidget {
   void row(Metric m, IconData icon, Color col, String name, String sub,
       String value, String unit, List<double?> series, String metricKey,
       {String? whyAbsent,
+      String? display,
       bool overnight = true,
       Rising rising = Rising.neither,
       String Function(double)? fmt}) {
@@ -523,6 +524,7 @@ class HealthScreen extends StatefulWidget {
           unit: unit,
           range: nr.range!,
           fmt: fmt ?? (x) => x.round().toString(),
+          display: display,
           onTap: () => go(c, MetricDetail(metricKey)));
       return;
     }
@@ -540,6 +542,7 @@ class HealthScreen extends StatefulWidget {
             ? 'usual range in $left more night${left == 1 ? '' : 's'}'
             : null,
         fmt: fmt ?? (x) => x.round().toString(),
+        display: display,
         onTap: () => go(c, MetricDetail(metricKey)));
   }
 
@@ -618,14 +621,20 @@ class HealthScreen extends StatefulWidget {
   final skin = metricOf(d.today['skin_temp']);
   String signed(double x) =>
       '${x >= 0 ? '+' : '−'}${x.abs().toStringAsFixed(1)}';
+  // WHOOP's reading: degrees off your normal. Only a strap that measures real
+  // degrees carries it; the tile itself stays on the SD scale its range uses.
+  final skinBlock = d.today['skin_temp'];
+  final deltaC =
+      skinBlock is Map ? (skinBlock['delta_c'] as num?)?.toDouble() : null;
   row(skin, LucideIcons.thermometer, C.orange,
       l?.healthRowSkinTemp ?? 'Skin temperature',
       ofNight(l?.healthVsOwnNights ?? 'vs your own nights'),
       skin.value == null ? '' : signed(skin.value!.toDouble()),
-      'SD',
+      deltaC == null ? 'SD' : '',
       d.spark('skin_temp', 24),
       'skin_temp',
       fmt: signed,
+      display: deltaC == null ? null : '${signed(deltaC)} °C',
       whyAbsent: sleepMin.isEmpty
           ? (l?.healthWhyReadOnlyFromSleep ??
               'Read only from sleep, and no night was scored.')

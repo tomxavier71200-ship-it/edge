@@ -939,15 +939,19 @@ int? hardwareStepsFromCounter(
 /// minute's steps count, and the fewest steps that minute must hold (a real
 /// walking pace is 90–120 a minute; arm movement at a desk is short bursts).
 const int kWalkMinuteSec = 30;
-const int kWalkMinuteMinSteps = 60;
+const int kWalkMinuteMinSteps = 55;
 
 /// Steps from the band's counter, counting only WALKING MINUTES: a minute
 /// whose seconds the band classed as walking/running for at least
 /// [kWalkMinuteSec] and that holds at least [kWalkMinuteMinSteps] steps.
 ///
 /// The on-chip counter also ticks on arm movement. On 22 Oct 2026 it counted
-/// 13,869 for a mostly seated day; the owner's iPhone counted 6,009, and this
-/// gate gives 6,008 (one day of evidence — re-check on more days). Without
+/// 13,869 for a mostly seated day; on 23 Oct 9,424 by 20:30. The owner's
+/// iPhone (carried all day) counted 6,009 and 5,209. At 60 steps this gate
+/// gave 6,008 and 3,966 (−24%); 55 is the best balance over both days —
+/// 6,872 and 4,476, ±14% — and no single minimum fits both closely, because
+/// the counter's over-count differs day to day. The 30 s class gate changes
+/// nothing on that data and is kept as a floor. Re-fit as days arrive. Without
 /// any motion class (gen4, or rows decoded before the column existed) the
 /// ungated [hardwareStepsFromCounter] stands. Same wrap/reset handling.
 int? walkingStepsFromCounter(

@@ -65,6 +65,7 @@ import '../stress/breath_phases.dart';
 // scheduler is imported under an alias rather than shadowed by it.
 import '../data/auto_backup.dart' as backup show runBackupIfDue;
 import 'alarm_schedule.dart';
+import 'alarm_sets.dart';
 import 'smart_wake.dart';
 import 'prefs.dart';
 import '../ble/adapters/signals.dart' show InputSignal;
@@ -2474,6 +2475,7 @@ class AppState extends ChangeNotifier {
     }
     await _loadAlarmSchedule();
     await _seedAlarmScheduleFromLegacyIfNeeded();
+    await _loadAlarmSets();
     // Band-gesture mapping: load the saved action + query native capabilities so the
     // settings UI knows what this platform supports. Best-effort, non-blocking.
     unawaited(gestureSettings.bootstrap());
@@ -4661,6 +4663,109 @@ class AppState extends ChangeNotifier {
     if (isConnected) await _armNextAlarmOccurrence();
   }
 
+  // ── named alarm schedules (alarm_sets.dart) ────────────────────────────────
+  // Only the active set reaches the band, flattened into the 7-slot schedule
+  // above — which stays the single thing that arms the strap, so the headless
+  // re-arm path needs no change.
+  static const _kAlarmSets = 'alarm.sets';
+  static const _kActiveAlarmSet = 'alarm.active_set';
+  List<AlarmSet> _alarmSets = const [];
+  String? _activeAlarmSetId;
+  List<AlarmSet> get alarmSets => _alarmSets;
+  String? get activeAlarmSetId => _activeAlarmSetId;
+
+  /// Reads the saved schedules. First run after this feature: a weekly
+  /// schedule that already has alarms on becomes "My alarms", switched on, so
+  /// nothing the band was going to do changes.
+  Future<void> _loadAlarmSets() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _alarmSets = decodeAlarmSets(prefs.getString(_kAlarmSets));
+      _activeAlarmSetId = prefs.getString(_kActiveAlarmSet);
+      if (_alarmSets.isEmpty && _schedule.any((e) => e.enabled)) {
+        final first = AlarmSet.fromWeek('s1', 'My alarms', _schedule);
+        _alarmSets = [first];
+        _activeAlarmSetId = first.id;
+        await _saveAlarmSets();
+      }
+      if (!_alarmSets.any((s) => s.id == _activeAlarmSetId)) {
+        _activeAlarmSetId = null;
+      }
+    } catch (e) {
+      _log('[alarm] schedules load failed: $e');
+    }
+  }
+
+  Future<void> _saveAlarmSets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kAlarmSets, encodeAlarmSets(_alarmSets));
+    final id = _activeAlarmSetId;
+    if (id == null) {
+      await prefs.remove(_kActiveAlarmSet);
+    } else {
+      await prefs.setString(_kActiveAlarmSet, id);
+    }
+  }
+
+  /// A fresh id for a new schedule.
+  String newAlarmSetId() => 's${DateTime.now().microsecondsSinceEpoch}';
+
+  /// Add or replace [set]; when it is the active one the band gets it now.
+  Future<void> saveAlarmSet(AlarmSet set) async {
+    final i = _alarmSets.indexWhere((s) => s.id == set.id);
+    _alarmSets = [..._alarmSets];
+    if (i < 0) {
+      _alarmSets.add(set);
+    } else {
+      _alarmSets[i] = set;
+    }
+    await _saveAlarmSets();
+    if (set.id == _activeAlarmSetId) {
+      await _applyAlarmWeek(set.week());
+    } else {
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteAlarmSet(String id) async {
+    _alarmSets = [for (final s in _alarmSets) if (s.id != id) s];
+    final wasActive = id == _activeAlarmSetId;
+    if (wasActive) _activeAlarmSetId = null;
+    await _saveAlarmSets();
+    if (wasActive) {
+      await _applyAlarmWeek(fillDefaultAlarmSchedule(const []));
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// Switch [id] on (every other schedule off), or all off with null.
+  Future<void> activateAlarmSet(String? id) async {
+    _activeAlarmSetId = id;
+    await _saveAlarmSets();
+    final set = id == null
+        ? null
+        : _alarmSets.firstWhere((s) => s.id == id,
+            orElse: () => AlarmSet(id: id, name: ''));
+    await _applyAlarmWeek(set?.week() ?? fillDefaultAlarmSchedule(const []));
+  }
+
+  /// Write a whole week into the schedule table, then arm once.
+  Future<void> _applyAlarmWeek(List<AlarmScheduleEntry> week) async {
+    for (final e in week) {
+      await LocalDb.setAlarmScheduleDay(
+        weekday: e.weekday,
+        hour: e.hour,
+        minute: e.minute,
+        enabled: e.enabled,
+        smartWindowMinutes: e.smartWindowMinutes,
+      );
+    }
+    await _loadAlarmSchedule();
+    notifyListeners();
+    if (isConnected) await _armNextAlarmOccurrence();
+  }
+
   /// Compute + arm the next scheduled occurrence, skipping the write when it
   /// already matches what's armed (don't hammer the strap on every sync).
   /// Called after every successful connect and after each sync completes —
@@ -4972,6 +5077,9 @@ class AppState extends ChangeNotifier {
     await prefs.remove('alarm_epoch_confirmed');
     await LocalDb.clearAlarmSchedule();
     _schedule = fillDefaultAlarmSchedule(const []);
+    // The schedules stay; none is on any more.
+    _activeAlarmSetId = null;
+    await _saveAlarmSets();
     notifyListeners();
   }
 

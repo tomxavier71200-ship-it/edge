@@ -313,8 +313,9 @@ class _StressMonitorViewState extends State<StressMonitorView>
             const SizedBox(width: S.x3),
             Expanded(
               child: _explainer(P.of(c), 'MEASURING STRESS',
-                  'Koop reads it from your heartbeat timing every 15 minutes '
-                  'and shows it from 0 to 3. The higher it is, the more '
+                  'Every 15 minutes Koop compares your heart rate with your '
+                  'resting rate, leaving out the minutes you were moving, and '
+                  'shows it from 0 to 3. The higher it is, the more '
                   'activated you are.'),
             ),
           ]),

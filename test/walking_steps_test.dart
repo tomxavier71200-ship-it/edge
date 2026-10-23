@@ -1,5 +1,5 @@
 // The band's step counter also ticks on arm movement: only WALKING MINUTES
-// count (at least 30 s classed walking/running and at least 60 steps). On
+// count (at least 30 s classed walking/running and at least 55 steps). On
 // 22 Oct 2026 this took a seated day from 13,869 to 6,008; the iPhone said
 // 6,009.
 

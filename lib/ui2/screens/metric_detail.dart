@@ -89,6 +89,51 @@ class MetricSpec {
   });
 }
 
+/// What each number IS, in plain words — not how it is computed (that is
+/// [MetricSpec.method], in Nerd stats). Shown first on the metric's screen so
+/// a tap on a Health tile answers "what am I looking at".
+const kMetricAbout = <String, String>{
+  'resting_hr': 'How fast your heart beats when your body is fully at rest, '
+      'measured while you sleep. Lower than your usual often means you are '
+      'well recovered; higher can mean stress, illness, alcohol or a hard day.',
+  'hrv': 'Heart rate variability: how much the time between heartbeats '
+      'changes from beat to beat, measured while you sleep. Higher than your '
+      'usual generally means your body is rested and ready; lower means it '
+      'is under strain.',
+  'readiness': 'Recovery: how ready your body is to take on strain today, '
+      'from 0 to 100%. It comes from last night\'s heart rate variability, '
+      'resting heart rate and sleep, each compared with your own usual.',
+  'resp_rate': 'Breaths per minute while you sleep. It stays very steady '
+      'night to night, so a clear rise above your usual can be an early sign '
+      'of illness.',
+  'sleep': 'How long you were actually asleep last night — time in bed '
+      'minus the time you lay awake.',
+  'efficiency': 'The share of your time in bed that you spent asleep. '
+      'Higher means less time lying awake.',
+  'deep': 'Deep (slow-wave) sleep: the stage where the body does most of its '
+      'physical repair.',
+  'rem': 'REM sleep: the dreaming stage, important for memory and mood.',
+  'steps': 'How many steps you walked today, counted only in the minutes the '
+      'band saw you actually walking.',
+  'calories': 'Energy your body used today, from your heart rate and your '
+      'profile.',
+  'strain': 'How much load your heart was under today, from 0 to 21. '
+      'Workouts add the most; a calm day stays low.',
+  'stress': 'How tense your body is, read from your heart. Low when you are '
+      'calm and resting; high when your body is reacting to pressure, '
+      'effort or worry.',
+  'skin_temp': 'How warm your skin was overnight compared with your own '
+      'usual nights. A rise can come with illness, alcohol, a hot room or '
+      'your cycle.',
+  'hrr': 'How quickly your heart rate drops in the minute after you stop '
+      'exercising. A faster drop is a sign of good fitness.',
+  'dip': 'How much your heart rate falls during sleep compared with the day. '
+      'A bigger dip usually means deeper rest.',
+  'nap_min': 'Minutes you slept outside your main night\'s sleep.',
+  'active_min': 'Minutes today you were moving, not sitting or lying still.',
+  'wear': 'How many hours the band was on your wrist and recording.',
+};
+
 const _specs = <String, MetricSpec>{
   'resting_hr': MetricSpec(
     chartKey: 'resting_hr',
@@ -831,6 +876,11 @@ class _MetricDetailState extends State<MetricDetail> {
     final vals = [for (final v in series) ?v];
 
     return detailScaffold(c, spec.title, [
+      if (kMetricAbout[widget.metricKey] case final about?) ...[
+        const SizedBox(height: S.x2),
+        StatusCard('What it is', about, icon: LucideIcons.info),
+        const SizedBox(height: S.x4),
+      ],
       // Resting heart rate is the NIGHT's number; this is what the chest is
       // doing this second. Two different quantities, so the live one gets its
       // own card above the trend rather than a second figure on the same card,

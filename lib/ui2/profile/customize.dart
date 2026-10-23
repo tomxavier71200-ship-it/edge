@@ -139,7 +139,10 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
       ),
       Section(
         'Home rings',
-        _list(c, [
+        _dragList(c, _rings.length, (a, b) => setState(() {
+              _rings = _moved(_rings, a, b);
+              setRingOrder(_rings);
+            }), [
           for (var i = 0; i < _rings.length; i++)
             _row(c, _ringName(_rings[i]), null, i, _rings.length,
                 (d) => setState(() {
@@ -150,7 +153,10 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
       ),
       Section(
         'Home sections',
-        _list(c, [
+        _dragList(c, _sections.length, (a, b) => setState(() {
+              _sections = _moved(_sections, a, b);
+              setHomeSections(_sections);
+            }), [
           for (var i = 0; i < _sections.length; i++)
             _row(
               c,
@@ -171,7 +177,10 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
       ),
       Section(
         'Dashboard metrics',
-        _list(c, [
+        _dragList(c, _metrics.length, (a, b) => setState(() {
+              _metrics = _moved(_metrics, a, b);
+              setDashMetrics(_metrics);
+            }), [
           for (var i = 0; i < _metrics.length; i++)
             _row(
               c,
@@ -218,7 +227,8 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
         ),
       ),
       const SizedBox(height: S.x3),
-      Text('The eye shows or hides an item; the arrows move it.',
+      Text('The eye shows or hides an item. Press and hold an item, then '
+          'drag it up or down — or use the arrows.',
           style: F.cap.copyWith(color: p.ink3)),
     ]);
   }
@@ -237,16 +247,54 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   Widget _swatch(BoxDecoration d) =>
       Container(width: 52, height: 52, decoration: d);
 
-  Widget _list(BuildContext c, List<Widget> rows) {
+  /// [from] moved to [to], in ReorderableListView's index convention (a move
+  /// down counts the gap the item leaves).
+  List<T> _moved<T>(List<T> l, int from, int to) {
+    final next = [...l];
+    final t = next.removeAt(from);
+    next.insert(to > from ? to - 1 : to, t);
+    return next;
+  }
+
+  /// [_list], but rows can be dragged: press and hold anywhere on one, or
+  /// drag the grip at once. The arrows stay for screen readers and switches.
+  Widget _dragList(BuildContext c, int n, void Function(int, int) onReorder,
+      List<Widget> rows) {
     final p = P.of(c);
     return Surface(
       pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),
-      child: Column(children: [
-        for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) Divider(color: p.line, height: 1),
-          rows[i],
+      child: ReorderableListView(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        onReorder: onReorder,
+        proxyDecorator: (child, _, _) => Material(
+            color: p.card2, borderRadius: R.rMd, elevation: 6, child: child),
+        children: [
+          for (var i = 0; i < rows.length; i++)
+            ReorderableDelayedDragStartListener(
+              key: ValueKey(i),
+              index: i,
+              child: Container(
+                decoration: BoxDecoration(
+                    border: i == 0
+                        ? null
+                        : Border(top: BorderSide(color: p.line))),
+                child: Row(children: [
+                  ReorderableDragStartListener(
+                    index: i,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: S.x2),
+                      child: Icon(LucideIcons.gripVertical,
+                          size: 18, color: p.ink3),
+                    ),
+                  ),
+                  Expanded(child: rows[i]),
+                ]),
+              ),
+            ),
         ],
-      ]),
+      ),
     );
   }
 

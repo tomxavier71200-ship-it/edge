@@ -1819,7 +1819,15 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // (substrate.walkingStepsFromCounter). 22 Oct 2026: 13,869 → 6,008 against
 // the owner's iPhone 6,009. Rows without a motion class keep the old count.
 // kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 109;
+// 109 → 110 (stress, skin temperature): `stress_day` is now heart rate above
+// the night's resting rate per 15 minutes, moving minutes left out
+// (onehz_pipeline.hrStressPerWindow) — the band sends too few awake beats for
+// the per-bin SI, which read as noise. New scalar `skin_temp_delta_c`: degrees
+// off the person's normal, gen5 only. The nightly stress score is unchanged.
+// Steps: a walking minute needs 55 steps, not 60 (substrate.kWalkMinuteMinSteps;
+// 23 Oct 2026 read 3,966 against the iPhone's 5,209).
+// kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 110;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -4300,6 +4308,7 @@ class DerivationEngine {
       date: day.date,
       dayTsSec: daySub.tsSec,
       dayHr: daySub.hr,
+      dayActivityClass: daySub.activityClass,
       stepSpans: stepSpans,
       dayRrTsMs: daySub.rrTsMs,
       dayRrMs: daySub.rrMs,

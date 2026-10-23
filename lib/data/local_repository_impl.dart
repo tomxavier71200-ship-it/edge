@@ -789,13 +789,23 @@ class LocalRepositoryImpl extends LocalRepository {
       final env = _sub(b, 'wellness.skin_temp');
       return {
         'value': z,
+        // Degrees off the person's normal — gen5 only, null otherwise (see
+        // onehz_pipeline's skinTempDeltaC).
+        'delta_c': _scalar(b, 'skin_temp_delta_c'),
         'confidence': (env?['confidence'] as num?) ?? 0.5,
         'tier': (env?['tier'] as String?) ?? ana.Tier.relative,
         'inputs_used': env?['inputs_used'] ?? const ['skin_temp_raw'],
         'note': ?env?['note'],
       };
     }
-    final have = (await LocalDb.metricSeries('skin_temp_adc')).length;
+    // The baseline is nights STRICTLY BEFORE this one (the pipeline's
+    // `valuesBefore`), so this night's own value does not count towards it —
+    // counting it said "0 more nights" while the tile was still missing.
+    final day = b['date'] as String?;
+    final have = [
+      for (final r in await LocalDb.metricSeries('skin_temp_adc'))
+        if (day == null || (r['date'] as String).compareTo(day) < 0) r,
+    ].length;
     return {'value': null, 'note': 'need_baseline:have=$have,need=3'};
   }
 

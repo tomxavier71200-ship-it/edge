@@ -28,10 +28,11 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../state/alarm_schedule.dart';
+import '../../state/alarm_sets.dart';
 import '../../state/app_state.dart';
 import '../screens/home_screen.dart' show weekdayShortName;
 import '../ui2.dart';
-import 'profile.dart' show SetRow, settingsGroup;
+import 'profile.dart' show SetRow;
 
 /// What we actually know about the armed alarm.
 enum AlarmArmState {
@@ -72,12 +73,12 @@ class AlarmScreen extends StatelessWidget {
                   : AlarmArmState.unknown,
       connected: app.isConnected,
       schedule: app.alarmSchedule,
-      onToggleDay: (weekday, enabled) =>
-          app.setScheduleDay(weekday: weekday, enabled: enabled),
-      onSetDayTime: (weekday, hour, minute) =>
-          app.setScheduleDay(weekday: weekday, hour: hour, minute: minute),
-      onSetSmartWindow: (weekday, minutes) =>
-          app.setScheduleDay(weekday: weekday, smartWindowMinutes: minutes),
+      sets: app.alarmSets,
+      activeSetId: app.activeAlarmSetId,
+      onActivate: app.activateAlarmSet,
+      onSaveSet: app.saveAlarmSet,
+      onDeleteSet: app.deleteAlarmSet,
+      newSetId: app.newAlarmSetId,
       onTest: app.testAlarmBuzz,
       onCancel: app.disableAlarm,
     );
@@ -98,13 +99,18 @@ class AlarmScreenView extends StatelessWidget {
   /// [AppState.alarmSchedule] guarantees.
   final List<AlarmScheduleEntry> schedule;
 
-  /// All four talk to the band or its schedule and all throw when it is not
-  /// connected — the screen reports the failure rather than pretending it
-  /// worked.
-  final Future<void> Function(int weekday, bool enabled)? onToggleDay;
-  final Future<void> Function(int weekday, int hour, int minute)?
-      onSetDayTime;
-  final Future<void> Function(int weekday, int minutes)? onSetSmartWindow;
+  /// The named schedules (alarm_sets.dart) and which one is on. Saving or
+  /// switching writes the week straight away and arms the band when it is
+  /// connected, otherwise on its next connect.
+  final List<AlarmSet> sets;
+  final String? activeSetId;
+  final Future<void> Function(String? id)? onActivate;
+  final Future<void> Function(AlarmSet set)? onSaveSet;
+  final Future<void> Function(String id)? onDeleteSet;
+  final String Function()? newSetId;
+
+  /// Both talk to the band and throw when it is not connected — the screen
+  /// reports the failure rather than pretending it worked.
   final Future<void> Function()? onTest, onCancel;
 
   const AlarmScreenView({
@@ -114,9 +120,12 @@ class AlarmScreenView extends StatelessWidget {
     this.connected = false,
     this.now,
     this.schedule = const [],
-    this.onToggleDay,
-    this.onSetDayTime,
-    this.onSetSmartWindow,
+    this.sets = const [],
+    this.activeSetId,
+    this.onActivate,
+    this.onSaveSet,
+    this.onDeleteSet,
+    this.newSetId,
     this.onTest,
     this.onCancel,
   });
@@ -164,44 +173,61 @@ class AlarmScreenView extends StatelessWidget {
                   ],
                   const SizedBox(height: S.x4),
                 ],
-                if (!connected)
+                if (!connected) ...[
                   StatusCard(
                     l?.alarmNotConnectedTitle ?? 'The band is not connected',
-                    l?.alarmNotConnectedBody ??
-                        'Changing the schedule, testing and cancelling all '
-                            'write to the band, so they need a live '
-                            'connection. An alarm that is already armed is '
-                            'unaffected — it lives on the band.',
+                    'Schedule changes are saved and sent to the band the next '
+                        'time it connects. Testing and cancelling need it '
+                        'connected. An alarm that is already armed is '
+                        'unaffected — it lives on the band.',
                     icon: LucideIcons.bluetoothOff,
-                  )
-                else ...[
-                  settingsGroup(c, l?.alarmScheduleGroup ?? 'Weekly schedule', [
-                    for (final day in schedule) ...[
-                      SetRow(
-                          LucideIcons.calendarDays,
-                          C.orange,
-                          _weekdayLabel(c, day.weekday),
-                          value: day.enabled
-                              ? (l?.stateOn ?? 'On')
-                              : (l?.stateOff ?? 'Off'),
-                          chevron: false,
-                          onTap: () =>
-                              onToggleDay?.call(day.weekday, !day.enabled)),
-                      if (day.enabled) ...[
-                        SetRow(LucideIcons.clock, C.blue,
-                            l?.alarmWakeTimeRowTitle ?? 'Wake time',
-                            value: _hhmmOf(day.hour, day.minute),
-                            chevron: false,
-                            onTap: () => _pickDayTime(c, day)),
-                        SetRow(LucideIcons.moon, C.purple, 'Smart wake',
-                            value: day.smartWindowMinutes == 0
-                                ? (l?.stateOff ?? 'Off')
-                                : '${day.smartWindowMinutes} min early',
-                            chevron: false,
-                            onTap: () => _pickSmartWindow(c, day)),
-                      ],
+                  ),
+                  const SizedBox(height: S.x4),
+                ],
+                Section(
+                  'Schedules',
+                  Column(children: [
+                    for (final set in sets) ...[
+                      _SetCard(
+                        set: set,
+                        on: set.id == activeSetId,
+                        onToggle: () => _run(
+                            c,
+                            () => onActivate!(
+                                set.id == activeSetId ? null : set.id),
+                            set.id == activeSetId
+                                ? '${set.name} off'
+                                : '${set.name} on'),
+                        onTap: () => _edit(c, set),
+                      ),
+                      const SizedBox(height: S.x3),
                     ],
+                    if (sets.isEmpty) ...[
+                      const StatusCard(
+                        'No alarms yet',
+                        'Make a schedule — for example "Work week" with 6:30 '
+                            'on Monday to Friday — and switch it on.',
+                        icon: LucideIcons.alarmClock,
+                      ),
+                      const SizedBox(height: S.x3),
+                    ],
+                    BigButton('New schedule',
+                        icon: LucideIcons.plus,
+                        color: C.blue,
+                        soft: true,
+                        onTap: newSetId == null
+                            ? null
+                            : () => _edit(
+                                c,
+                                AlarmSet(
+                                    id: newSetId!(),
+                                    name: sets.isEmpty
+                                        ? 'My alarms'
+                                        : 'Schedule ${sets.length + 1}'),
+                                isNew: true)),
                   ]),
+                ),
+                if (connected) ...[
                   const SizedBox(height: S.x3),
                   if (at != null) ...[
                     BigButton(l?.alarmTestTheBuzz ?? 'Test the buzz',
@@ -228,45 +254,20 @@ class AlarmScreenView extends StatelessWidget {
     );
   }
 
-  Future<void> _pickDayTime(BuildContext c, AlarmScheduleEntry day) async {
-    final picked = await showTimePicker(
-      context: c,
-      initialTime: TimeOfDay(hour: day.hour, minute: day.minute),
-    );
-    if (picked == null || !c.mounted) return;
-    await _run(
-        c,
-        () => onSetDayTime!(day.weekday, picked.hour, picked.minute),
-        AppLocalizations.of(c)?.alarmSentToBand ?? 'Alarm sent to the band');
-  }
-
-  /// Off, or how many minutes before [day]'s wake time the band may buzz
-  /// early once light sleep is detected. Capped at 45 min — the standard
-  /// window size other wearables with this feature use — and [day]'s
-  /// hour:minute NEVER changes: it stays the hard fallback, armed on the
-  /// band exactly as before.
-  Future<void> _pickSmartWindow(BuildContext c, AlarmScheduleEntry day) async {
-    final picked = await showDialog<int>(
-      context: c,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Smart wake window'),
-        children: [0, 15, 30, 45]
-            .map((m) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(ctx, m),
-                  child: Text(m == 0 ? 'Off' : '$m min before wake time'),
-                ))
-            .toList(),
-      ),
-    );
-    if (picked == null || !c.mounted) return;
-    await _run(
-        c,
-        () => onSetSmartWindow!(day.weekday, picked),
-        picked == 0
-            ? 'Smart wake off'
-            : 'Smart wake on — the band still buzzes at the wake time '
-                'either way');
-  }
+  Future<void> _edit(BuildContext c, AlarmSet set, {bool isNew = false}) =>
+      Navigator.of(c).push(MaterialPageRoute<void>(
+        builder: (_) => AlarmSetEditor(
+          set: set,
+          isNew: isNew,
+          on: set.id == activeSetId,
+          onSave: (s) async {
+            await onSaveSet?.call(s);
+            // A first schedule is the one you meant to use.
+            if (isNew && activeSetId == null) await onActivate?.call(s.id);
+          },
+          onDelete: isNew ? null : () async => onDeleteSet?.call(set.id),
+        ),
+      ));
 
   /// Run a band/schedule write and report what happened. Every one of these
   /// throws when the band is not connected, and silence would read as success.
@@ -296,12 +297,6 @@ class AlarmScreenView extends StatelessWidget {
   /// hasn't actually latched yet.
   static String _dayAndTime(BuildContext c, DateTime at) =>
       '${weekdayShortName(at.weekday, AppLocalizations.of(c))} ${_hhmm(at)}';
-
-  /// Short weekday label for a schedule row. [weekday] is the 0=Mon..6=Sun
-  /// convention `AlarmScheduleEntry` uses; `weekdayShortName` wants
-  /// `DateTime.weekday` (1=Mon..7=Sun), hence the `+ 1`.
-  static String _weekdayLabel(BuildContext c, int weekday) =>
-      weekdayShortName(weekday + 1, AppLocalizations.of(c));
 
   static String _whichDay(BuildContext c, DateTime d, DateTime now) {
     final l = AppLocalizations.of(c);
@@ -379,5 +374,306 @@ class AlarmScreenView extends StatelessWidget {
               'connected if you need to be sure.',
       AlarmArmState.none => null,
     };
+  }
+}
+
+/// One schedule in the list: its name, each alarm as "06:30 · Mon–Fri", and
+/// an On/Off switch. Only one schedule is on at a time.
+class _SetCard extends StatelessWidget {
+  final AlarmSet set;
+  final bool on;
+  final VoidCallback onToggle, onTap;
+  const _SetCard(
+      {required this.set,
+      required this.on,
+      required this.onToggle,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Surface(
+      onTap: onTap,
+      semanticLabel: '${set.name}, ${on ? 'on' : 'off'}. Edit',
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(set.name, style: F.head.copyWith(color: p.ink)),
+            const SizedBox(height: S.x1),
+            if (set.alarms.isEmpty)
+              Text('No alarms', style: F.cap.copyWith(color: p.ink3))
+            else
+              for (final a in set.alarms)
+                Text(
+                    '${AlarmScreenView._hhmmOf(a.hour, a.minute)} · '
+                    '${daysLabel(a.days)}',
+                    style: F.body.copyWith(color: p.ink2)),
+          ]),
+        ),
+        const SizedBox(width: S.x3),
+        _OnOff(on: on, onTap: onToggle, label: set.name),
+      ]),
+    );
+  }
+}
+
+/// A pill switch: green "ON" or grey "OFF", 44 pt tall.
+class _OnOff extends StatelessWidget {
+  final bool on;
+  final VoidCallback onTap;
+  final String label;
+  const _OnOff({required this.on, required this.onTap, required this.label});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: '${on ? 'Switch off' : 'Switch on'} $label',
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 64, minHeight: S.tap),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: S.x3),
+        decoration: BoxDecoration(
+            color: on ? p.on(C.green) : p.card2, borderRadius: R.rPill),
+        child: Text(on ? 'ON' : 'OFF',
+            style: F.over.copyWith(
+                color: on ? p.bg : p.ink2, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+}
+
+/// Edit one schedule: its name and its alarms. Each alarm is a time, the
+/// days it rings (tap M T W T F S S), and smart wake. A day can belong to one
+/// alarm only — picking it on one takes it off another, because the band
+/// holds a single alarm per morning.
+class AlarmSetEditor extends StatefulWidget {
+  final AlarmSet set;
+  final bool isNew, on;
+  final Future<void> Function(AlarmSet set) onSave;
+  final Future<void> Function()? onDelete;
+  const AlarmSetEditor({
+    super.key,
+    required this.set,
+    required this.onSave,
+    this.onDelete,
+    this.isNew = false,
+    this.on = false,
+  });
+
+  @override
+  State<AlarmSetEditor> createState() => _AlarmSetEditorState();
+}
+
+class _AlarmSetEditorState extends State<AlarmSetEditor> {
+  late AlarmSet _d = widget.set.alarms.isEmpty
+      ? widget.set.withAlarm(const AlarmGroup(
+          days: {0, 1, 2, 3, 4},
+          hour: defaultAlarmHour,
+          minute: defaultAlarmMinute))
+      : widget.set;
+  late final _name = TextEditingController(text: widget.set.name);
+  bool _saving = false;
+
+  static const _letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  static const _names = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+    'Sunday',
+  ];
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _put(int i, AlarmGroup a) =>
+      setState(() => _d = _d.withAlarm(a, index: i));
+
+  Future<void> _time(int i) async {
+    final a = _d.alarms[i];
+    final t = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(hour: a.hour, minute: a.minute));
+    if (t != null && mounted) {
+      _put(i, a.copyWith(hour: t.hour, minute: t.minute));
+    }
+  }
+
+  /// Off, or how many minutes before the wake time the band may buzz early
+  /// once light sleep is seen. The wake time itself stays the hard fallback.
+  Future<void> _smart(int i) async {
+    final a = _d.alarms[i];
+    final m = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Smart wake window'),
+        children: [
+          for (final m in const [0, 15, 30, 45])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, m),
+              child: Text(m == 0 ? 'Off' : '$m min before wake time'),
+            ),
+        ],
+      ),
+    );
+    if (m != null && mounted) _put(i, a.copyWith(smartWindowMinutes: m));
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    final name = _name.text.trim();
+    try {
+      await widget.onSave(
+          _d.ready().copyWith(name: name.isEmpty ? widget.set.name : name));
+      HapticFeedback.lightImpact();
+      nav.pop();
+    } catch (e) {
+      if (mounted) setState(() => _saving = false);
+      messenger.showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Widget _day(P p, int i, int w) {
+    final a = _d.alarms[i];
+    final sel = a.days.contains(w);
+    return Pressable(
+      onTap: () => _put(
+          i, a.copyWith(days: sel ? ({...a.days}..remove(w)) : {...a.days, w})),
+      semanticLabel: '${_names[w]}, ${sel ? 'on' : 'off'}',
+      child: Container(
+        width: 40,
+        height: S.tap,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+            color: sel ? p.on(C.blue) : p.card2, shape: BoxShape.circle),
+        child: Text(_letters[w],
+            style: F.body.copyWith(
+                color: sel ? p.bg : p.ink2, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  Widget _alarm(P p, int i) {
+    final a = _d.alarms[i];
+    return Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Pressable(
+              onTap: () => _time(i),
+              semanticLabel: 'Wake time, change',
+              child: Text(AlarmScreenView._hhmmOf(a.hour, a.minute),
+                  style: F.n48.copyWith(color: p.ink)),
+            ),
+          ),
+          Pressable(
+            onTap: () => setState(() => _d = _d.withoutAlarm(i)),
+            semanticLabel: 'Remove this alarm',
+            child: SizedBox(
+              width: S.tap,
+              height: S.tap,
+              child: Icon(LucideIcons.trash2, size: 18, color: p.ink3),
+            ),
+          ),
+        ]),
+        const SizedBox(height: S.x3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [for (var w = 0; w < 7; w++) _day(p, i, w)],
+        ),
+        const SizedBox(height: S.x2),
+        Text(a.days.isEmpty ? 'Pick the days it rings' : daysLabel(a.days),
+            style: F.cap.copyWith(color: p.ink2)),
+        const SizedBox(height: S.x2),
+        SetRow(LucideIcons.moon, C.purple, 'Smart wake',
+            value: a.smartWindowMinutes == 0
+                ? 'Off'
+                : '${a.smartWindowMinutes} min early',
+            chevron: false,
+            onTap: () => _smart(i)),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: S.x4),
+            child: NavBar(widget.isNew ? 'New schedule' : 'Edit schedule',
+                sub: widget.on ? 'ON — THE BAND USES THIS ONE' : ''),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x10),
+              children: [
+                Surface(
+                  child: TextField(
+                    controller: _name,
+                    style: F.head.copyWith(color: p.ink),
+                    decoration: InputDecoration(
+                        labelText: 'NAME',
+                        labelStyle: F.over.copyWith(color: p.ink3),
+                        border: InputBorder.none),
+                  ),
+                ),
+                const SizedBox(height: S.x4),
+                for (var i = 0; i < _d.alarms.length; i++) ...[
+                  _alarm(p, i),
+                  const SizedBox(height: S.x3),
+                ],
+                BigButton('Add an alarm',
+                    icon: LucideIcons.plus,
+                    color: C.blue,
+                    soft: true,
+                    onTap: () => setState(() => _d = _d.copyWith(alarms: [
+                          ..._d.alarms,
+                          // The days no alarm has yet.
+                          AlarmGroup(
+                              days: {
+                                for (var w = 0; w < 7; w++)
+                                  if (!_d.alarms.any((a) => a.days.contains(w)))
+                                    w,
+                              },
+                              hour: defaultAlarmHour,
+                              minute: defaultAlarmMinute),
+                        ]))),
+                const SizedBox(height: S.x3),
+                const StatusCard(
+                  'One alarm per day',
+                  'The band holds one alarm for each morning, so picking a day '
+                      'on one alarm takes it off the others.',
+                  icon: LucideIcons.info,
+                ),
+                const SizedBox(height: S.x4),
+                BigButton(_saving ? 'Saving…' : 'Save',
+                    icon: LucideIcons.check, onTap: _saving ? null : _save),
+                if (widget.onDelete != null) ...[
+                  const SizedBox(height: S.x3),
+                  BigButton('Delete schedule',
+                      icon: LucideIcons.trash2,
+                      color: C.red,
+                      soft: true, onTap: () async {
+                    final nav = Navigator.of(c);
+                    await widget.onDelete!();
+                    nav.pop();
+                  }),
+                ],
+              ],
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 }

@@ -186,6 +186,12 @@ class RangeTile extends StatelessWidget {
   final String Function(double) fmt;
   final VoidCallback? onTap;
 
+  /// Shown in place of `fmt(value)` (with [unit]) when the reading people know
+  /// is in a different unit from the one the range is built on — skin
+  /// temperature in °C over an SD range. The chip then names the verdict
+  /// without the range's numbers, which are in the other unit.
+  final String? display;
+
   const RangeTile({
     super.key,
     required this.icon,
@@ -196,6 +202,7 @@ class RangeTile extends StatelessWidget {
     required this.fmt,
     this.note,
     this.onTap,
+    this.display,
   });
 
   @override
@@ -211,13 +218,18 @@ class RangeTile extends StatelessWidget {
     final col = r == null ? p.ink3 : (inside ? p.on(C.green) : p.on(C.orange));
     final chip = r == null
         ? (note ?? 'usual range building')
-        : '$word ${fmt(r.lo)}–${fmt(r.hi)}';
+        : display != null
+            ? '$word your usual'
+            : '$word ${fmt(r.lo)}–${fmt(r.hi)}';
+    final shown = display ?? fmt(value);
     return Surface(
       onTap: onTap,
       semanticLabel: r == null
-          ? '$name, ${fmt(value)} $unit, $chip'
-          : '$name, ${fmt(value)} $unit, $word your usual '
-              '${fmt(r.lo)} to ${fmt(r.hi)}',
+          ? '$name, $shown $unit, $chip'
+          : display != null
+              ? '$name, $shown $unit, $chip'
+              : '$name, $shown $unit, $word your usual '
+                  '${fmt(r.lo)} to ${fmt(r.hi)}',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon, size: 18, color: p.ink3),
@@ -236,7 +248,7 @@ class RangeTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(fmt(value), style: F.n48.copyWith(color: p.ink)),
+              Text(shown, style: F.n48.copyWith(color: p.ink)),
               if (unit.isNotEmpty) ...[
                 const SizedBox(width: 4),
                 Text(unit, style: F.body.copyWith(color: p.ink2)),

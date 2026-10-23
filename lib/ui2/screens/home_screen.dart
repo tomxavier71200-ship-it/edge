@@ -2760,7 +2760,27 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   ],
                   _ => const <Widget>[],
                 },
-
+            // The way to rearrange this screen, where you finish reading it.
+            const SizedBox(height: S.x5),
+            Center(
+              child: Pressable(
+                semanticLabel: 'Edit Home: reorder or hide sections',
+                onTap: _openCustomize,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: S.tap),
+                  padding: const EdgeInsets.symmetric(horizontal: S.x4),
+                  decoration: BoxDecoration(
+                      border: Border.all(color: p.line), borderRadius: R.rPill),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(LucideIcons.layoutList, size: 16, color: p.ink2),
+                    const SizedBox(width: S.x2),
+                    Text('Edit Home',
+                        style: F.body.copyWith(
+                            color: p.ink2, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            ),
           ],
           // Room for the coach line, so it never covers the last card.
           if (bubble != null) const SizedBox(height: 88),

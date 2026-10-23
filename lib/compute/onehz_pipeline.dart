@@ -197,6 +197,11 @@ class DayBundleInput {
   // ── DAY span (wake → next wake) 1 Hz substrate ────────────────────────────
   final List<int> dayTsSec;
   final List<int> dayHr; // 0 = off-skin
+
+  /// The band's own per-second activity class over [dayTsSec] (−1 absent,
+  /// 0 still, ≥1 moving), parallel to [dayHr]; empty when not carried. Stress
+  /// uses it to leave out the minutes a raised heart rate is just movement.
+  final List<int> dayActivityClass;
   // Day-span RR (beat-end epoch ms + interval ms) for the 24/7 irregular-rhythm
   // screen. Sparse (0–4 beats/s); empty when no RR was captured.
   final List<double> dayRrTsMs;
@@ -285,6 +290,7 @@ class DayBundleInput {
     required this.date,
     required this.dayTsSec,
     required this.dayHr,
+    this.dayActivityClass = const [],
     this.dayRrTsMs = const [],
     this.dayRrMs = const [],
     required this.sleepTsSec,
@@ -319,6 +325,7 @@ class DayBundleInput {
     'step_spans': stepSpans,
     'day_ts': dayTsSec,
     'day_hr': dayHr,
+    'day_activity_class': dayActivityClass,
     'day_rr_ts_ms': dayRrTsMs,
     'day_rr_ms': dayRrMs,
     'sleep_ts': sleepTsSec,
@@ -370,6 +377,7 @@ class DayBundleInput {
       date: m['date'] as String,
       dayTsSec: ints('day_ts'),
       dayHr: ints('day_hr'),
+      dayActivityClass: ints('day_activity_class'),
       dayRrTsMs: dbls('day_rr_ts_ms'),
       dayRrMs: dbls('day_rr_ms'),
       sleepTsSec: ints('sleep_ts'),
@@ -689,6 +697,18 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     // sub-quantum SD, which standardizes ordinary quantization noise into
     // an inflated z. Below 1 ADC count of dispersion, abstain instead.
     if (sd != null && sd >= 1) skinTempZ = (skinTempAdc - base) / sd;
+  }
+  // WHOOP states skin temperature as degrees off the person's normal. Only a
+  // gen5 strap gives real degrees (centi-°C in this column); a gen4 one gives
+  // ADC counts with no honest conversion, so it keeps the z alone. The range
+  // check refuses a baseline that mixes in anything that is not a skin
+  // temperature in centi-°C (an ADC night from another strap).
+  double? skinTempDeltaC;
+  if (skinTempZ != null &&
+      d.deviceFamily == 'gen5' &&
+      d.skinTempAdcHistory.every((v) => v >= 2000 && v <= 4500)) {
+    skinTempDeltaC =
+        (skinTempAdc! - _mean(d.skinTempAdcHistory)!) / 100;
   }
 
   // ── READINESS (the canonical composite, baseline-dependent) ───────────────
@@ -1294,11 +1314,14 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   final si = stress.present ? stress.value!.si : null;
   final lfhf = hrvF.present ? hrvF.value!.lfhf : null;
   final stressScore = si == null ? null : _stressScoreOfSi(si);
-  // The same SI, per 15 minutes of the whole day — see [stressPerWindow].
-  final stressDay = stressPerWindow(
-    dayCorrected.nn,
-    dayCorrected.nnTimesMs,
-    d.dayRrTsMs.isEmpty ? 0 : d.dayRrTsMs.first - d.dayRrMs.first,
+  // Per 15 minutes of the whole day, from heart rate above this night's
+  // resting rate — see [hrStressPerWindow] for why not the beat-timing SI.
+  final stressDay = hrStressPerWindow(
+    tsSec: d.dayTsSec,
+    hr: d.dayHr,
+    activityClass: d.dayActivityClass,
+    restingHr: rhrToday,
+    maxHr: hrMax,
   );
   final stressBlock = <String, dynamic>{
     'value': stressScore == null ? '—' : _round(stressScore, 1),
@@ -1602,6 +1625,8 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       'ln_rmssd': lnToday,
       'resp_rate': respToday,
       'skin_temp_z': skinTempZ,
+      'skin_temp_delta_c':
+          skinTempDeltaC == null ? null : _round(skinTempDeltaC, 2),
       // RAW nightly skin-temp ADC mean — the personal BASELINE series for
       // skin_temp_z. ALWAYS present when there's sleep+temp data (even while z is
       // still null in the ≤3-day bootstrap), so the series fills and z starts
@@ -2124,6 +2149,70 @@ double? _stressScoreOfSi(double si) {
   if (si <= 0) return null;
   final lo = math.log(20), hi = math.log(600);
   return (100 * (math.log(si) - lo) / (hi - lo)).clamp(0.0, 100.0);
+}
+
+/// Daytime stress, the way WHOOP's Stress Monitor reads it: how far the heart
+/// is running above this person's own resting rate while the body is NOT
+/// moving, per 15-minute wall-clock bin, on the same 0–100 scale.
+///
+/// Why not [stressPerWindow]: this band sends beat timing densely only while
+/// asleep. Awake it sends a few hundred beats an hour, and the per-bin SI on
+/// that swung 0↔63 between neighbouring bins with no relation to heart rate
+/// (r = −0.08 against bin mean HR on the owner's 21–23 Oct 2026 data). The
+/// 1 Hz heart rate is there every second.
+///
+/// score = (mean HR − resting HR) / (max HR − resting HR) / 0.5 × 100: still
+/// at half of heart-rate reserve is the top of the scale. On the owner's
+/// 23 Oct 2026 data that put sleep at 2–15, desk hours at 85–96 bpm at
+/// 40–58 (medium) and calm evening at 25–35. A "still" bin at 50%+ of reserve
+/// is exercise the band's activity class missed (a 126 bpm bin that day), so
+/// it is treated as movement, not as maximum stress.
+/// ponytail: 0.5 is a fixed reserve fraction, not fitted to WHOOP's stress
+/// export (the owner's export has none); fit it the day one is available.
+///
+/// A bin with under 10 minutes of worn heart rate is `score: null`; a bin
+/// where the band saw movement in 30%+ of those seconds, or at 50%+ of
+/// reserve, is `score: null, moving: true` (movement raises heart rate
+/// without stress). Bins with no
+/// heart rate at all are not emitted. No resting or max heart rate, no bins.
+List<Map<String, dynamic>> hrStressPerWindow({
+  required List<int> tsSec,
+  required List<int> hr,
+  List<int> activityClass = const [],
+  required double? restingHr,
+  required double? maxHr,
+  int binSec = 900,
+}) {
+  if (restingHr == null || maxHr == null || maxHr <= restingHr + 20) {
+    return const [];
+  }
+  if (tsSec.length != hr.length) return const [];
+  final hasActivity = activityClass.length == hr.length;
+  final sum = <int, double>{}, worn = <int, int>{}, moving = <int, int>{};
+  for (var i = 0; i < hr.length; i++) {
+    if (hr[i] <= 0) continue;
+    final k = tsSec[i] ~/ binSec;
+    sum[k] = (sum[k] ?? 0) + hr[i];
+    worn[k] = (worn[k] ?? 0) + 1;
+    if (hasActivity && activityClass[i] >= 1) moving[k] = (moving[k] ?? 0) + 1;
+  }
+  final keys = worn.keys.toList()..sort();
+  return [
+    for (final k in keys)
+      () {
+        final n = worn[k]!;
+        final t = k * binSec;
+        if (n < 600) return <String, dynamic>{'t': t, 'score': null};
+        final f = (sum[k]! / n - restingHr) / (maxHr - restingHr);
+        if ((moving[k] ?? 0) >= 0.3 * n || f >= 0.5) {
+          return <String, dynamic>{'t': t, 'score': null, 'moving': true};
+        }
+        return <String, dynamic>{
+          't': t,
+          'score': _round((f / 0.5).clamp(0.0, 1.0) * 100, 1),
+        };
+      }(),
+  ];
 }
 
 /// Daytime stress: the SAME [baevskyStressIndex] the night uses, run over each
