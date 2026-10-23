@@ -48,6 +48,14 @@ body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--displ
 .datenav button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer}
 .date{color:var(--today);font-weight:600;font-size:16px}
 .loader{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
+/* WHOOP keeps the date row clean: once your data is open the account and file
+   controls fold behind one ⋯ button. */
+#more{display:none;border:1px solid var(--line);background:#fff;border-radius:999px;width:32px;height:32px;font-size:18px;line-height:1;color:var(--ink2);cursor:pointer}
+body.loaded #more{display:inline-block}
+#ch-title:empty,#ch-vs:empty{display:none}
+body.loaded .loader>*:not(#more){display:none!important}
+body.loaded.menu .loader{position:relative}
+body.loaded.menu .loader>*:not(#more):not([hidden]):not(#passwrap):not(#source){display:inline-flex!important}
 input,select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
 .open{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer}
 .open.google{background:var(--card);color:var(--ink);border:1px solid var(--line)}
@@ -148,7 +156,7 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 
 <div class="band"><div class="bar">
   <div class="datenav"><button id="prev" aria-label="Previous day">‹</button><label class="date" for="cal"><span class="calic" id="calic">1</span><span id="date">—</span><input id="cal" type="date" aria-label="Pick a day"></label><button id="next" aria-label="Next day">›</button><button class="today" id="today" hidden>Today</button></div>
-  <form class="loader" id="loader"><span class="tag" id="source">Example data</span>
+  <form class="loader" id="loader"><button type="button" id="more" aria-label="Account and files" aria-expanded="false">⋯</button><span class="tag" id="source">Example data</span>
     <span id="passwrap"><input id="pass" type="password" placeholder="Koop Cloud passphrase" autocomplete="current-password" aria-label="Koop Cloud passphrase"><label class="rem"><input type="checkbox" id="remember">Remember</label></span>
     <span id="saved" hidden></span><button type="button" class="forget" id="forget" hidden>Forget passphrase</button><button type="button" class="forget" id="glog" hidden>Diagnostics log</button>
     <button class="open google" type="button" id="gsign"><svg width="15" height="15" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Sign in with Google</button>
@@ -358,7 +366,13 @@ function sessionsOn(d){
     return {id:o.id,type:ty[0].toUpperCase()+ty.slice(1),start:secs(o.start_ts),end:secs(o.end_ts),strain:o.strain,max_hr:o.max_hr,avg_hr:o.avg_hr??null,
       calories:o.calories,duration_min:o.duration_min,zones,hr};}).filter(Boolean);}
 
-function status(t){const s=document.getElementById("status");s.textContent=t;s.hidden=!t;}
+// [fade]: a success line goes away on its own after a few seconds, like WHOOP's
+// quiet header; problems stay until something replaces them.
+let statusTimer=null;
+{const m=document.getElementById("more");
+  m?.addEventListener("click",()=>{const open=document.body.classList.toggle("menu");m.setAttribute("aria-expanded",String(open));});}
+function status(t,fade=false){const s=document.getElementById("status");s.textContent=t;s.hidden=!t;
+  clearTimeout(statusTimer);if(fade&&t)statusTimer=setTimeout(()=>{if(s.textContent===t)s.hidden=true;},5000);}
 // The passphrase can be remembered in THIS browser (the person's choice, OFF by default: it is
 // stored as plain text, readable by any script on this origin, which the scripts below are
 // integrity-pinned and CSP-limited to keep to our own), so later
@@ -485,9 +499,9 @@ function overviewDay(){sess=sessionsOn(day);const [A,B]=selSpan(),days=[];
     (d===day?sess:sessionsOn(d)).forEach((s,i)=>{ss.push(s);items.push({a:s.start,b:s.end||s.start,c:"#0093e7",icon:sportIcon(s.type),top:"",below:s.strain==null?"—":(+s.strain).toFixed(1),
       title:`${s.type} ${ampm(s.start)}${s.end?" – "+ampm(s.end):""}`,go:()=>{day=d;zoom=null;tab="strain";workout=i;focus=null;render();}});});});
   const zoomed=!!(zoom&&zoomable()),hrs=(B-A)/3600;
-  drawCurve(pts,wins,null,zoomed?"Heart rate, zoomed":"Day heart rate",
+  drawCurve(pts,wins,null,zoomed?"Heart rate, zoomed":"",
     zoomed?`${ampm(A)} – ${ampm(B)}${days.length>1?" (across midnight)":""} · ${hrs<1?Math.round(hrs*60)+" min":hrs.toFixed(1)+" h"} · drag the handles below to change · double-click the strip to reset`
-          :`${nice(day)} · hover the line for each minute · drag the handles in the strip below to zoom in`,ss,[A,B]);
+          :``,ss,[A,B]);
   if(zoomed)document.getElementById("ch-title").insertAdjacentHTML("beforeend",` <button class="back" id="unzoom">Reset zoom</button>`),
     document.getElementById("unzoom").addEventListener("click",()=>{zoom=null;render();});
   timeline(items);}
@@ -658,7 +672,8 @@ async function load(blob,label,keep=false){
   status("Reading…");const pass=passphrase(),r=await readBackup(blob,pass);
   try{if(document.getElementById("remember").checked&&pass)localStorage.setItem(PASS_KEY,pass);}catch{}showSaved();
   whoopZip=null;document.getElementById("wsend").hidden=true;
-  show(r,keep);if(!keep)status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`);}
+  show(r,keep);document.body.classList.add("loaded");
+  if(!keep)status(`Loaded ${label}. Decrypted in this browser; nothing was sent anywhere.`,true);}
 function show(r,keep){const keepDay=keep?day:null;data=r.d;
   if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
   const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=keepDay&&keepDay<=iso(new Date())?keepDay:dates.at(-1)||iso(new Date());
