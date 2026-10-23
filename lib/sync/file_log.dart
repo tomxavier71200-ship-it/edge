@@ -27,9 +27,16 @@ class FileLog {
   static Future<void> _ensure() async {
     if (_init) return;
     _init = true;
+    // Android's external files dir first (adb-pullable); everywhere else the
+    // app's documents dir. `getExternalStorageDirectory` THROWS on iOS rather
+    // than returning null, and inside one try that throw left the iPhone with
+    // no log file at all — so nothing ever reached Koop Cloud's log either.
+    Directory? dir;
     try {
-      final dir = await getExternalStorageDirectory() ??
-          await getApplicationDocumentsDirectory();
+      if (Platform.isAndroid) dir = await getExternalStorageDirectory();
+    } catch (_) {}
+    try {
+      dir ??= await getApplicationDocumentsDirectory();
       _file = File('${dir.path}/openstrap_sync.log');
     } catch (_) {
       _file = null;
