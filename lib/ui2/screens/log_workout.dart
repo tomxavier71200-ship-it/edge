@@ -421,9 +421,11 @@ String dayLabel(DateTime at, {DateTime? now, AppLocalizations? l}) {
 ///
 /// [sessionId] is the whole difference between the two: with it the save is a
 /// RETIME (`setWorkoutWindow`, same id, so the row's GPS route and its rating
-/// stay attached), without it a new manual entry (`logManualWorkout`). The
-/// type is not editable on a retime — it belongs to the row already, and this
-/// screen is about the times.
+/// stay attached), without it a new manual entry (`logManualWorkout`). On an
+/// existing row this is WHOOP's "Edit activity": the sport can be changed too
+/// (`LocalDb.setSessionType`), and the window is only re-scored when the times
+/// actually moved — renaming a workout older than the raw retention must not
+/// re-score it into "unscored".
 ///
 /// Pops `true` when something was written, so the caller can re-read.
 class LogWorkout extends StatefulWidget {
@@ -465,6 +467,11 @@ class _LogWorkoutState extends State<LogWorkout> {
   List<SessionSpan> _spans = const [];
   bool _saving = false;
   String? _wrote;
+
+  /// Set once the sport is picked on an existing row. Until then a row with no
+  /// known sport (a detected workout not named yet) shows as unnamed rather
+  /// than as whatever the default activity happens to be.
+  bool _typePicked = false;
 
   @override
   void initState() {
@@ -569,7 +576,12 @@ class _LogWorkoutState extends State<LogWorkout> {
       shape: const RoundedRectangleBorder(borderRadius: R.rXl),
       builder: (_) => const _TypeSheet(),
     );
-    if (picked != null) setState(() => _activity = picked);
+    if (picked != null) {
+      setState(() {
+        _activity = picked;
+        _typePicked = true;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -583,11 +595,25 @@ class _LogWorkoutState extends State<LogWorkout> {
       _wrote = null;
     });
     try {
-      final r = widget.sessionId == null
-          ? await repo.logManualWorkout(
-              startTs: _startSec, endTs: _endSec, type: _activity.typeKey)
-          : await repo.setWorkoutWindow(widget.sessionId!,
-              startTs: _startSec, endTs: _endSec);
+      final id = widget.sessionId;
+      if (id != null && _typePicked && _activity != widget.activity) {
+        // The sport first, so a re-score below reads the new type.
+        await LocalDb.setSessionType(id, _activity.typeKey);
+      }
+      final moved = widget.start == null ||
+          widget.end == null ||
+          !_start.isAtSameMomentAs(widget.start!) ||
+          !_end.isAtSameMomentAs(widget.end!);
+      final Map<String, dynamic> r;
+      if (id == null) {
+        r = await repo.logManualWorkout(
+            startTs: _startSec, endTs: _endSec, type: _activity.typeKey);
+      } else if (moved) {
+        r = await repo.setWorkoutWindow(id,
+            startTs: _startSec, endTs: _endSec);
+      } else {
+        r = {'workout_id': id};
+      }
       // Both branches: a new session and a RETIMED one both change what the
       // health store should hold for that window (#130).
       await HealthExporter.exportWorkoutId(
@@ -645,10 +671,14 @@ class _LogWorkoutState extends State<LogWorkout> {
               padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x10),
               children: [
                 settingsGroup(c, l?.logWorkoutWhenGroup ?? 'When', [
-                  if (!retime)
+                  if (!retime || _typePicked || widget.activity != null)
                     SetRow(_activity.icon, _activity.color,
                         l?.logWorkoutActivityLabel ?? 'Activity',
-                        value: _activity.name, onTap: _pickActivity),
+                        value: _activity.name, onTap: _pickActivity)
+                  else
+                    SetRow(LucideIcons.activity, C.strain,
+                        l?.logWorkoutActivityLabel ?? 'Activity',
+                        value: 'Not named yet', onTap: _pickActivity),
                   SetRow(LucideIcons.calendar, C.blue,
                       l?.logWorkoutDateLabel ?? 'Date',
                       value: dayLabel(_start, now: widget.now, l: l),
@@ -696,7 +726,7 @@ class _LogWorkoutState extends State<LogWorkout> {
                   _saving
                       ? (l?.logWorkoutSaving ?? 'Saving…')
                       : retime
-                          ? (l?.logWorkoutSaveNewTimes ?? 'Save the new times')
+                          ? (l?.actionSave ?? 'Save')
                           : (l?.logWorkoutLogIt ?? 'Log it'),
                   icon: LucideIcons.check,
                   onTap: bad == null && !_saving ? _save : null,

@@ -151,7 +151,7 @@ void main() {
       );
     });
 
-    testWidgets('a retime keeps the type and does not offer to change it', (
+    testWidgets('editing a saved row offers its sport and its times', (
       t,
     ) async {
       await _pump(
@@ -162,14 +162,30 @@ void main() {
           start: _start,
           end: _end,
           activity: activityByName('running'),
-          title: 'Fix the times',
+          title: 'Edit activity',
         ),
       );
-      expect(find.text('Fix the times'), findsWidgets);
-      expect(find.text('Save the new times'), findsOneWidget);
-      // The row that would change the activity is absent: a retime is about
-      // the window, and the type belongs to the row already.
-      expect(find.text('Activity'), findsNothing);
+      expect(find.text('Edit activity'), findsWidgets);
+      expect(find.text('Save'), findsOneWidget);
+      // WHOOP's Edit activity: the sport is changeable on a saved row too.
+      expect(find.text('Activity'), findsOneWidget);
+      expect(find.text('Running'), findsOneWidget);
+    });
+
+    testWidgets('a saved row with no known sport reads unnamed, not a default',
+        (t) async {
+      await _pump(
+        t,
+        LogWorkout(
+          sessionId: 'auto:1',
+          now: _now,
+          start: _start,
+          end: _end,
+          title: 'Edit activity',
+        ),
+      );
+      expect(find.text('Not named yet'), findsOneWidget);
+      expect(find.text('Running'), findsNothing);
     });
 
     testWidgets('picking an end time before the start rolls to the next day', (

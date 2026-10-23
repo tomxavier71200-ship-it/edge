@@ -26,6 +26,8 @@ import '../../state/app_state.dart';
 import '../../state/prefs.dart';
 import '../../theme/theme_switcher.dart' show themedRoute;
 import '../activity/day_strain.dart' show DayStrainDetail;
+import '../../compute/workout_autolog.dart' show kUnnamedWorkoutType;
+import '../activity/catalogue.dart' show activityByName;
 import '../ui2.dart';
 import 'home_screen.dart';
 import 'health_screen.dart' show kStressLevelColors, kStressLevelWords, stressLevelOf;
@@ -511,23 +513,43 @@ Widget yourDayCard(BuildContext c, HomeData d) {
     for (final w in (t['sessions'] as List? ?? const [])) {
       if (w is! Map || w['start_ts'] is! num) continue;
       final type = (w['title'] ?? w['type'] ?? 'Activity').toString();
-      final name = type.isEmpty
-          ? 'Activity'
-          : '${type[0].toUpperCase()}${type.substring(1).replaceAll('_', ' ')}';
+      // A known sport shows its own name and icon; a detected workout not
+      // named yet reads plain "Activity", as WHOOP's does.
+      final sport =
+          type == kUnnamedWorkoutType ? null : activityByName(type);
+      final name = sport?.name ??
+          (type.isEmpty || type == kUnnamedWorkoutType
+              ? 'Activity'
+              : '${type[0].toUpperCase()}${type.substring(1).replaceAll('_', ' ')}');
       final strain = (w['strain'] as num?)?.toDouble();
       final start = (w['start_ts'] as num).toInt();
       final end = (w['end_ts'] as num?)?.toInt();
+      DateTime at(int sec) => DateTime.fromMillisecondsSinceEpoch(sec * 1000);
       rows.add(_dayRow(
           c,
           p,
-          LucideIcons.activity,
+          sport?.icon ?? LucideIcons.activity,
           C.strain,
           name,
           // No strain scored, no number in the pill — a dash, never a zero.
           strain?.toStringAsFixed(1) ?? '—',
           hhmm(start),
           end == null ? '' : hhmm(end),
-          () => go(c, const DayStrainDetail())));
+          () => go(c, const DayStrainDetail()),
+          // WHOOP's "Edit activity": the sport and the times, right here
+          // instead of three screens deep. Not for a live session: it has
+          // no end to edit yet.
+          onEdit: w['id'] is String && end != null && w['status'] != 'live'
+              ? () => go(
+                  c,
+                  LogWorkout(
+                    sessionId: w['id'] as String,
+                    start: at(start),
+                    end: at(end),
+                    activity: sport,
+                    title: 'Edit activity',
+                  ))
+              : null));
     }
   }
   Widget action(IconData icon, String label, VoidCallback onTap) => Expanded(
@@ -1067,7 +1089,8 @@ Widget? morningCard(BuildContext c, HomeData d) {
 /// the name in spaced capitals, start over end at the right with a bar in
 /// the activity's colour.
 Widget _dayRow(BuildContext c, P p, IconData icon, Color col, String name,
-        String value, String start, String end, VoidCallback onTap) =>
+        String value, String start, String end, VoidCallback onTap,
+        {VoidCallback? onEdit}) =>
     Pressable(
       semanticLabel: '$name, $value, $start to $end',
       onTap: onTap,
@@ -1110,6 +1133,16 @@ Widget _dayRow(BuildContext c, P p, IconData icon, Color col, String name,
             height: 30,
             decoration: BoxDecoration(color: p.on(col), borderRadius: R.rPill),
           ),
+          if (onEdit != null)
+            Pressable(
+              onTap: onEdit,
+              semanticLabel: 'Edit $name',
+              child: SizedBox(
+                width: S.tap,
+                height: S.tap,
+                child: Icon(LucideIcons.pencil, size: 18, color: p.ink2),
+              ),
+            ),
         ]),
       ),
     );
