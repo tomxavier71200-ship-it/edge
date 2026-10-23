@@ -27,6 +27,7 @@ import 'dart:math' as math;
 
 import 'strain_backfill.dart' show backfillStrainScale;
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'findings.dart';
 import 'nap_edits.dart';
@@ -61,6 +62,7 @@ import 'step_cadence.dart';
 import 'profile.dart';
 import 'quiet_level.dart' show personalQuietHrr;
 import 'substrate.dart';
+import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 
 /// Analytics/bundle version — bump to force a recompute of non-finalized days.
 /// v3: Walch 2019 stager + 4-class stages (light/deep/rem), robust nocturnal HRV,
@@ -1812,7 +1814,12 @@ import 'substrate.dart';
 // early estimate, which the Recovery screen shows when they sum to the dial.
 // No published number changes; the bump re-derives days so they carry it.
 // kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 108;
+// 108 → 109 (steps): the band's step counter counts only WALKING MINUTES —
+// at least 30 s the band classed as walking/running and at least 60 steps
+// (substrate.walkingStepsFromCounter). 22 Oct 2026: 13,869 → 6,008 against
+// the owner's iPhone 6,009. Rows without a motion class keep the old count.
+// kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 109;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -4786,7 +4793,11 @@ class DerivationEngine {
           ? false
           : (await LocalDb.activeWorkoutSuggestions())
               .any((r) => r['id'] == nb.id);
-      if (nb != null && live) {
+      // With auto-add on (the default), the app saves the bout itself and
+      // sends ONE notification then — named from habit or asking what it was
+      // (AppState._notifyDetectedWorkout). This one would be a second buzz
+      // about the same bout, landing on a suggestion already answered.
+      if (nb != null && live && !await _autoLogOn()) {
         await NotificationCenter.instance.emit(
           NotificationEvent(
             // Per-bout, not per-day — a per-day key silently swallowed the
@@ -5069,6 +5080,16 @@ class DerivationEngine {
     required bool sleepSubEmpty,
     required bool nightScalarsNull,
   }) => sleepSubEmpty && nightScalarsNull;
+
+  /// Whether detected workouts are saved automatically (the default).
+  static Future<bool> _autoLogOn() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      return sp.getBool(kAutoLogWorkoutsKey) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
 
   /// Share of an older result's sleep window the 1 Hz record must still cover
   /// for that night to count as "still recorded" (not pruned).
@@ -6682,7 +6703,9 @@ class DerivationEngine {
         scMap,
         liveStepsReal,
         liveStepsFromStrap: liveStepsFromStrap,
-        bandSteps: hardwareStepsFromCounter(
+        // Walking minutes only (substrate.walkingStepsFromCounter): the
+        // counter also ticks on arm movement at a desk.
+        bandSteps: walkingStepsFromCounter(
           daySub,
           cumulativeCounterModulus:
               ana.calibrationFor(_stepCounterModulus, daySub.deviceFamily),

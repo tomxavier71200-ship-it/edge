@@ -58,6 +58,17 @@ const String kRouteSteps = '/today/steps';
 String workoutSuggestionRoute(String id) =>
     Uri(path: kRouteWorkoutSuggestion, queryParameters: {'id': id}).toString();
 
+/// The deep link that NAMES one saved, auto-detected workout: the sport
+/// picker for that session. Same path as the detected-bout link (so it rides
+/// the same notification class and off switch), told apart by `session=`.
+String workoutNameRoute(String sessionId) => Uri(
+    path: kRouteWorkoutSuggestion,
+    queryParameters: {'session': sessionId}).toString();
+
+/// The session id of a [workoutNameRoute] link, or null.
+String? routeSessionId(String route) =>
+    Uri.tryParse(route)?.queryParameters['session'];
+
 /// The forgotten-workout nudge ("Still working out?" — see
 /// `WorkoutIdleWatch`). Lands on the Workouts tab: the live session bar and
 /// its finish control are what the notification is about. A dedicated path

@@ -261,6 +261,12 @@ class Substrate {
   /// Same absent-marker discipline as [stepCount] and [accelPresentAt].
   final List<int> hrValid;
 
+  /// The band's own motion class per second (gen5 `activity_class`: 0 still,
+  /// 1 walking, 2 running). Parallel to [tsSec]; **`-1` means the record
+  /// carried no class** (gen4, or a row decoded before the column existed).
+  /// Same absent-marker discipline as [stepCount].
+  final List<int> activityClass;
+
   /// WHICH STRAP MEASURED THIS SUBSTRATE — `'gen4'`, `'gen5'`, or null.
   ///
   /// Stamped at ingest into `decoded_onehz.device_family` and carried here so
@@ -322,6 +328,7 @@ class Substrate {
     required List<int> skinContact,
     List<int> stepCount = const [],
     List<int> hrValid = const [],
+    List<int> activityClass = const [],
     String? deviceFamily,
     Set<String> deviceIds = const {},
   }) =>
@@ -341,6 +348,7 @@ class Substrate {
         skinContact: skinContact,
         stepCount: stepCount,
         hrValid: hrValid,
+        activityClass: activityClass,
       );
 
   const Substrate._({
@@ -357,6 +365,7 @@ class Substrate {
     required this.skinContact,
     this.stepCount = const [],
     this.hrValid = const [],
+    this.activityClass = const [],
     this.deviceFamily,
     this.deviceIds = const {},
   });
@@ -504,6 +513,7 @@ class Substrate {
       skinContact: skinContact.sublist(lo, hi),
       stepCount: _stepSlice(lo, hi),
       hrValid: _perSecSlice(hrValid, lo, hi),
+      activityClass: _perSecSlice(activityClass, lo, hi),
       deviceFamily: deviceFamily,
       deviceIds: deviceIds,
       rrTsMs: rr.$1,
@@ -533,6 +543,7 @@ class Substrate {
       skinContact: skinContact.sublist(lo, hi),
       stepCount: _stepSlice(lo, hi),
       hrValid: _perSecSlice(hrValid, lo, hi),
+      activityClass: _perSecSlice(activityClass, lo, hi),
       deviceFamily: deviceFamily,
       deviceIds: deviceIds,
       rrTsMs: rr.$1,
@@ -599,6 +610,7 @@ class Substrate {
         'skin_contact': skinContact,
         'step_count': stepCount,
         'hr_valid': hrValid,
+        'activity_class': activityClass,
         // Null (unknown provenance) is a real answer — emit the key regardless.
         'device_family': deviceFamily,
         'device_ids': deviceIds.toList(),
@@ -655,6 +667,10 @@ class Substrate {
       // reading — the band saying THIS second's beat is not trustworthy.
       hrValid: () {
         final l = ints(m, 'hr_valid');
+        return l.length == n ? l : List<int>.filled(n, -1);
+      }(),
+      activityClass: () {
+        final l = ints(m, 'activity_class');
         return l.length == n ? l : List<int>.filled(n, -1);
       }(),
       deviceFamily: m['device_family'] as String?,
@@ -806,6 +822,7 @@ Substrate decodeSubstrate(List<String> hexes) {
     // replay, which carries no device stamp either — so it would refuse at
     // `hrValidAt` regardless.
     hrValid: List<int>.filled(n, -1),
+    activityClass: List<int>.filled(n, -1),
   );
 }
 
@@ -916,6 +933,67 @@ int? hardwareStepsFromCounter(
     prevTs = ts;
   }
   return seen ? total : null;
+}
+
+/// Seconds of a minute the band must call walking or running before that
+/// minute's steps count, and the fewest steps that minute must hold (a real
+/// walking pace is 90–120 a minute; arm movement at a desk is short bursts).
+const int kWalkMinuteSec = 30;
+const int kWalkMinuteMinSteps = 60;
+
+/// Steps from the band's counter, counting only WALKING MINUTES: a minute
+/// whose seconds the band classed as walking/running for at least
+/// [kWalkMinuteSec] and that holds at least [kWalkMinuteMinSteps] steps.
+///
+/// The on-chip counter also ticks on arm movement. On 22 Oct 2026 it counted
+/// 13,869 for a mostly seated day; the owner's iPhone counted 6,009, and this
+/// gate gives 6,008 (one day of evidence — re-check on more days). Without
+/// any motion class (gen4, or rows decoded before the column existed) the
+/// ungated [hardwareStepsFromCounter] stands. Same wrap/reset handling.
+int? walkingStepsFromCounter(
+  Substrate sub, {
+  required int? cumulativeCounterModulus,
+  int maxStepsPerSecond = 5,
+}) {
+  final wrap = cumulativeCounterModulus;
+  if (wrap == null || wrap <= 0) return null;
+  final hasClass = sub.activityClass.length == sub.length &&
+      sub.activityClass.any((c) => c >= 0);
+  if (!hasClass) {
+    return hardwareStepsFromCounter(sub,
+        cumulativeCounterModulus: wrap, maxStepsPerSecond: maxStepsPerSecond);
+  }
+  final steps = <int, int>{};
+  final walk = <int, int>{};
+  int? prev;
+  int? prevTs;
+  var seen = false;
+  for (var i = 0; i < sub.length; i++) {
+    final ts = sub.tsSec[i];
+    final minute = ts ~/ 60;
+    if (sub.activityClass[i] >= 1) walk[minute] = (walk[minute] ?? 0) + 1;
+    final c = sub.stepCounterAt(i);
+    if (c == null) continue;
+    seen = true;
+    if (prev != null && prevTs != null && ts > prevTs) {
+      final budget = (ts - prevTs).clamp(60, 3600) * maxStepsPerSecond;
+      var delta = c - prev;
+      if (delta < 0) delta += wrap;
+      if (delta > 0 && delta <= budget) {
+        steps[minute] = (steps[minute] ?? 0) + delta;
+      }
+    }
+    prev = c;
+    prevTs = ts;
+  }
+  if (!seen) return null;
+  var total = 0;
+  steps.forEach((m, n) {
+    if ((walk[m] ?? 0) >= kWalkMinuteSec && n >= kWalkMinuteMinSteps) {
+      total += n;
+    }
+  });
+  return total;
 }
 
 class _Rec {

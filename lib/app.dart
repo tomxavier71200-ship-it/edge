@@ -18,6 +18,7 @@ import 'theme/theme_switcher.dart';
 import 'widget/widget_service.dart';
 import 'ui2/activity/catalogue.dart';
 import 'ui2/activity/live.dart';
+import 'ui2/activity/picker.dart' show NameWorkoutScreen;
 import 'ui2/onboarding/pairing.dart' show OnboardingBypass;
 import 'ui2/onboarding/profile_setup.dart';
 import 'ui2/pairing/device_picker.dart';
@@ -437,8 +438,11 @@ Widget? screenForRoute(String route) => switch (routePath(route)) {
       // screen is PUSHED by `_consume`, so every tap builds a fresh one and the
       // id reaches it. Wellness is a shell tab kept alive in the IndexedStack,
       // never rebuilt on a tap, which is why that one needs a request notifier.
-      kRouteWorkoutSuggestion =>
-        WorkoutSuggestionScreen(focusId: routeId(route)),
+      // A saved, auto-detected workout to name (`session=`), or a bout to
+      // review (`id=`).
+      kRouteWorkoutSuggestion => routeSessionId(route) != null
+          ? NameWorkoutScreen(sessionId: routeSessionId(route)!)
+          : WorkoutSuggestionScreen(focusId: routeId(route)),
       // Battery, band and sources all live behind this one.
       kRouteProfile => const ProfileHome(),
       // The alarm safety notifications land where either can actually be

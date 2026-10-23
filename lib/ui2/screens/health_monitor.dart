@@ -25,8 +25,10 @@ import 'detail_trends.dart' show hmOfMin;
 import 'metric_detail.dart' show detailScaffold;
 import 'stress_detail.dart' show StressReading;
 
-/// A vital's verdict against the person's own usual range.
-enum VitalStatus { inside, outside, building }
+/// A vital's verdict against the person's own usual range. [unavailable] is
+/// a vital this band's data cannot give at all (blood oxygen) — a dash that,
+/// unlike [building], never turns into a range.
+enum VitalStatus { inside, outside, building, unavailable }
 
 class HealthMonitorCard extends StatelessWidget {
   /// (icon, short name, status), in display order.
@@ -38,14 +40,17 @@ class HealthMonitorCard extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final ranged = items.where((i) => i.$3 != VitalStatus.building).length;
+    final ranged = items
+        .where((i) =>
+            i.$3 != VitalStatus.building && i.$3 != VitalStatus.unavailable)
+        .length;
     final inside = items.where((i) => i.$3 == VitalStatus.inside).length;
     final all = ranged > 0 && inside == ranged;
     Widget box(VitalStatus s) {
       final col = switch (s) {
         VitalStatus.inside => C.green,
         VitalStatus.outside => C.orange,
-        VitalStatus.building => C.n500,
+        VitalStatus.building || VitalStatus.unavailable => C.n500,
       };
       return Container(
         width: 30,
@@ -55,10 +60,13 @@ class HealthMonitorCard extends StatelessWidget {
             switch (s) {
               VitalStatus.inside => LucideIcons.check,
               VitalStatus.outside => LucideIcons.triangleAlert,
-              VitalStatus.building => LucideIcons.minus,
+              VitalStatus.building || VitalStatus.unavailable =>
+                LucideIcons.minus,
             },
             size: 18,
-            color: s == VitalStatus.building ? p.ink3 : p.on(col)),
+            color: s == VitalStatus.building || s == VitalStatus.unavailable
+                ? p.ink3
+                : p.on(col)),
       );
     }
 

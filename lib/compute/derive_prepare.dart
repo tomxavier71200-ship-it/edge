@@ -456,6 +456,7 @@ class _PrepareAccumulator {
   /// See [Substrate.stepCount] for why the sentinel is not 0.
   final List<int> stepCount = [];
   final List<int> hrValid = [];
+  final List<int> activityClass = [];
 
   /// The DISTINCT non-null `device_family` stamps seen across every page fed in
   /// (see [Substrate.deviceFamily]). Exactly one ⇒ that is the substrate's
@@ -565,6 +566,9 @@ class _PrepareAccumulator {
     hrValid.addAll(sub.hrValid.length == sub.length
         ? sub.hrValid
         : List<int>.filled(sub.length, -1));
+    activityClass.addAll(sub.activityClass.length == sub.length
+        ? sub.activityClass
+        : List<int>.filled(sub.length, -1));
   }
 
   void addDecodedPage(
@@ -662,6 +666,8 @@ class _PrepareAccumulator {
       // `device_family == 'gen5'` check that used to sit on top of it was a
       // band id in the neutral layer (BANDAGNOSTIC C12).
       hrValid.add(_num(row?['hr_valid'])?.toInt() ?? -1);
+      // The band's motion class; NULL is ABSENT (-1) like the two above.
+      activityClass.add(_num(row?['activity_class'])?.toInt() ?? -1);
       final beats = rrByRecTs[recTs];
       if (beats == null) continue;
       for (final beat in beats) {
@@ -720,6 +726,7 @@ class _PrepareAccumulator {
       skinContact: skinContact,
       stepCount: stepCount,
       hrValid: hrValid,
+      activityClass: activityClass,
       deviceFamily: deviceFamily,
       deviceIds: _deviceIds,
     );

@@ -1039,6 +1039,10 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
           (LucideIcons.activity, 'HRV', status['hrv'] ?? VitalStatus.building),
           (LucideIcons.thermometer, 'Temp',
               status['skin_temp'] ?? VitalStatus.building),
+          // WHOOP's fifth vital. This band's 1 Hz red and IR channels are one
+          // signal (onehz_pipeline kSpo2Refusal), so there is no oxygen
+          // reading to range — a permanent dash, said plainly on the screen.
+          (LucideIcons.droplet, 'SpO₂', VitalStatus.unavailable),
         ],
         onTap: () => go(
           c,
@@ -1049,7 +1053,17 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
             tiles: [
               for (final k in kMonitorVitals) ?tiles[k],
             ],
-            gaps: gaps,
+            gaps: [
+              ...gaps,
+              const StatusCard(
+                'Blood oxygen',
+                'Not available from this band. WHOOP works it out inside the '
+                    'band and sends it only to its own app; the readings Koop '
+                    'receives cannot give an oxygen level, so Koop shows none '
+                    'rather than a guess.',
+                icon: LucideIcons.droplet,
+              ),
+            ],
           ),
         ),
       ),

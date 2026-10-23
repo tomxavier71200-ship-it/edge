@@ -198,6 +198,9 @@ const _notComponents = {
   // The shell's More tab: a list of doors that switches tabs through the
   // ShellScope, so it has no meaning outside a live shell.
   'MoreScreen',
+  // The detected-workout notification's landing: ActivityPicker (in the
+  // gallery) with a save callback, nothing of its own to show.
+  'NameWorkoutScreen',
   'CustomizeScreen',
   'PeriodReport',
   'Vo2maxScreen',

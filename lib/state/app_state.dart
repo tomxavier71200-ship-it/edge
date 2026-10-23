@@ -18,7 +18,9 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:openstrap_analytics/onehz.dart' as ana;
+import '../compute/substrate.dart' show tzOffsetSecondsAt;
 import '../compute/workout_autolog.dart';
+import '../compute/workout_autolog.dart' as autolog show kAutoLogWorkoutsKey, kUnnamedWorkoutType;
 import '../compute/quiet_level.dart' show kQuietHistoryDays, personalQuietHrr;
 import 'package:openstrap_protocol/openstrap_protocol.dart' as proto;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -6578,7 +6580,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Prefs key: log detected workouts automatically (WHOOP's behaviour).
-  static const kAutoLogWorkoutsKey = 'workout.auto_log';
+  /// The one definition lives in workout_autolog.dart (the engine reads it).
+  static const kAutoLogWorkoutsKey = autolog.kAutoLogWorkoutsKey;
 
   /// Every settled, unanswered workout detection becomes a session marked
   /// `detected` — the "Auto-detected" chip — the way WHOOP adds an activity
@@ -6593,6 +6596,9 @@ class AppState extends ChangeNotifier {
     if (r == null || !Prefs.getBool(kAutoLogWorkoutsKey, true)) return 0;
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     var added = 0;
+    // The person's own named workouts of the last 8 weeks — what the habit
+    // guess learns from (guessWorkoutType). Read once per pass.
+    List<PastWorkout>? past;
     for (final s in await LocalDb.activeWorkoutSuggestions()) {
       final id = s['id'] as String?;
       final st = (s['start_ts'] as num?)?.toInt();
@@ -6618,14 +6624,81 @@ class AppState extends ChangeNotifier {
         await LocalDb.dismissWorkoutSuggestion(id);
         continue;
       }
-      await r.logManualWorkout(
-          startTs: st, endTs: en, type: 'general_workout', source: 'detected');
+      past ??= [
+        for (final o in await LocalDb.sessionsInRange(nowSec - 56 * 86400, nowSec))
+          if (sec(o['start_ts']) case final a?)
+            if (sec(o['end_ts']) case final b?)
+              (
+                startSec: a,
+                endSec: b,
+                type: (o['type'] as String?) ?? '',
+                avgHr: (o['avg_hr'] as num?)?.toDouble(),
+              ),
+      ];
+      final avg = (s['avg_bpm'] as num?)?.toDouble();
+      final guess = guessWorkoutType(
+        startSec: st,
+        endSec: en,
+        avgHr: avg,
+        history: past,
+        tzOffsetSec: tzOffsetSecondsAt,
+      );
+      final saved = await r.logManualWorkout(
+          startTs: st,
+          endTs: en,
+          type: guess ?? autolog.kUnnamedWorkoutType,
+          source: 'detected');
       // logManualWorkout retires the suggestions this window covers; this one
       // too, in case its window rounding left it out.
       await LocalDb.dismissWorkoutSuggestion(id);
       added++;
+      final sessionId = saved['workout_id']?.toString();
+      if (sessionId != null) {
+        unawaited(_notifyDetectedWorkout(
+            sessionId: sessionId, startSec: st, endSec: en, type: guess));
+      }
     }
     return added;
+  }
+
+  /// One notification per auto-added workout, WHOOP-style: named from habit
+  /// ("Cycling saved, tap to change") or asking ("what was it?"). Either way
+  /// the tap opens the sport picker for that session.
+  Future<void> _notifyDetectedWorkout({
+    required String sessionId,
+    required int startSec,
+    required int endSec,
+    required String? type,
+  }) async {
+    String hm(int t) {
+      final d = DateTime.fromMillisecondsSinceEpoch(t * 1000);
+      return '${d.hour.toString().padLeft(2, '0')}:'
+          '${d.minute.toString().padLeft(2, '0')}';
+    }
+    final when = '${hm(startSec)}–${hm(endSec)}, '
+        '${((endSec - startSec) / 60).round()} min';
+    final name = type
+        ?.split('_')
+            .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+            .join(' ');
+    try {
+      await NotificationCenter.instance.emit(
+        NotificationEvent(
+          dedupeKey: 'detected_named:$sessionId',
+          category: NotifCategory.reminders,
+          priority: NotifPriority.normal,
+          title: name == null ? 'Workout detected' : '$name saved',
+          body: name == null
+              ? '$when. What was it? Tap to choose.'
+              : '$when, named from your usual workouts. Tap to change.',
+          date: todayLabel(),
+          route: workoutNameRoute(sessionId),
+        ),
+        allowPermissionPrompt: false,
+      );
+    } catch (e) {
+      _log('[workout] detected-workout notification skipped: $e');
+    }
   }
 
   /// Retire the auto-detected suggestion(s) a just-finalized session covers,

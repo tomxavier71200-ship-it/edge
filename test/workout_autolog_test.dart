@@ -59,4 +59,66 @@ void main() {
             startSec: st, endSec: st, nowSec: later, sessions: const [], answeredOverlap: false),
         AutoLogDecision.skip);
   });
+
+  group('guessWorkoutType: named from the person\'s own habit', () {
+    // Local clock = UTC here (offset 0), so 05:00 is 5 * 3600 past midnight.
+    const day = 86400;
+    PastWorkout w(int d, int startMin, int durMin, String type, [double? hr]) => (
+          startSec: d * day + startMin * 60,
+          endSec: d * day + (startMin + durMin) * 60,
+          type: type,
+          avgHr: hr,
+        );
+    String? guess(int startMin, int durMin, List<PastWorkout> h, [double? hr]) =>
+        guessWorkoutType(
+          startSec: 30 * day + startMin * 60,
+          endSec: 30 * day + (startMin + durMin) * 60,
+          avgHr: hr,
+          history: h,
+          tzOffsetSec: (_) => 0,
+        );
+
+    final mornings = [
+      for (var d = 1; d <= 5; d++) w(d, 5 * 60 + (d % 3) * 10, 60 + d * 5, 'cycling', 125),
+    ];
+
+    test('a 05:10 bout like the usual morning ride is Cycling', () {
+      expect(guess(5 * 60 + 10, 70, mornings, 128), 'cycling');
+    });
+
+    test('the same ride for two hours still counts (half to double the length)', () {
+      expect(guess(5 * 60, 120, mornings), 'cycling');
+    });
+
+    test('an evening bout is not the morning habit: ask', () {
+      expect(guess(19 * 60, 60, mornings), isNull);
+    });
+
+    test('one earlier ride is not a habit yet', () {
+      expect(guess(5 * 60, 60, mornings.take(1).toList()), isNull);
+    });
+
+    test('mixed sports at that hour: no clear answer, ask', () {
+      final mixed = [
+        ...mornings.take(2),
+        w(3, 5 * 60, 60, 'running'),
+        w(4, 5 * 60, 60, 'running'),
+      ];
+      expect(guess(5 * 60, 60, mixed), isNull);
+    });
+
+    test('unnamed workouts never vote', () {
+      final unnamed = [for (var d = 1; d <= 5; d++) w(d, 5 * 60, 60, kUnnamedWorkoutType)];
+      expect(guess(5 * 60, 60, unnamed), isNull);
+    });
+
+    test('around midnight: 23:50 and 00:10 are close', () {
+      final late = [for (var d = 1; d <= 3; d++) w(d, 23 * 60 + 50, 40, 'walking')];
+      expect(guess(10, 40, late), 'walking');
+    });
+
+    test('a very different heart rate is not the same workout', () {
+      expect(guess(5 * 60 + 10, 70, mornings, 170), isNull);
+    });
+  });
 }

@@ -8,7 +8,9 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/db.dart' show LocalDb;
 import '../../l10n/app_localizations.dart';
+import '../screens/log_workout.dart' show bumpInsights;
 import '../grammar.dart';
 import '../theme.dart';
 import 'catalogue.dart';
@@ -351,4 +353,24 @@ class _Quick extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The sport picker for ONE saved session — where the detected-workout
+/// notification lands ("what was it?" / "tap to change"). Picking stores the
+/// type the same way the summary's "Change activity type" does, then closes.
+class NameWorkoutScreen extends StatelessWidget {
+  final String sessionId;
+  const NameWorkoutScreen({super.key, required this.sessionId});
+
+  @override
+  Widget build(BuildContext c) => ActivityPicker(onPick: (pc, a) async {
+        try {
+          await LocalDb.setSessionType(sessionId, a.typeKey);
+        } catch (_) {
+          return; // the row is unchanged: leave the picker open
+        }
+        if (!pc.mounted) return;
+        bumpInsights(pc);
+        Navigator.of(pc).maybePop();
+      });
 }
