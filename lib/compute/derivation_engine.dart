@@ -1827,7 +1827,11 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // Steps: a walking minute needs 55 steps, not 60 (substrate.kWalkMinuteMinSteps;
 // 23 Oct 2026 read 3,966 against the iPhone's 5,209).
 // kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 110;
+// 110 → 111 (stress): `stress_day` bins are 5 minutes, not 15, so the
+// Stress Monitor's line is near-continuous like WHOOP's; each bin carries
+// its length (`sec`) and readers count minutes, not bins (an hour still
+// gates a level). Same score formula. kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 111;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.

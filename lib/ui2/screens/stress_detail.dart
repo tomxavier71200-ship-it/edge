@@ -1,12 +1,12 @@
-// The Stress Monitor's day view, WHOOP-style: the 15-minute readings as a
+// The Stress Monitor's day view, WHOOP-style: the readings as a
 // line coloured by level, sleep and workouts marked on it, and the time spent
 // at each level — for the whole day, outside activities, and during sleep —
 // against the same weekday's usual.
 //
-// Arithmetic on the readings the pipeline already wrote (`stress_day`, the
-// Baevsky index per 15 minutes, 0–100, shown 0–3). Nothing here is a new
-// stress number. Each reading counts as 15 minutes; a window without a
-// reading counts as nothing, never as calm.
+// Arithmetic on the readings the pipeline already wrote (`stress_day`, heart
+// rate above resting per 5 minutes — 15 before algo 111 — 0–100, shown 0–3).
+// Nothing here is a new stress number. Each reading counts as its own
+// length; a window without a reading counts as nothing, never as calm.
 
 import 'dart:math' as math;
 
@@ -20,15 +20,34 @@ import 'health_screen.dart' show kStressLevelColors, kStressLevelWords, stressLe
 import 'detail_trends.dart' show hmOfMin;
 import 'home_screen.dart' show clock;
 
-/// One 15-minute reading on the 0–3 scale.
-typedef StressReading = ({DateTime at, double v});
+/// One reading on the 0–3 scale, and the minutes it covers (5, or 15 on
+/// days derived before algo 111).
+typedef StressReading = ({DateTime at, double v, int min});
 
-/// Scored 15-minute windows today before any screen states a stress LEVEL
-/// for the day (Home's tile, the Health stress gauge). One window is about
-/// 15 minutes of beats, and a confident level on that is the thin-data
-/// stress reading AGENTS §4.1 calls out. Four is an hour. The individual
-/// readings still draw as what they are.
-const kStressMinWindows = 4;
+/// Minutes of scored readings today before any screen states a stress LEVEL
+/// for the day (Home's tile, the Health stress gauge). A level on twenty
+/// minutes is the thin-data stress reading AGENTS §4.1 calls out, so it
+/// waits for an hour. The individual readings still draw as what they are.
+const kStressMinMinutes = 60;
+
+/// The minutes [r] covers.
+int stressMinutes(Iterable<StressReading> r) =>
+    r.fold(0, (a, x) => a + x.min);
+
+/// Enough readings to state a level: [kStressMinMinutes].
+bool stressEnough(Iterable<StressReading> r) =>
+    stressMinutes(r) >= kStressMinMinutes;
+
+/// WHOOP's stress scale from 0 to 3: blue, teal, green, yellow, orange. The
+/// line and the dial shade along it rather than jumping at the level cuts.
+const kStressScale = [C.blue, C.teal, C.green, C.yellow, C.orange];
+
+/// The colour of [v] (0–3) on [kStressScale].
+Color stressShade(double v) {
+  final f = (v / 3).clamp(0.0, 1.0) * (kStressScale.length - 1);
+  final i = f.floor().clamp(0, kStressScale.length - 2);
+  return Color.lerp(kStressScale[i], kStressScale[i + 1], f - i)!;
+}
 
 /// A span the day's timeline marks: sleep, or a workout.
 typedef Span = ({int from, int to});
@@ -39,7 +58,11 @@ List<StressReading> stressReadings(Map<String, dynamic> s, String day) => [
         if (e is Map && e['t'] is num && e['score'] is num)
           if (DateTime.fromMillisecondsSinceEpoch((e['t'] as num).toInt() * 1000)
               case final at when dayLabelOf(at) == day)
-            (at: at, v: (e['score'] as num).toDouble() / 100 * 3),
+            (
+              at: at,
+              v: (e['score'] as num).toDouble() / 100 * 3,
+              min: e['sec'] is num ? (e['sec'] as num).toInt() ~/ 60 : 15,
+            ),
     ];
 
 /// Sleep and workout spans from a `getDayTimeline` map, epoch seconds.
@@ -76,11 +99,11 @@ StressSplit stressSplit(List<StressReading> r,
   for (final x in r) {
     final lvl = stressLevelOf(x.v);
     final t = x.at.millisecondsSinceEpoch ~/ 1000;
-    total[lvl] += 15;
+    total[lvl] += x.min;
     if (inside(sleep, t)) {
-      asleep[lvl] += 15;
+      asleep[lvl] += x.min;
     } else if (!inside(work, t)) {
-      outside[lvl] += 15;
+      outside[lvl] += x.min;
     }
   }
   return StressSplit(total, outside, asleep);
@@ -124,6 +147,9 @@ class StressLine extends StatelessWidget {
 
   /// A dashed line at the right edge: the window ends now.
   final bool markEnd;
+
+  /// The plot's height; the Stress Monitor draws it tall, as WHOOP does.
+  final double height;
   const StressLine(
       {super.key,
       required this.readings,
@@ -133,7 +159,8 @@ class StressLine extends StatelessWidget {
       this.from,
       this.to,
       this.selected,
-      this.markEnd = false});
+      this.markEnd = false,
+      this.height = 150});
 
   /// Five evenly spaced clock labels over the drawn window.
   List<String> _labels() {
@@ -160,7 +187,7 @@ class StressLine extends StatelessWidget {
       label: 'Stress through the day, ${readings.length} readings',
       child: Column(children: [
         SizedBox(
-          height: 150,
+          height: height,
           child: CustomPaint(
             size: Size.infinite,
             painter: _LinePainter(readings, sleep, work, day, p, from, to, selected, markEnd),
@@ -260,21 +287,25 @@ class _LinePainter extends CustomPainter {
             ..strokeWidth = 3
             ..strokeCap = StrokeCap.round);
     }
-    // The line: consecutive readings (15 minutes apart) joined, each segment
-    // in the colour of its level; a longer gap breaks the line.
+    // The line: back-to-back readings joined, each segment shaded by its
+    // value along WHOOP's blue → green → orange scale; a gap breaks it.
     final sorted = [...r]..sort((a, b) => a.at.compareTo(b.at));
     for (var i = 0; i < sorted.length; i++) {
       final a = sorted[i];
       final ax = x(a.at.millisecondsSinceEpoch ~/ 1000), ay = y(a.v);
-      final col = p.on(kStressLevelColors[stressLevelOf(a.v)]);
+      final col = p.on(stressShade(a.v));
       if (i + 1 < sorted.length &&
-          sorted[i + 1].at.difference(a.at).inMinutes <= 20) {
+          sorted[i + 1].at.difference(a.at).inMinutes <= a.min + 5) {
         final b = sorted[i + 1];
+        final a2 = Offset(ax, ay),
+            b2 = Offset(x(b.at.millisecondsSinceEpoch ~/ 1000), y(b.v));
         cv.drawLine(
-            Offset(ax, ay),
-            Offset(x(b.at.millisecondsSinceEpoch ~/ 1000), y(b.v)),
+            a2,
+            b2,
             Paint()
-              ..color = col
+              ..shader = LinearGradient(
+                      colors: [col, p.on(stressShade(b.v))])
+                  .createShader(Rect.fromPoints(a2, b2 + const Offset(.1, .1)))
               ..strokeWidth = 2
               ..strokeCap = StrokeCap.round);
       } else {

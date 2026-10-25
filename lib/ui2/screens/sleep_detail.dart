@@ -36,7 +36,7 @@ import 'stress_detail.dart'
     show
         Span,
         StressReading,
-        kStressMinWindows,
+        kStressMinMinutes,
         stressReadings,
         stressSplit,
         timelineSpans;
@@ -737,11 +737,11 @@ class _SleepDetailState extends State<SleepDetail> {
   }
 
   /// The share of the night's stress readings at the high level, or null
-  /// with fewer than [kStressMinWindows] readings asleep — too few to state.
+  /// with under [kStressMinMinutes] of readings asleep — too few to state.
   double? _highStressPct(SleepData d) {
     final split = stressSplit(d.stress, sleep: d.sleepSpans).asleep;
     final total = split.fold<int>(0, (a, b) => a + b);
-    if (total < kStressMinWindows * 15) return null;
+    if (total < kStressMinMinutes) return null;
     return split[2] / total * 100;
   }
 

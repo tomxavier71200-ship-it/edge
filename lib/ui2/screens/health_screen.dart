@@ -885,7 +885,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
 
   /// WHOOP's Stress Monitor card on the Health tab: today's time at high
   /// stress against a typical day of this weekday, and today's readings.
-  /// Opens the Stress tab. The time needs [kStressMinWindows] readings.
+  /// Opens the Stress tab. The time needs [kStressMinMinutes] of readings.
   Widget _stressCard(BuildContext c) {
     final d = _sd;
     return StressMonitorCard(

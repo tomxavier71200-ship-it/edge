@@ -394,7 +394,7 @@ Map<String, Widget> goldenCases() => {
         readings: [
           for (var i = 0; i < 24; i++)
             (
-              at: DateTime(2026, 10, 3, 8, 15 * i),
+              at: DateTime(2026, 10, 3, 8, 15 * i), min: 15,
               v: .5 + (i % 5) * .35,
             ),
         ],
@@ -440,7 +440,7 @@ Map<String, Widget> goldenCases() => {
         readings: [
           for (var i = 0; i < 30; i++)
             (
-              at: DateTime(2026, 10, 3, 5, 44 + 15 * i),
+              at: DateTime(2026, 10, 3, 5, 44 + 15 * i), min: 15,
               v: i == 27 ? 2.3 : (i % 7 == 0 ? 1.2 : .4),
             ),
         ],
@@ -716,7 +716,7 @@ Map<String, Widget> _nutritionAndWellnessCases() {
       height: 32,
       child: StressSparkline([
         for (var i = 0; i < 12; i++)
-          (at: DateTime(2026, 10, 3, 8, 15 * i), v: .6 + (i % 4) * .4),
+          (at: DateTime(2026, 10, 3, 8, 15 * i), min: 15, v: .6 + (i % 4) * .4),
       ]),
     ),
     'coach_bubble': CoachBubble(
@@ -1208,7 +1208,7 @@ Map<String, Widget> extraCases() => {
           readings: [
             for (var i = 0; i < 40; i++)
               (
-                at: DateTime(2026, 10, 2, 8, 15 * i),
+                at: DateTime(2026, 10, 2, 8, 15 * i), min: 15,
                 v: 1.5 + (i % 7 - 3) * .35,
               ),
           ],

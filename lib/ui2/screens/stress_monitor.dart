@@ -1,18 +1,18 @@
 // WHOOP's Stress Monitor, as its own screen:
 //
-//   * a day stepper (arrows, and the calendar on the day's name);
+//   * "STRESS MONITOR" and WHOOP's plain "< TODAY >" stepper;
 //   * the half-dial with the newest reading on 0–3, or "CALCULATING" while
-//     the day has too few readings for a level, and an (i) that explains it;
+//     the day has under an hour of readings, and an (i) that explains it;
 //   * the readings as a line — the last 24 hours for today, midnight to
 //     midnight for an earlier day — with sleep and workouts marked. Touch or
 //     drag picks a reading; the magnifier zooms to six hours around it;
 //   * Total day / Non-activity / Sleep against the same weekday's usual,
 //     each with "See trends" (the last seven days at each level);
-//   * last night's reading and the breathing exercise.
+//   * Sessions (guided breathing) and How it works.
 //
-// Every number is the pipeline's `stress_day` (Baevsky SI per 15 minutes,
-// 0–100, shown 0–3) or arithmetic on it. A window without a reading counts
-// as nothing, never as calm.
+// Every number is the pipeline's `stress_day` (heart rate above resting per
+// 5 minutes, 0–100, shown 0–3) or arithmetic on it. A window without a
+// reading counts as nothing, never as calm.
 
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -25,21 +25,19 @@ import 'detail_trends.dart' show hmOfMin;
 import 'health_screen.dart'
     show kStressLevelColors, kStressLevelWords, stressLevelOf;
 import 'home_screen.dart' show clock, go, repoOf, syncOf;
-import 'metric_detail.dart' show dayCenter, detailScaffold;
+import 'metric_detail.dart' show detailScaffold;
 import 'stress_detail.dart';
 import 'dart:math' as math;
 
 const kInfoStress =
-    'Stress Monitor reads the Baevsky stress index from your beat-to-beat '
-    'data in 15-minute windows — the same formula as the nightly reading — '
+    'Every 5 minutes Koop compares your heart rate with your resting rate '
     'and shows it from 0 to 3. Under 1 is low, under 2 is medium, 2 and up is '
-    'high.\n\nThe dial shows the newest reading once the day has about an '
-    'hour of them; before that it says Calculating. Exercise raises the '
-    'index too, so workouts are marked on the chart and counted apart in '
-    'Non-activity.\n\nA window without enough clean beats shows nothing '
-    'rather than a guess. "Typical" is the average of up to four earlier '
-    'same weekdays with at least two hours of readings. Updates after each '
-    'band sync.';
+    'high.\n\nThe dial shows the newest reading once the day has an hour '
+    'of them; before that it says Calculating. Minutes when you were moving '
+    'are left out, because moving raises your heart rate without stress.'
+    '\n\nA stretch without enough wear shows nothing rather than a guess. '
+    '"Typical" is the average of up to four earlier same weekdays with at '
+    'least two hours of readings. Updates after each band sync.';
 
 /// One day of stress, read once: what the dial, the chart and the cards
 /// need.
@@ -75,8 +73,8 @@ class StressDay {
 
   bool get isToday => day == todayLabel();
 
-  /// Too few readings to state a level: [kStressMinWindows].
-  bool get calculating => readings.length < kStressMinWindows;
+  /// Too few readings to state a level: [kStressMinMinutes].
+  bool get calculating => !stressEnough(readings);
 
   static Future<Map<String, dynamic>> _soft(
       Future<Map<String, dynamic>> Function() read) async {
@@ -89,9 +87,12 @@ class StressDay {
 
   static Future<({List<StressReading> r, List<Span> sleep, List<Span> work})>
       _one(LocalRepository repo, String day) async {
-    final r = stressReadings(await _soft(() => repo.getDayStress(day)), day);
-    final sp = timelineSpans(await _soft(() => repo.getDayTimeline(day)));
-    return (r: r, sleep: sp.sleep, work: sp.work);
+    final (s, tl) = await (
+      _soft(() => repo.getDayStress(day)),
+      _soft(() => repo.getDayTimeline(day)),
+    ).wait;
+    final sp = timelineSpans(tl);
+    return (r: stressReadings(s, day), sleep: sp.sleep, work: sp.work);
   }
 
   /// One day's split, or null for a day with under two hours of readings —
@@ -103,11 +104,24 @@ class StressDay {
     return stressSplit(o.r, sleep: o.sleep, work: o.work);
   }
 
+  /// The last read of each day, so reopening the screen shows it at once
+  /// while the fresh read runs.
+  static final shown = <String, StressDay>{};
+
   static Future<StressDay> load(LocalRepository repo, String day) async {
+    final d = await _read(repo, day);
+    shown[day] = d;
+    return d;
+  }
+
+  static Future<StressDay> _read(LocalRepository repo, String day) async {
     final d = DateTime.parse(day);
-    final s = await _soft(() => repo.getDayStress(day));
+    final (s, tl) = await (
+      _soft(() => repo.getDayStress(day)),
+      _soft(() => repo.getDayTimeline(day)),
+    ).wait;
     final readings = stressReadings(s, day);
-    final sp = timelineSpans(await _soft(() => repo.getDayTimeline(day)));
+    final sp = timelineSpans(tl);
     var window = readings;
     var sleep = sp.sleep, work = sp.work;
     DateTime from = d, to = DateTime(d.year, d.month, d.day + 1);
@@ -125,11 +139,14 @@ class StressDay {
       sleep = [...prev.sleep, ...sp.sleep];
       work = [...prev.work, ...sp.work];
     }
-    final usual = <StressSplit>[];
-    for (var k = 1; k <= 4; k++) {
-      final u = await splitOf(repo, dayLabelOf(DateTime(d.year, d.month, d.day - 7 * k)));
-      if (u != null) usual.add(u);
-    }
+    // The four earlier same weekdays, read together rather than one by one.
+    final usual = [
+      for (final u in await Future.wait([
+        for (var k = 1; k <= 4; k++)
+          splitOf(repo, dayLabelOf(DateTime(d.year, d.month, d.day - 7 * k))),
+      ]))
+        ?u,
+    ];
     final night = s['stress'];
     return StressDay(
       day: day,
@@ -168,9 +185,19 @@ class _StressMonitorScreenState extends State<StressMonitorScreen> {
       for (var i = 0; i < 30; i++)
         dayLabelOf(DateTime(now.year, now.month, now.day - i)),
     ];
-    return detailScaffold(c, 'Stress monitor', [
-      const SizedBox(height: S.x2),
-      dayCenter(_day, days, (d) => setState(() => _day = d)),
+    final i = days.indexOf(_day);
+    return detailScaffold(c, 'STRESS MONITOR', [
+      _Stepper(
+        words: i <= 0
+            ? 'TODAY'
+            : i == 1
+                ? 'YESTERDAY'
+                : dayWords(DateTime.parse(_day)).toUpperCase(),
+        onOlder: i < days.length - 1
+            ? () => setState(() => _day = days[i + 1])
+            : null,
+        onNewer: i > 0 ? () => setState(() => _day = days[i - 1]) : null,
+      ),
       const SizedBox(height: S.x4),
       DaySwipe(
         day: _day,
@@ -207,7 +234,7 @@ class _StressMonitorViewState extends State<StressMonitorView>
   @override
   void initState() {
     super.initState();
-    _d = widget.preview;
+    _d = widget.preview ?? StressDay.shown[widget.day ?? todayLabel()];
   }
 
   @override
@@ -251,14 +278,15 @@ class _StressMonitorViewState extends State<StressMonitorView>
       );
     }
     final wd = weekdayName(DateTime.parse(d.day));
-    final dayWords = '${wd.substring(0, 3)}, ${_monthDay(DateTime.parse(d.day))}';
+    final words = dayWords(DateTime.parse(d.day));
     final versus = d.usual == null
-        ? '$dayWords stress · typical $wd needs two earlier ${wd}s'
-        : '$dayWords stress vs. typical $wd';
+        ? '$words stress · typical $wd needs two earlier ${wd}s'
+        : '$words stress vs. typical $wd';
     const parts = [
       ('Total day', 'Stress through the whole day, including sleep and activities.',
           LucideIcons.gauge),
-      ('Non-activity', 'Stress experienced outside of workouts and sleep.',
+      ('Non activity',
+          'Stress experienced outside of Strain activities and sleep.',
           LucideIcons.armchair),
       ('Sleep', 'Stress experienced during sleep.', LucideIcons.moon),
     ];
@@ -291,15 +319,9 @@ class _StressMonitorViewState extends State<StressMonitorView>
               : () => go(c, StressTrendsScreen(part: i, day: d.day)),
         ),
       ],
-      Section('Stress last night', _lastNight(c, d)),
       // WHOOP's two closing sections: something to do about it, and what the
       // number is.
-      Section(
-          'Sessions',
-          ActionCard('Breathe for 2 minutes',
-              'Slow, paced breathing to bring your stress down',
-              'Start', LucideIcons.wind, C.blue,
-              onTap: () => go(c, const CalmBreathing()))),
+      Section('Sessions', _session(c)),
       Section(
         'How it works',
         IntrinsicHeight(
@@ -313,7 +335,7 @@ class _StressMonitorViewState extends State<StressMonitorView>
             const SizedBox(width: S.x3),
             Expanded(
               child: _explainer(P.of(c), 'MEASURING STRESS',
-                  'Every 15 minutes Koop compares your heart rate with your '
+                  'Every 5 minutes Koop compares your heart rate with your '
                   'resting rate, leaving out the minutes you were moving, and '
                   'shows it from 0 to 3. The higher it is, the more '
                   'activated you are.'),
@@ -334,11 +356,38 @@ class _StressMonitorViewState extends State<StressMonitorView>
         ]),
       );
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  static String _monthDay(DateTime d) => '${_months[d.month - 1]} ${d.day}';
+  /// WHOOP's Sessions tile: a picture-like card that starts guided
+  /// breathing.
+  Widget _session(BuildContext c) {
+    final p = P.of(c);
+    return Pressable(
+      onTap: () => go(c, const CalmBreathing()),
+      semanticLabel: 'Guided breathing, to bring your stress down. Start',
+      child: Container(
+        height: 150,
+        width: double.infinity,
+        padding: const EdgeInsets.all(S.x4),
+        decoration: BoxDecoration(
+          borderRadius: R.rLg,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [p.on(C.blue).withValues(alpha: .55), p.card],
+          ),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(LucideIcons.wind, size: 28, color: p.ink),
+          const Spacer(),
+          Text('GUIDED BREATHING',
+              style: F.over.copyWith(
+                  color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+          const SizedBox(height: S.x1),
+          Text('Slow, paced breathing to increase relaxation',
+              style: F.cap.copyWith(color: p.ink2)),
+        ]),
+      ),
+    );
+  }
 
   /// WHOOP's half-dial with its 0.0 / 3.0 ends and an (i).
   Widget _gauge(BuildContext c, StressDay d) {
@@ -351,8 +400,8 @@ class _StressMonitorViewState extends State<StressMonitorView>
       Stack(children: [
         Center(
           child: SizedBox(
-            width: 260,
-            height: 150,
+            width: 300,
+            height: 175,
             child: CustomPaint(
               painter: StressGauge(v == null ? null : v / 3, p),
               child: Align(
@@ -361,15 +410,20 @@ class _StressMonitorViewState extends State<StressMonitorView>
                   fit: BoxFit.scaleDown,
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     if (v == null) ...[
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: p.ink3, width: 2)),
+                        child: Icon(LucideIcons.activity, size: 26, color: p.ink3),
+                      ),
+                      const SizedBox(height: S.x3),
                       Text('CALCULATING',
-                          style: F.over.copyWith(
+                          style: F.label.copyWith(
                               color: p.ink,
                               letterSpacing: 2,
                               fontWeight: FontWeight.w700)),
-                      const SizedBox(height: S.x1),
-                      Text(
-                          '${d.readings.length} of $kStressMinWindows readings',
-                          style: F.cap.copyWith(color: p.ink3)),
                     ] else ...[
                       Text(v.toStringAsFixed(1),
                           style: F.n48.copyWith(color: p.ink)),
@@ -389,22 +443,13 @@ class _StressMonitorViewState extends State<StressMonitorView>
             right: 0, top: 0, child: InfoButton('Stress monitor', kInfoStress)),
       ]),
       SizedBox(
-        width: 260,
+        width: 240,
         child: Row(children: [
-          Text('0.0', style: F.over.copyWith(color: p.ink3)),
+          Text('0.0', style: F.label.copyWith(color: p.ink3)),
           const Spacer(),
-          Text('3.0', style: F.over.copyWith(color: p.ink3)),
+          Text('3.0', style: F.label.copyWith(color: p.ink3)),
         ]),
       ),
-      if (v != null && last != null) ...[
-        const SizedBox(height: S.x2),
-        Text('as of ${clock(last.at.hour * 60 + last.at.minute)}',
-            style: F.cap.copyWith(color: p.ink3)),
-      ] else if (d.readings.isNotEmpty) ...[
-        const SizedBox(height: S.x2),
-        Text('A level needs about an hour of wear.',
-            style: F.cap.copyWith(color: p.ink3)),
-      ],
     ]);
   }
 
@@ -455,13 +500,11 @@ class _StressMonitorViewState extends State<StressMonitorView>
 
     final sel = _sel;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      // The picked reading, or the hint that the chart can be touched.
-      SizedBox(
-        height: 28,
-        child: sel == null
-            ? Text('Touch the chart to read a moment',
-                style: F.cap.copyWith(color: p.ink3))
-            : Pressable(
+      // The picked reading; nothing until a finger touches the chart.
+      if (sel != null)
+        SizedBox(
+          height: 28,
+          child: Pressable(
                 onTap: () => setState(() => _sel = null),
                 semanticLabel: 'Clear the picked reading',
                 child: Row(children: [
@@ -480,7 +523,7 @@ class _StressMonitorViewState extends State<StressMonitorView>
                   Icon(LucideIcons.x, size: 16, color: p.ink3),
                 ]),
               ),
-      ),
+        ),
       Stack(children: [
         LayoutBuilder(
           builder: (c, box) => Scrubber(
@@ -512,6 +555,7 @@ class _StressMonitorViewState extends State<StressMonitorView>
               to: to,
               selected: sel != null && shown.contains(sel) ? sel : null,
               markEnd: d.isToday && !_zoom,
+              height: 210,
             ),
           ),
         ),
@@ -532,20 +576,6 @@ class _StressMonitorViewState extends State<StressMonitorView>
         ),
       ]),
     ]);
-  }
-
-  Widget _lastNight(BuildContext c, StressDay d) {
-    final n = d.lastNight;
-    final score = n == null ? null : n['score'] as num?;
-    if (score == null) {
-      return const StatusCard('No stress reading last night',
-          'Stress is read from beat timing while you were resting overnight, '
-              'and last night produced no reading.',
-          icon: LucideIcons.activity);
-    }
-    return SignalCard(LucideIcons.activity, C.purple, 'Autonomic tension',
-        score.round().toString(),
-        unit: '/100', sub: (n?['level']?.toString() ?? '').toUpperCase());
   }
 }
 
@@ -647,7 +677,7 @@ class StressGauge extends CustomPainter {
 
   @override
   void paint(Canvas cv, Size s) {
-    const w = 14.0;
+    const w = 11.0;
     final r = math.min(s.width / 2, s.height) - w;
     final center = Offset(s.width / 2, s.height - w / 2);
     final rect = Rect.fromCircle(center: center, radius: r);
@@ -658,7 +688,7 @@ class StressGauge extends CustomPainter {
     final sweep = const SweepGradient(
       startAngle: math.pi,
       endAngle: 2 * math.pi,
-      colors: kStressLevelColors,
+      colors: kStressScale,
     ).createShader(rect);
     // WHOOP keeps the scale's colours visible even before a reading: the
     // full arc dim, the part up to the reading bright.
@@ -677,4 +707,46 @@ class StressGauge extends CustomPainter {
 
   @override
   bool shouldRepaint(StressGauge old) => old.frac != frac || old.p.dark != p.dark;
+}
+
+/// WHOOP's day words: "Sat, Oct 3".
+String dayWords(DateTime d) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${weekdayName(d).substring(0, 3)}, ${months[d.month - 1]} ${d.day}';
+}
+
+/// WHOOP's day stepper: a chevron each side of the day's name, the newer one
+/// greyed on today.
+class _Stepper extends StatelessWidget {
+  final String words;
+  final VoidCallback? onOlder, onNewer;
+  const _Stepper({required this.words, this.onOlder, this.onNewer});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    Widget arrow(IconData i, VoidCallback? on, String label) => Pressable(
+          onTap: on,
+          semanticLabel: label,
+          child: SizedBox(
+            width: S.tap,
+            height: S.tap,
+            child: Icon(i, size: 22, color: on == null ? p.ink3 : p.ink),
+          ),
+        );
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      arrow(LucideIcons.chevronLeft, onOlder, 'Day before'),
+      ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 120),
+        child: Text(words,
+            textAlign: TextAlign.center,
+            style: F.label.copyWith(
+                color: p.ink, letterSpacing: 2, fontWeight: FontWeight.w700)),
+      ),
+      arrow(LucideIcons.chevronRight, onNewer, 'Day after'),
+    ]);
+  }
 }

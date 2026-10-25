@@ -206,8 +206,8 @@ StressDay _stressDay(int n) {
   final r = [
     for (var i = 0; i < n; i++)
       (
-        at: DateTime(2026, 10, 3, 1, 15 * i),
-        v: (1.2 + 0.9 * ((i * 13 % 17) / 17 - .4) + (i > 40 && i < 50 ? .9 : 0))
+        at: DateTime(2026, 10, 3, 1, 5 * i), min: 5,
+        v: ((i < 72 ? .5 : 1.3) + 0.7 * ((i * 13 % 17) / 17 - .4) + (i > 130 && i < 140 ? 1.0 : 0))
             .clamp(0.1, 2.9)
             .toDouble(),
       ),
@@ -273,7 +273,7 @@ void main() {
           readings: [
             for (var i = 0; i < 90; i++)
               (
-                at: DateTime(2026, 10, 2, 1).add(Duration(minutes: 15 * i)),
+                at: DateTime(2026, 10, 2, 1).add(Duration(minutes: 15 * i)), min: 15,
                 v: (1.4 + 0.9 * ((i * 13 % 17) / 17 - .4) + (i > 40 && i < 50 ? .8 : 0))
                     .clamp(0.1, 2.9),
               ),
@@ -337,8 +337,8 @@ void main() {
     'live_hr_panel': ListView(padding: const EdgeInsets.all(16), children: const [
       LiveHrPanel.preview(hr: 76, trace: [74, 75, 75, 76, 77, 76, 75, 76, 76, 77, 76, 76]),
     ]),
-    'stress_monitor': StressMonitorScreen(preview: _stressDay(30)),
-    'stress_monitor_thin': StressMonitorScreen(preview: _stressDay(2)),
+    'stress_monitor': StressMonitorScreen(preview: _stressDay(190)),
+    'stress_monitor_thin': StressMonitorScreen(preview: _stressDay(6)),
 
     'tab_workout': const WorkoutScreen(),
     'tab_more': const MoreScreen(),
@@ -489,7 +489,7 @@ void main() {
         readings: [
           for (var i = 0; i < 30; i++)
             (
-              at: DateTime(2026, 10, 3, 5, 44).add(Duration(minutes: 15 * i)),
+              at: DateTime(2026, 10, 3, 5, 44).add(Duration(minutes: 15 * i)), min: 15,
               v: i == 27 ? 2.3 : (i % 7 == 0 ? 1.2 : .4) + (i % 3) * .1,
             ),
         ],
@@ -566,7 +566,7 @@ void main() {
           stress: [
             for (var i = 0; i < 30; i++)
               (
-                at: DateTime.fromMillisecondsSinceEpoch((on + i * 900) * 1000),
+                at: DateTime.fromMillisecondsSinceEpoch((on + i * 900) * 1000), min: 15,
                 v: i == 27 ? 2.3 : (i % 7 == 0 ? 1.2 : .4) + (i % 3) * .1,
               ),
           ],

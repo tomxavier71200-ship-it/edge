@@ -47,7 +47,7 @@ import '../../data/db.dart' show LocalDb;
 import 'sleep_detail.dart';
 import 'health_monitor.dart' show StressSparkline;
 import 'stress_detail.dart'
-    show StressReading, kStressMinWindows, stressReadings;
+    show StressReading, kStressMinMinutes, stressEnough, stressMinutes, stressReadings;
 
 /// Days a dashboard average needs before it exists.
 const kBaselineMin = 4;
@@ -639,7 +639,7 @@ class MonitorTiles extends StatefulWidget {
 
 class _MonitorTilesState extends State<MonitorTiles> {
   /// Today's scored 15-minute windows on the 0–3 scale, oldest first. The
-  /// level waits for [kStressMinWindows] of them.
+  /// level waits for [kStressMinMinutes] of them.
   List<StressReading> _readings = const [];
 
   @override
@@ -697,7 +697,7 @@ class _MonitorTilesState extends State<MonitorTiles> {
     final p = P.of(c);
     final (counts: hr, :ranged) = _inRange();
     final r = _readings;
-    final last = r.length >= kStressMinWindows ? r.last : null;
+    final last = stressEnough(r) ? r.last : null;
     final v = last?.v;
     final lvl = v == null ? null : stressLevelOf(v);
     // WHOOP's Home pair: a title with a chevron, one big figure, a word under
@@ -799,7 +799,7 @@ class _MonitorTilesState extends State<MonitorTiles> {
                 ? 'as of ${clock(last.at.hour * 60 + last.at.minute)}'
                 : r.isEmpty
                     ? 'Not yet today'
-                    : '${r.length} of $kStressMinWindows readings',
+                    : '${stressMinutes(r)} of $kStressMinMinutes min',
           ),
         ]),
       ),
@@ -1496,7 +1496,7 @@ class _StressDashRowState extends State<StressDashRow> {
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final last = _r.length >= kStressMinWindows ? _r.last : null;
+    final last = stressEnough(_r) ? _r.last : null;
     final v = last?.v;
     final lvl = v == null ? null : stressLevelOf(v);
     return Surface(

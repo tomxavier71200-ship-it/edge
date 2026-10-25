@@ -23,7 +23,7 @@ import '../../state/app_state.dart';
 import '../ui2.dart';
 import 'detail_trends.dart' show hmOfMin;
 import 'metric_detail.dart' show detailScaffold;
-import 'stress_detail.dart' show StressReading;
+import 'stress_detail.dart' show StressReading, stressShade;
 
 /// A vital's verdict against the person's own usual range. [unavailable] is
 /// a vital this band's data cannot give at all (blood oxygen) — a dash that,
@@ -490,7 +490,7 @@ class _MiniStress extends CustomPainter {
           Paint()
             ..strokeWidth = 2
             ..strokeCap = StrokeCap.round
-            ..color = p.on(v >= 2 ? C.orange : (v >= 1 ? C.green : C.blue)));
+            ..color = p.on(stressShade(v)));
     }
     final last = at(pts.last);
     cv.drawCircle(last, 5, Paint()..color = p.ink);

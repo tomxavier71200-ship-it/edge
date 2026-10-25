@@ -10,11 +10,11 @@ int _s(int h, int m) => _t(h, m).millisecondsSinceEpoch ~/ 1000;
 
 void main() {
   final r = <StressReading>[
-    (at: _t(2, 0), v: 0.5), // asleep, low
-    (at: _t(2, 15), v: 1.5), // asleep, medium
-    (at: _t(12, 15), v: 2.5), // workout, high
-    (at: _t(15, 0), v: 1.2), // outside, medium
-    (at: _t(15, 15), v: 2.1), // outside, high
+    (at: _t(2, 0), min: 15, v: 0.5), // asleep, low
+    (at: _t(2, 15), min: 15, v: 1.5), // asleep, medium
+    (at: _t(12, 15), min: 15, v: 2.5), // workout, high
+    (at: _t(15, 0), min: 15, v: 1.2), // outside, medium
+    (at: _t(15, 15), min: 15, v: 2.1), // outside, high
   ];
   final sleep = [(from: _s(1, 0), to: _s(7, 0))];
   final work = [(from: _s(12, 0), to: _s(12, 40))];

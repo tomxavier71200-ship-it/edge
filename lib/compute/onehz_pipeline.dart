@@ -2153,7 +2153,8 @@ double? _stressScoreOfSi(double si) {
 
 /// Daytime stress, the way WHOOP's Stress Monitor reads it: how far the heart
 /// is running above this person's own resting rate while the body is NOT
-/// moving, per 15-minute wall-clock bin, on the same 0–100 scale.
+/// moving, per 5-minute wall-clock bin, on the same 0–100 scale. Five
+/// minutes, not fifteen, so the day draws as WHOOP's near-continuous line.
 ///
 /// Why not [stressPerWindow]: this band sends beat timing densely only while
 /// asleep. Awake it sends a few hundred beats an hour, and the per-bin SI on
@@ -2170,7 +2171,8 @@ double? _stressScoreOfSi(double si) {
 /// ponytail: 0.5 is a fixed reserve fraction, not fitted to WHOOP's stress
 /// export (the owner's export has none); fit it the day one is available.
 ///
-/// A bin with under 10 minutes of worn heart rate is `score: null`; a bin
+/// Each bin carries its length (`sec`), so a reader counts time, not bins.
+/// A bin worn for under two thirds of its length is `score: null`; a bin
 /// where the band saw movement in 30%+ of those seconds, or at 50%+ of
 /// reserve, is `score: null, moving: true` (movement raises heart rate
 /// without stress). Bins with no
@@ -2181,7 +2183,7 @@ List<Map<String, dynamic>> hrStressPerWindow({
   List<int> activityClass = const [],
   required double? restingHr,
   required double? maxHr,
-  int binSec = 900,
+  int binSec = 300,
 }) {
   if (restingHr == null || maxHr == null || maxHr <= restingHr + 20) {
     return const [];
@@ -2202,13 +2204,21 @@ List<Map<String, dynamic>> hrStressPerWindow({
       () {
         final n = worn[k]!;
         final t = k * binSec;
-        if (n < 600) return <String, dynamic>{'t': t, 'score': null};
+        if (n < binSec * 2 ~/ 3) {
+          return <String, dynamic>{'t': t, 'sec': binSec, 'score': null};
+        }
         final f = (sum[k]! / n - restingHr) / (maxHr - restingHr);
         if ((moving[k] ?? 0) >= 0.3 * n || f >= 0.5) {
-          return <String, dynamic>{'t': t, 'score': null, 'moving': true};
+          return <String, dynamic>{
+            't': t,
+            'sec': binSec,
+            'score': null,
+            'moving': true,
+          };
         }
         return <String, dynamic>{
           't': t,
+          'sec': binSec,
           'score': _round((f / 0.5).clamp(0.0, 1.0) * 100, 1),
         };
       }(),
