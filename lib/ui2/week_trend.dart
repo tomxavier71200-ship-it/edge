@@ -511,7 +511,9 @@ enum Band3 { poor, sufficient, optimal }
 Color band3Color(P p, Band3 b) => switch (b) {
       Band3.poor => p.on(C.orange),
       Band3.sufficient => p.ink3,
-      Band3.optimal => p.on(C.green),
+      // WHOOP mode: WHOOP's Optimal is its own teal-green (#00F09E off the
+      // sleep legend), not the recovery green.
+      Band3.optimal => Look.whoop ? kWhoopOptimal : p.on(C.green),
     };
 
 /// A contributor on the three-step scale: name, three segments with its own

@@ -168,7 +168,10 @@ enum Skin {
   // WHOOP's own, sampled from the owner's WHOOP screenshots (2026-10-10): the
   // page fades from #242F34 at the top to #0E1313 at the bottom, cards a step
   // lighter (#262A2D), rows inside them #31373C. The "WHOOP look" switch.
-  whoop('WHOOP', [0xFF191F23, 0xFF262A2D, 0xFF31373C, 0xFF3A3F44, 0xFF3B4046, 0xFF242F34, 0xFF0E1313]);
+  // Re-measured 2026-10-26 down the page edge: #242F34 at the top, #14181B
+  // halfway, #0E1313 at the foot — the fade is steep, hence a middle stop
+  // (bg) in WHOOP mode. Cards #2B2F33 at their brightest (kWhoopCardGlow).
+  whoop('WHOOP', [0xFF14181B, 0xFF2B2F33, 0xFF31373C, 0xFF3A3F44, 0xFF3B4046, 0xFF242F34, 0xFF0E1313]);
 
   final String label;
 
@@ -180,6 +183,52 @@ enum Skin {
   Color get top => Color(argb[5]);
   Color get bottom => Color(argb[6]);
 }
+
+/// WHOOP mode's colours for Koop's accents, sampled from the owner's WHOOP
+/// screenshots (2026-10-10): recovery green / yellow / red off the weekly
+/// recovery bars, strain off its dial and bars, sleep off its dial, the
+/// Poor band's orange off the sleep legend. [P.on] returns these as they are.
+/// WHOOP's card fill, measured across its contributor card: brightest at
+/// the upper middle, falling off toward the edges and the foot.
+const kWhoopCardGlow = RadialGradient(
+  center: Alignment(0, -.35),
+  radius: 1.25,
+  colors: [Color(0xFF2B2F33), Color(0xFF1A1E21)],
+);
+
+/// WHOOP's Optimal band green, off its sleep legend (#00F09E) — its own
+/// teal-green, not the recovery green.
+const kWhoopOptimal = Color(0xFF00F09E);
+
+/// WHOOP mode's Health tab glow, measured off its screen: near black at the
+/// top left (#0A0A0A) under magenta-purple from the top right (#4B2151).
+const kWhoopGlowBase = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [Color(0xFF0A0A0A), Color(0x000A0A0A)],
+);
+const kWhoopGlow = RadialGradient(
+  center: Alignment(1.1, -1.1),
+  radius: 1.3,
+  colors: [Color(0xFF4B2151), Color(0x992D1731), Color(0x002D1731)],
+  stops: [0, .5, 1],
+);
+
+/// The page fade, WHOOP mode: three stops, as WHOOP's falls steeply.
+LinearGradient pageFade(P p) => LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: Look.whoop ? [p.bgTop, p.bg, p.bgBottom] : [p.bgTop, p.bgBottom],
+    );
+
+final kWhoopInk = <Color, Color>{
+  C.green: Color(0xFF16EC06),
+  C.yellow: Color(0xFFFEDE00),
+  C.red: Color(0xFFFF0026),
+  C.strain: Color(0xFF0093E7),
+  C.sleep: Color(0xFF7AA1BB),
+  C.orange: Color(0xFFFCA620),
+};
 
 /// How the score rings are drawn — Customize → Ring style.
 enum RingStyle { classic, thin, glow }
@@ -295,6 +344,11 @@ class P {
   /// solver only ever nudges toward the page ink, so clearing the second
   /// surface cannot un-clear the first.
   Color on(Color accent) {
+    // WHOOP mode: WHOOP's own score colours, exactly as measured off its
+    // screens, unnudged — WHOOP draws them bright on its dark cards.
+    if (Look.whoop) {
+      if (kWhoopInk[accent] case final w?) return w;
+    }
     final toward = dark ? ink : C.n900;
     final flat = _solve(accent, toward, card2, dark);
     return _solve(flat, toward, Color.alphaBlend(wash(accent), card2), dark);
@@ -482,17 +536,28 @@ class F {
       fontWeight: FontWeight.w600,
       letterSpacing: -.3);
 
+  /// WHOOP mode: the ramp in Barlow, the regular-width face. WHOOP's
+  /// numerals are wide and round (a DIN-style face licensed to WHOOP);
+  /// Barlow is the closest free one, matched side by side against them
+  /// (2026-10-26). A step smaller, as it is wider than the condensed face.
+  static TextStyle _w(TextStyle c) => c.copyWith(
+      fontFamily: 'Barlow',
+      fontSize: c.fontSize! * .9,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0);
+
   /// The hero numeral: the one headline number a detail screen opens on,
   /// inside its ring or gauge. One step, not a size per screen.
-  static TextStyle get hero =>
-      (Look.rounded ? _r(_c48) : _c48).copyWith(
+  static TextStyle get hero => Look.whoop
+      ? _w(_c48).copyWith(fontSize: 64 * .9)
+      : (Look.rounded ? _r(_c48) : _c48).copyWith(
           fontSize: 64 * (Look.rounded ? .8 : 1),
           fontWeight: Look.rounded ? FontWeight.w600 : FontWeight.w500);
   /// The hero numeral sized to its dial, as WHOOP's is: about three tenths
   /// of the ring's width. The wordmark and label scale with it.
   static TextStyle heroFor(double dial) =>
       hero.copyWith(
-          fontSize: dial * (Look.whoop ? .31 : .29) * (Look.rounded ? .8 : 1));
+          fontSize: dial * .29 * (Look.rounded && !Look.whoop ? .8 : 1));
   static TextStyle dialMark(double dial) => head.copyWith(fontSize: dial * .062);
   static TextStyle dialLabel(double dial) => over.copyWith(fontSize: dial * .048);
 
@@ -500,9 +565,12 @@ class F {
   /// over [over], the value larger than [n24].
   static TextStyle get rowLabel => over.copyWith(fontSize: 11.5);
   static TextStyle get rowValue => n24.copyWith(fontSize: 28);
-  static TextStyle get n48 => Look.rounded ? _r(_c48) : _c48;
-  static TextStyle get n34 => Look.rounded ? _r(_c34) : _c34;
-  static TextStyle get n24 => Look.rounded ? _r(_c24) : _c24;
+  static TextStyle get n48 =>
+      Look.whoop ? _w(_c48) : Look.rounded ? _r(_c48) : _c48;
+  static TextStyle get n34 =>
+      Look.whoop ? _w(_c34) : Look.rounded ? _r(_c34) : _c34;
+  static TextStyle get n24 =>
+      Look.whoop ? _w(_c24) : Look.rounded ? _r(_c24) : _c24;
   static const n17 = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,

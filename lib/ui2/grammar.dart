@@ -230,6 +230,10 @@ class Surface extends StatelessWidget {
         padding: pad ?? EdgeInsets.all(Look.compact ? S.x3 : S.x4),
         decoration: BoxDecoration(
           color: color ?? p.card,
+          // WHOOP mode: WHOOP's card is not flat — it glows lighter at its
+          // upper middle (#2B2F33) and falls off to the edges (#1A1E21),
+          // measured across its contributor card.
+          gradient: Look.whoop && color == null ? kWhoopCardGlow : null,
           // WHOOP's rounder raised card. The hairline only on the black Onyx
           // page, where a card has nothing else to separate it.
           borderRadius: R.rLg,

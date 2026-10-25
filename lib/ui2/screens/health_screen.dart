@@ -902,7 +902,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   Widget build(BuildContext c) {
     final d = _d ?? const HealthData();
     final l = AppLocalizations.of(c);
-    return ListView(padding: pad, children: [
+    final list = ListView(padding: pad, children: [
       // WHOOP mode: WHOOP's Health tab has no tab strip — just its cards.
       // The other views open from the doors under them and come back here.
       if (Look.whoop && _tab != 0)
@@ -929,6 +929,12 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
           6 => const StressMonitorView(),
           _ => _labs(c),
         },
+    ]);
+    if (!Look.whoop || _tab != 0) return list;
+    return Stack(children: [
+      const Positioned(
+          top: 0, left: 0, right: 0, height: 420, child: _WhoopGlow()),
+      list,
     ]);
   }
 
@@ -1248,13 +1254,10 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
           : 'Healthspan, $left more days of data to unlock',
       child: Container(
         padding: const EdgeInsets.fromLTRB(S.x4, S.x4, S.x4, S.x4),
+        // A see-through card over the page's purple glow ([_whoopGlow]).
         decoration: BoxDecoration(
           borderRadius: R.rLg,
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [p.on(C.purple).withValues(alpha: .45), p.card],
-          ),
+          color: p.card.withValues(alpha: .35),
         ),
         child: Row(children: [
           Expanded(
@@ -2196,3 +2199,18 @@ const kStressLevelColors = [C.blue, C.green, C.orange];
 int stressLevelOf(double v) => v < 1 ? 0 : v < 2 ? 1 : 2;
 
 
+
+/// WHOOP mode's Health tab glow ([kWhoopGlow]), fading out down the first
+/// third of the page.
+class _WhoopGlow extends StatelessWidget {
+  const _WhoopGlow();
+
+  @override
+  Widget build(BuildContext c) => const IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(gradient: kWhoopGlowBase),
+          child: DecoratedBox(
+              decoration: BoxDecoration(gradient: kWhoopGlow)),
+        ),
+      );
+}

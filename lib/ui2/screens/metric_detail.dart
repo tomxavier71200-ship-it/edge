@@ -1931,12 +1931,7 @@ Widget detailScaffold(BuildContext c, String title, List<Widget> body,
     // its own detail screens have (the tabs already draw it — app_shell).
     body: DecoratedBox(
       decoration: BoxDecoration(
-        gradient: Look.whoop
-            ? LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [p.bgTop, p.bgBottom])
-            : null,
+        gradient: Look.whoop ? pageFade(p) : null,
       ),
       child: SafeArea(
       child: Column(children: [

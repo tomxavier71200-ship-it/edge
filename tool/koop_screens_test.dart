@@ -253,6 +253,14 @@ void main() {
           .readAsBytes()
           .then((b) => ByteData.sublistView(b)));
     await lucide.load();
+    // WHOOP mode's numerals, loaded by hand like the icons.
+    final barlow = FontLoader('Barlow');
+    for (final w in ['Medium', 'SemiBold', 'Bold']) {
+      barlow.addFont(File('assets/fonts/Barlow/Barlow-$w.ttf')
+          .readAsBytes()
+          .then((b) => ByteData.sublistView(b)));
+    }
+    await barlow.load();
   });
 
   final cases = <String, Widget>{
@@ -713,7 +721,9 @@ void main() {
 
   cases.forEach((name, w) {
     testWidgets(name, (t) async {
-      t.view.physicalSize = Size(390 * 2, (name == 'home_long' ? 3400 : name == 'dashboard' ? 3600 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : name == 'overview' ? 1900 : 844) * 2);
+      // `--dart-define=KOOP_PHONE=1`: one iPhone screen, so a page fade
+      // is drawn over the height a phone shows it on.
+      t.view.physicalSize = Size(390 * 2, (const bool.fromEnvironment('KOOP_PHONE') ? 844 : name == 'home_long' ? 3400 : name == 'dashboard' ? 3600 : name == 'recovery_detail' ? 3200 : name == 'sleep_detail' ? 6400 : name == 'strain_detail' ? 5200 : name == 'streak' ? 1900 : name == 'sleep_cards' ? 3100 : name.startsWith('stress_monitor') ? 3600 : name == 'health_monitor' ? 1500 : name.startsWith('tab_') ? 2400 : name == 'app_health' ? 1100 : name == 'activity_summary' ? 3600 : name == 'live_workout' ? 2600 : name == 'records' ? 1000 : name == 'overview' ? 1900 : 844) * 2);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
       await t.pumpWidget(_frame(w));

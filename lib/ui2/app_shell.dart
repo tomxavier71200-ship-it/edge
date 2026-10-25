@@ -141,13 +141,7 @@ class _AppShellState extends State<AppShell> {
         // already ends with enough bottom padding to clear it.
         extendBody: true,
         body: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [p.bgTop, p.bgBottom],
-            ),
-          ),
+          decoration: BoxDecoration(gradient: pageFade(p)),
           child: SafeArea(
             bottom: false,
             child: IndexedStack(

@@ -751,6 +751,15 @@ flutter:
           weight: 600
         - asset: assets/fonts/BarlowSemiCondensed/BarlowSemiCondensed-Bold.ttf
           weight: 700
+    # Regular-width Barlow: WHOOP mode's numerals (theme.dart F._w).
+    - family: Barlow
+      fonts:
+        - asset: assets/fonts/Barlow/Barlow-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Barlow/Barlow-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Barlow/Barlow-Bold.ttf
+          weight: 700
     - family: Barlow Condensed
       fonts:
         - asset: assets/fonts/BarlowCondensed/BarlowCondensed-Bold.ttf
