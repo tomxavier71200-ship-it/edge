@@ -1937,6 +1937,9 @@ class LocalRepositoryImpl extends LocalRepository {
   }
 
   @override
+  Future<Set<String>> importedDays() => LocalDb.importedDates();
+
+  @override
   Future<Map<String, dynamic>> getChart(
     String metric, {
     int? from,

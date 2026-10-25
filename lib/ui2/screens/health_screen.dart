@@ -89,6 +89,13 @@ class HealthData {
   /// history is there from the first run instead of starting empty today.
   final List<Finding> findings;
 
+  /// Days another app's export wrote (WHOOP, cloud v2). Their numbers stay in
+  /// every chart, but a usual range is built from this app's own nights only
+  /// — WHOOP's breathing reads about a breath a minute above this band's
+  /// (two nights both measured, Oct 2026), so a range out of its nights
+  /// called every night here "below".
+  final Set<String> imported;
+
   const HealthData({
     this.today = const {},
     this.insights = const {},
@@ -102,7 +109,17 @@ class HealthData {
     this.napCount,
     this.napDay = '',
     this.findings = const [],
+    this.imported = const {},
   });
+
+  /// The stored points for [key] without the [imported] days: this app's own
+  /// measurement, the only one a usual range can be drawn from.
+  List<ChartPoint> measured(String key) => [
+        for (final pt in points(key))
+          if (!imported.contains(
+              dayLabelOf(DateTime.fromMillisecondsSinceEpoch(pt.t * 1000))))
+            pt,
+      ];
 
   /// The stored points for [key].
   List<ChartPoint> points(String key) => charts[key] ?? const [];
@@ -227,6 +244,8 @@ class HealthData {
       napDay: napDay,
       findings:
           findingsHistory(cd, readiness: ready, irregularDays: irregular),
+      // A failed read leaves every night in: the range as it was before.
+      imported: await repo.importedDays().catchError((_) => const <String>{}),
     );
   }
 }
@@ -511,11 +530,12 @@ class HealthScreen extends StatefulWidget {
     }
     // Against the reader's own usual range once there is one; until then
     // the tile says how many more nights the range needs.
-    final nr = normalRangeOf(d.points(metricKey));
+    final nr = normalRangeOf(d.measured(metricKey));
     final v = m.value;
     status[metricKey] = VitalStatus.building;
     if (nr.range != null && v != null) {
-      final inside = nr.range!.contains(v.toDouble());
+      // Within or near is a tick, as WHOOP's card shows it.
+      final inside = nr.range!.ok(v.toDouble());
       status[metricKey] = inside ? VitalStatus.inside : VitalStatus.outside;
       // A WHOOP-style tile once there is a range to stand it against.
       tiles[metricKey] = RangeTile(

@@ -169,6 +169,10 @@ abstract class LocalRepository {
   Future<List<String>> availableDays() =>
       throw UnimplementedError('re-layer: availableDays');
 
+  /// Days another app's export wrote (WHOOP export, cloud v2): see
+  /// LocalDb.importedDates. Empty by default, a repository with no imports.
+  Future<Set<String>> importedDays() async => const {};
+
   // ── trends + records + charts ────────────────────────────────────────────────
   Future<Map<String, dynamic>> getRecords() =>
       throw UnimplementedError('re-layer: getRecords');

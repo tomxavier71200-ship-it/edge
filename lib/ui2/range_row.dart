@@ -26,22 +26,49 @@ const kRangeMinNights = 7;
 /// being compared with.
 const kRangeWindowDays = 30;
 
+/// The most recent earlier nights the range is drawn from, inside
+/// [kRangeWindowDays]. WHOOP's: its Health Monitor ranges on the owner's
+/// 10 Oct 2026 screen are reproduced by the middle half of the 14 nights
+/// before it (breathing 12.5–12.8, HRV 58–65, resting HR 56–58 with 59 shown
+/// "near 58"), checked against the owner's WHOOP export.
+const kRangeNights = 14;
+
 /// The reader's usual range for one metric.
 class NormalRange {
   final double lo, hi;
 
   /// The earlier nights it was drawn from.
   final int nights;
-  const NormalRange(this.lo, this.hi, this.nights);
+
+  /// How far past an edge still reads "near", WHOOP's in-between state
+  /// (ticked, not warned). One band width by default: for a steady signal
+  /// about 19 nights in 20 then land within or near, so a warning means a
+  /// night that really was unlike the others.
+  final double margin;
+  const NormalRange(this.lo, this.hi, this.nights, {double? margin})
+      : margin = margin ?? hi - lo;
 
   bool contains(double v) => v >= lo && v <= hi;
+
+  /// Outside the band but within [margin] of it.
+  bool near(double v) => !contains(v) && v >= lo - margin && v <= hi + margin;
+
+  /// Within or near: what WHOOP ticks.
+  bool ok(double v) => contains(v) || near(v);
+
+  /// The edge [v] is nearest to, for "near 58".
+  double edgeFor(double v) => v > hi ? hi : lo;
 }
 
-/// The usual range from [pts], compared against the NEWEST point: mean ± one
-/// standard deviation of the earlier points in the [kRangeWindowDays] before
-/// it. Null — no band, no verdict — with fewer than [kRangeMinNights] of them,
-/// or when they do not vary at all (a flat band would call every change
-/// "outside your usual").
+/// The usual range from [pts], compared against the NEWEST point: the middle
+/// half (25th to 75th percentile) of the [kRangeNights] most recent earlier
+/// points in the [kRangeWindowDays] before it. Percentiles, not mean ± SD:
+/// one odd night barely moves them. Null — no band, no verdict — with fewer
+/// than [kRangeMinNights] of them, or when they do not vary at all.
+///
+/// [pts] must be ONE measurement: the caller drops days another app's export
+/// wrote (see HealthData.measured), or tonight's own reading is judged
+/// against somebody else's algorithm.
 ///
 /// Also returns how many earlier nights there are, so a row without a range
 /// can say how close it is to having one.
@@ -55,18 +82,31 @@ class NormalRange {
   final nd = DateTime.fromMillisecondsSinceEpoch(newest * 1000);
   final from = DateTime(nd.year, nd.month, nd.day - kRangeWindowDays)
           .millisecondsSinceEpoch ~/ 1000;
-  final prior = [
+  final inWindow = [
     for (final p in sorted)
       if (p.t < newest && p.t >= from && p.v.isFinite) p.v,
   ];
+  final prior = inWindow.length > kRangeNights
+      ? inWindow.sublist(inWindow.length - kRangeNights)
+      : inWindow;
   final n = prior.length;
   if (n < kRangeMinNights) return (range: null, nights: n);
-  final mean = prior.reduce((a, b) => a + b) / n;
-  final sd = math.sqrt(
-      prior.map((v) => (v - mean) * (v - mean)).reduce((a, b) => a + b) /
-          (n - 1));
-  if (sd <= 0) return (range: null, nights: n);
-  return (range: NormalRange(mean - sd, mean + sd, n), nights: n);
+  final s = [...prior]..sort();
+  double q(double p) {
+    final k = (s.length - 1) * p;
+    final f = k.floor(), c = math.min(f + 1, s.length - 1);
+    return s[f] + (s[c] - s[f]) * (k - f);
+  }
+
+  final lo = q(.25), hi = q(.75);
+  final spread = s.last - s.first;
+  if (spread <= 0) return (range: null, nights: n);
+  // A middle half squeezed onto one value (several nights at the same
+  // rounded number) still gets a usable "near": half the full spread.
+  return (
+    range: NormalRange(lo, hi, n, margin: hi > lo ? hi - lo : spread / 2),
+    nights: n,
+  );
 }
 
 /// One metric against its usual range: name and value on top, the band with
@@ -101,8 +141,10 @@ class RangeRow extends StatelessWidget {
     final inside = range.contains(value);
     final word = inside
         ? 'In your range'
-        : (value > range.hi ? 'Above your usual' : 'Below your usual');
-    final wordCol = inside ? p.on(C.green) : p.on(C.orange);
+        : range.near(value)
+            ? 'Near your usual'
+            : (value > range.hi ? 'Above your usual' : 'Below your usual');
+    final wordCol = range.ok(value) ? p.on(C.green) : p.on(C.orange);
     return Pressable(
       onTap: onTap,
       semanticLabel: '$name, ${fmt(value)} $unit. $word, usual '
@@ -209,18 +251,24 @@ class RangeTile extends StatelessWidget {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final r = range;
-    final inside = r?.contains(value) ?? false;
+    // Within, near (WHOOP's in-between: ticked), or above / below.
+    final inside = r?.ok(value) ?? false;
+    final isNear = r?.near(value) ?? false;
     final word = r == null
         ? null
-        : inside
+        : r.contains(value)
             ? 'within'
-            : (value > r.hi ? 'above' : 'below');
+            : isNear
+                ? 'near'
+                : (value > r.hi ? 'above' : 'below');
     final col = r == null ? p.ink3 : (inside ? p.on(C.green) : p.on(C.orange));
     final chip = r == null
         ? (note ?? 'usual range building')
         : display != null
             ? '$word your usual'
-            : '$word ${fmt(r.lo)}–${fmt(r.hi)}';
+            : isNear
+                ? 'near ${fmt(r.edgeFor(value))}'
+                : '$word ${fmt(r.lo)}–${fmt(r.hi)}';
     final shown = display ?? fmt(value);
     return Surface(
       onTap: onTap,

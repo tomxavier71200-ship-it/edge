@@ -17,7 +17,8 @@ void main() {
     expect(r.nights, 6, reason: 'the newest night is the one being judged');
   });
 
-  test('mean ± one SD of the earlier nights, never including the newest', () {
+  test('the middle half of the earlier nights, never including the newest',
+      () {
     final vals = <double>[48, 52, 50, 54, 46, 50, 50];
     final pts = [
       for (var i = 0; i < vals.length; i++) (t: _day(i + 1), v: vals[i]),
@@ -26,9 +27,34 @@ void main() {
     ];
     final r = normalRangeOf(pts).range!;
     expect(r.nights, 7);
-    expect((r.lo + r.hi) / 2, closeTo(50, 1e-9));
-    expect(r.hi - r.lo, closeTo(2 * 2.5819888974716, 1e-6));
+    // Sorted 46 48 50 50 50 52 54: 25th percentile 49, 75th 51.
+    expect(r.lo, closeTo(49, 1e-9));
+    expect(r.hi, closeTo(51, 1e-9));
     expect(r.contains(90), isFalse);
+    expect(r.ok(90), isFalse);
+  });
+
+  test('just past an edge is near (a tick); a band width further is not', () {
+    final r = normalRangeOf([
+      for (var d = 1; d <= 8; d++) (t: _day(d), v: const [56.0, 57.0, 58.0][d % 3]),
+      (t: _day(9), v: 59.0),
+    ]).range!;
+    expect(r.contains(59), isFalse);
+    expect(r.near(59), isTrue);
+    expect(r.edgeFor(59), r.hi);
+    expect(r.ok(r.hi + (r.hi - r.lo) + .01), isFalse);
+  });
+
+  test('uses only the 14 most recent earlier nights', () {
+    final pts = [
+      // Fifteen old nights far away, then fourteen recent ones.
+      for (var d = 1; d <= 15; d++) (t: _day(d), v: 90.0),
+      for (var d = 16; d <= 29; d++) (t: _day(d), v: 50.0 + d % 2),
+      (t: _day(30), v: 50.0),
+    ];
+    final r = normalRangeOf(pts).range!;
+    expect(r.nights, 14);
+    expect(r.hi, lessThan(52));
   });
 
   test('ignores nights older than the 30-day window', () {
