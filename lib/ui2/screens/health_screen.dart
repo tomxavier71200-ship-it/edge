@@ -28,6 +28,7 @@ import 'home_screen.dart';
 import 'healthspan_screen.dart' show HealthspanScreen, kHabitMinDays;
 import 'health_monitor.dart';
 import 'stress_detail.dart';
+import 'more_screen.dart' show DoorRow;
 import 'stress_monitor.dart';
 import 'investigate.dart';
 import 'metric_detail.dart';
@@ -902,10 +903,16 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
     final d = _d ?? const HealthData();
     final l = AppLocalizations.of(c);
     return ListView(padding: pad, children: [
-      ScreenTitle(l?.healthTitle ?? 'Health', info: kInfoHealth),
-      SubTabs([for (final i in _order) _tabsOf(l)[i]], _order.indexOf(_tab),
-          (pos) => _select(_order[pos]),
-          color: C.blue),
+      // WHOOP mode: WHOOP's Health tab has no tab strip — just its cards.
+      // The other views open from the doors under them and come back here.
+      if (Look.whoop && _tab != 0)
+        NavBar(_tabsOf(l)[_tab], onBack: () => _select(0))
+      else
+        ScreenTitle(l?.healthTitle ?? 'Health', info: kInfoHealth),
+      if (!Look.whoop)
+        SubTabs([for (final i in _order) _tabsOf(l)[i]], _order.indexOf(_tab),
+            (pos) => _select(_order[pos]),
+            color: C.blue),
       const SizedBox(height: S.x5),
       if (_loading && _d == null)
         const Padding(
@@ -981,17 +988,10 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
                 'Worth noting if it continues past a couple of days.',
           );
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      // WHOOP MG only: the ECG door appears once the paired band has
-      // positively identified itself as an MG, and stays while it is away.
-      if (pairedIsMaverickOf(c)) ...[
-        const EcgEntryCard(),
-        const SizedBox(height: S.x3),
-      ],
-      // Healthspan leads the tab, WHOOP-style: the habits scorecard, or how
-      // many more days of data it needs (four in the last week, the floor
-      // each habit is judged on).
-      Builder(builder: (c) {
+    // Healthspan leads the tab, WHOOP-style: the habits scorecard, or how
+    // many more days of data it needs (four in the last week, the floor
+    // each habit is judged on).
+    final healthspan = Builder(builder: (c) {
         final now = DateTime.now();
         final from = DateTime(now.year, now.month, now.day - 6)
                 .millisecondsSinceEpoch ~/
@@ -1037,21 +1037,36 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
             Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
           ]),
         );
-      }),
-      const SizedBox(height: S.x3),
+      });
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // WHOOP MG only: the ECG door appears once the paired band has
+      // positively identified itself as an MG, and stays while it is away.
+      if (pairedIsMaverickOf(c)) ...[
+        const EcgEntryCard(),
+        const SizedBox(height: S.x3),
+      ],
+      // WHOOP mode: WHOOP's Health tab opens on a purple Healthspan band
+      // with its "GET STARTED" door, then the two monitors.
+      if (Look.whoop) ...[
+        _whoopHealthspan(c, d),
+        const SizedBox(height: S.x3),
+      ] else ...[
+        healthspan,
+        const SizedBox(height: S.x3),
+      ],
       // WHOOP's Health Monitor card: the four overnight vitals as ticks and
       // warnings, opening the per-vital cards (built here, shown there).
       HealthMonitorCard(
         items: [
           (LucideIcons.wind, 'Resp', status['resp_rate'] ?? VitalStatus.building),
+          // WHOOP mode keeps WHOOP's order: SpO₂ second.
+          if (Look.whoop) _spo2,
           (LucideIcons.heart, 'RHR', status['resting_hr'] ?? VitalStatus.building),
           (LucideIcons.activity, 'HRV', status['hrv'] ?? VitalStatus.building),
           (LucideIcons.thermometer, 'Temp',
               status['skin_temp'] ?? VitalStatus.building),
-          // WHOOP's fifth vital. This band's 1 Hz red and IR channels are one
-          // signal (onehz_pipeline kSpo2Refusal), so there is no oxygen
-          // reading to range — a permanent dash, said plainly on the screen.
-          (LucideIcons.droplet, 'SpO₂', VitalStatus.unavailable),
+          if (!Look.whoop) _spo2,
         ],
         onTap: () => go(
           c,
@@ -1149,6 +1164,25 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         onAction: () => go(c, NapsScreen(day: d.napDay)),
       ),
 
+      // WHOOP mode has no tab strip, so the other Health views are doors.
+      if (Look.whoop)
+        Section(
+          'More health',
+          Column(children: [
+            for (final (i, icon, sub) in [
+              (5, LucideIcons.heartPulse, 'Your heart rate right now'),
+              (1, LucideIcons.compass, 'Every metric, by body system'),
+              (2, LucideIcons.trendingUp, 'Rhythm, timing and long-run trends'),
+              (3, LucideIcons.activity, 'Last night’s vitals, one by one'),
+              (4, LucideIcons.flaskConical, 'Readings you enter yourself'),
+            ]) ...[
+              if (i != 5) const SizedBox(height: S.x3),
+              DoorRow(icon, C.blue, _tabsOf(l)[i], sub,
+                  onTap: () => _select(i)),
+            ],
+          ]),
+        ),
+
       // THERE IS NO "BODY COMPOSITION" SECTION, AND THE NEXT PERSON SHOULD NOT
       // BUILD ONE. It used to print the onboarding weight scalar, and the ask
       // that replaced it was "is their weight normal for the intake and the
@@ -1187,6 +1221,80 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
       // that. If someone logs food completely for months AND weighs in
       // repeatedly, the thing to build is still not a verdict on the person.
     ]);
+  }
+
+  // WHOOP's fifth vital. This band's 1 Hz red and IR channels are one
+  // signal (onehz_pipeline kSpo2Refusal), so there is no oxygen reading to
+  // range — a permanent dash, said plainly on the screen.
+  static const _spo2 = (LucideIcons.droplet, 'SpO₂', VitalStatus.unavailable);
+
+  /// WHOOP mode's head of the Health tab: WHOOP's purple Healthspan band and
+  /// its door. The days still needed come from the same count as Koop's card.
+  Widget _whoopHealthspan(BuildContext c, HealthData d) {
+    final p = P.of(c);
+    final now = DateTime.now();
+    final from =
+        DateTime(now.year, now.month, now.day - 6).millisecondsSinceEpoch ~/ 1000;
+    final have = {
+      for (final pt in d.points('sleep'))
+        if (pt.t >= from)
+          dayLabelOf(DateTime.fromMillisecondsSinceEpoch(pt.t * 1000)),
+    }.length;
+    final left = (kHabitMinDays - have).clamp(0, kHabitMinDays);
+    return Pressable(
+      onTap: () => go(c, const HealthspanScreen()),
+      semanticLabel: left == 0
+          ? 'Healthspan, open your habits scorecard'
+          : 'Healthspan, $left more days of data to unlock',
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(S.x4, S.x4, S.x4, S.x4),
+        decoration: BoxDecoration(
+          borderRadius: R.rLg,
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [p.on(C.purple).withValues(alpha: .45), p.card],
+          ),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(left == 0 ? 'HEALTHSPAN' : 'UNLOCK HEALTHSPAN',
+                  style: F.over.copyWith(
+                      color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+              const SizedBox(height: S.x2),
+              // WHOOP's line and bar while the days are still coming in.
+              if (left > 0) ...[
+                Text(
+                    '$left more ${left == 1 ? 'day' : 'days'} to unlock your '
+                    'personal Healthspan.',
+                    style: F.cap.copyWith(color: p.ink2)),
+                const SizedBox(height: S.x2),
+                ClipRRect(
+                  borderRadius: R.rPill,
+                  child: LinearProgressIndicator(
+                    value: have / kHabitMinDays,
+                    minHeight: 5,
+                    color: p.on(C.purple),
+                    backgroundColor: p.track,
+                  ),
+                ),
+              ] else
+              Row(children: [
+                Text(left == 0 ? 'VIEW' : 'GET STARTED',
+                    style: F.over.copyWith(
+                        color: p.on(C.blue),
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(width: S.x1),
+                Icon(LucideIcons.arrowRight, size: 14, color: p.on(C.blue)),
+              ]),
+            ]),
+          ),
+          const KoopMark(size: 44),
+        ]),
+      ),
+    );
   }
 
   // ─────────────── TRENDS ───────────────

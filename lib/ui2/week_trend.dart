@@ -40,7 +40,8 @@ class WeekTrendCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   /// The second value per day, for [TrendKind.stacked] and [TrendKind.span];
-  /// a day missing either draws nothing.
+  /// a day missing either draws nothing. For [TrendKind.line] it is a second
+  /// line in [color2] on the same scale (WHOOP's hours of sleep vs. needed).
   final List<double?> values2;
 
   /// The upper part's colour, for [TrendKind.stacked].
@@ -240,6 +241,8 @@ class _WeekPainter extends CustomPainter {
             TrendKind.span => [values[i]!, values2[i]!],
             _ => [values[i]!],
           },
+      if (kind == TrendKind.line)
+        for (final v in values2) ?v,
     ];
     if (present.isEmpty) return;
     var lo = present.reduce((a, b) => a < b ? a : b);
@@ -364,6 +367,25 @@ class _WeekPainter extends CustomPainter {
         cv.drawCircle(e.value, 6, Paint()..color = colors[e.key]);
         cv.drawCircle(e.value, 3.2, Paint()..color = dotInk);
         text(labels[e.key], colors[e.key], e.value - const Offset(0, 6));
+      }
+      // The second line, same scale, its own colour and labels.
+      final pts2 = <int, Offset>{
+        for (var i = 0; i < n; i++)
+          if (values2[i] != null) i: Offset(i * slot + slot / 2, y(values2[i]!)),
+      };
+      for (var i = 0; i < n - 1; i++) {
+        final a = pts2[i], b = pts2[i + 1];
+        if (a == null || b == null) continue;
+        cv.drawLine(a, b,
+            Paint()
+              ..color = color2
+              ..strokeWidth = 2.5
+              ..strokeCap = StrokeCap.round);
+      }
+      for (final e in pts2.entries) {
+        cv.drawCircle(e.value, 6, Paint()..color = color2);
+        cv.drawCircle(e.value, 3.2, Paint()..color = dotInk);
+        text(labels2[e.key], color2, e.value - const Offset(0, 6));
       }
     }
   }

@@ -58,16 +58,24 @@ class HeroDial extends StatelessWidget {
         duration: motion(c, Motion.sweep),
         curve: Curves.easeOutCubic,
         builder: (c, t, _) => LayoutBuilder(builder: (c, box) {
+          // WHOOP mode: WHOOP's own proportions, measured off its screens —
+          // the ring two thirds of the screen wide, its stroke 4% of it.
+          final whoop = Look.whoop;
+          final want = whoop ? this.size * 1.03 : this.size;
           final size = box.maxWidth.isFinite
-              ? math.min(this.size, box.maxWidth * .72)
-              : this.size;
+              ? math.min(want, box.maxWidth * (whoop ? .8 : .72))
+              : want;
           return SizedBox.square(
           dimension: size,
           child: CustomPaint(
             painter: _Dial(value.clamp(0.0, 1.0) * t, p.on(color), p.track,
                 band: band,
-                bandColor: p.on(color).withValues(alpha: .28),
-                stroke: size * .05),
+                // WHOOP mode: the target is WHOOP's small white tick.
+                tick: whoop,
+                bandColor: whoop
+                    ? p.ink
+                    : p.on(color).withValues(alpha: .28),
+                stroke: size * (whoop ? .055 : .05)),
             child: Padding(
               padding: EdgeInsets.all(size * .15),
               // Scaled down, never clipped, at large text sizes.
@@ -85,10 +93,14 @@ class HeroDial extends StatelessWidget {
                   ),
                   // Sized with the dial, as WHOOP's numeral is: about a
                   // quarter of the ring's width tall.
-                  Text(number(t),
-                      style: F.heroFor(size).copyWith(color: p.ink)),
+                  _number(number(t), size, p.ink, small: whoop),
                   const SizedBox(height: S.x1),
-                  Text(label.toUpperCase(),
+                  // WHOOP mode: a two-word label on two lines, as WHOOP
+                  // sets "SLEEP / PERFORMANCE".
+                  Text(
+                      whoop
+                          ? label.toUpperCase().replaceFirst(' ', '\n')
+                          : label.toUpperCase(),
                       textAlign: TextAlign.center,
                       style: F.dialLabel(size).copyWith(
                           color: p.ink,
@@ -105,14 +117,32 @@ class HeroDial extends StatelessWidget {
   }
 }
 
+/// The dial's numeral. [small]: WHOOP sets a trailing "%" at about half the
+/// numeral's height, on the same baseline.
+Widget _number(String n, double size, Color ink, {required bool small}) {
+  final big = F.heroFor(size).copyWith(color: ink);
+  if (!small || !n.endsWith('%')) return Text(n, style: big);
+  return Text.rich(TextSpan(children: [
+    TextSpan(text: n.substring(0, n.length - 1), style: big),
+    TextSpan(text: '%', style: F.heroFor(size * .55).copyWith(color: ink)),
+  ]));
+}
+
 class _Dial extends CustomPainter {
   final double v;
   final Color color, track;
   final (double, double)? band;
   final Color bandColor;
   final double stroke;
+
+  /// Mark the target's start with a short tick across the ring instead of
+  /// a wide arc.
+  final bool tick;
   const _Dial(this.v, this.color, this.track,
-      {this.band, required this.bandColor, required this.stroke});
+      {this.band,
+      required this.bandColor,
+      required this.stroke,
+      this.tick = false});
 
   @override
   void paint(Canvas cv, Size s) {
@@ -126,7 +156,10 @@ class _Dial extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..color = col;
     cv.drawCircle(rect.center, r, line(track, stroke));
-    if (band case (final lo, final hi) when hi > lo) {
+    if (band case (final lo, _) when tick) {
+      cv.drawArc(rect, top + 2 * math.pi * lo.clamp(0.0, 1.0), .035, false,
+          line(bandColor, stroke * 1.3)..strokeCap = StrokeCap.butt);
+    } else if (band case (final lo, final hi) when hi > lo) {
       cv.drawArc(rect, top + 2 * math.pi * lo.clamp(0.0, 1.0),
           2 * math.pi * (hi - lo).clamp(0.0, 1.0), false,
           line(bandColor, stroke * 2.4)..strokeCap = StrokeCap.butt);
@@ -141,5 +174,6 @@ class _Dial extends CustomPainter {
       o.track != track ||
       o.band != band ||
       o.bandColor != bandColor ||
-      o.stroke != stroke;
+      o.stroke != stroke ||
+      o.tick != tick;
 }

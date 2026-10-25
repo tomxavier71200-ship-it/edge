@@ -288,11 +288,14 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
           ],
           ?_targetCard(p, d),
           ..._weekly(c, p, d),
-          // ── Koop's own, below WHOOP's ──
-          ..._trace(p, l, d),
-          ..._zones(p, l, d),
-          Section(l?.dayStrainInputsSection ?? 'What this is made of',
-              _inputs(p, l, d)),
+          // ── Koop's own, below WHOOP's (not in WHOOP mode, where the
+          // screen ends with its week, as WHOOP's does) ──
+          if (!Look.whoop) ...[
+            ..._trace(p, l, d),
+            ..._zones(p, l, d),
+            Section(l?.dayStrainInputsSection ?? 'What this is made of',
+                _inputs(p, l, d)),
+          ],
         ],
       ],
       // WHOOP-style: the bar names the day; the ring names the metric.

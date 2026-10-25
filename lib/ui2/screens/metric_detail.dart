@@ -9,6 +9,7 @@
 // Every metric goes through THIS screen. Forty bespoke detail screens is how
 // the old UI ended up with forty different opinions about what a chart is.
 
+import 'coach.dart' show CoachScreen;
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -1903,15 +1904,34 @@ class _StepGoalGaugeState extends State<_StepGoalGauge> {
 /// in one function is the reason the back affordance is in the same place on
 /// all of them.
 Widget detailScaffold(BuildContext c, String title, List<Widget> body,
-    {String sub = '', Widget? trailing, String? info, Widget? center}) {
+    {String sub = '',
+    Widget? trailing,
+    String? info,
+    Widget? center,
+    bool coachBubble = false}) {
   final p = P.of(c);
+  // WHOOP mode: WHOOP's Sleep screen floats its coach line across the foot
+  // of the page; the others float the round coach disc.
+  final line = Look.whoop && coachBubble ? coachLine(c) : null;
   return Scaffold(
     backgroundColor: p.bg,
+    // WHOOP mode: WHOOP's coach disc floats in the corner of its screens.
+    floatingActionButtonLocation: line != null
+        ? FloatingActionButtonLocation.centerFloat
+        : null,
+    floatingActionButton: line != null
+        ? SizedBox(width: MediaQuery.sizeOf(c).width - 2 * S.x4, child: line)
+        : Look.whoop
+        ? CoachDisc(
+            size: 56,
+            onTap: () => Navigator.of(c).push(MaterialPageRoute<void>(
+                builder: (_) => const CoachScreen())))
+        : null,
     // The WHOOP look carries WHOOP's page fade onto detail screens too, as
     // its own detail screens have (the tabs already draw it — app_shell).
     body: DecoratedBox(
       decoration: BoxDecoration(
-        gradient: P.skin == Skin.whoop
+        gradient: Look.whoop
             ? LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,

@@ -20,6 +20,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../data/day_label.dart';
 import '../../data/local_repository.dart';
 import '../ui2.dart';
+import '../profile/settings.dart' show NotificationSettings;
 import 'calm_breathing.dart';
 import 'detail_trends.dart' show hmOfMin;
 import 'health_screen.dart'
@@ -186,7 +187,15 @@ class _StressMonitorScreenState extends State<StressMonitorScreen> {
         dayLabelOf(DateTime(now.year, now.month, now.day - i)),
     ];
     final i = days.indexOf(_day);
-    return detailScaffold(c, 'STRESS MONITOR', [
+    return detailScaffold(c, 'STRESS MONITOR', coachBubble: true,
+        // WHOOP mode: WHOOP's gear, to the stress notifications.
+        trailing: Look.whoop
+            ? Pressable(
+                semanticLabel: 'Stress notifications',
+                onTap: () => go(c, const NotificationSettings()),
+                child: Icon(LucideIcons.settings, size: 22, color: P.of(c).ink),
+              )
+            : null, [
       _Stepper(
         words: i <= 0
             ? 'TODAY'
@@ -416,7 +425,11 @@ class _StressMonitorViewState extends State<StressMonitorView>
                         decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(color: p.ink3, width: 2)),
-                        child: Icon(LucideIcons.activity, size: 26, color: p.ink3),
+                        // WHOOP mode: the mark in the circle, as WHOOP's
+                        // logo is.
+                        child: Look.whoop
+                            ? const Center(child: KoopMark(size: 32))
+                            : Icon(LucideIcons.activity, size: 26, color: p.ink3),
                       ),
                       const SizedBox(height: S.x3),
                       Text('CALCULATING',

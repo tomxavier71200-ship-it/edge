@@ -484,7 +484,7 @@ Future<void> _confirmReset(BuildContext c, AppState app) async {
 class MoreSettingsView extends StatelessWidget {
   final String units, appearance;
 
-  /// Profile → Settings → WHOOP look (ThemeController.setWhoopLook).
+  /// Profile → Settings → App style → WHOOP mode (ThemeController.setWhoopLook).
   final bool whoopLook;
   final VoidCallback? onToggleWhoopLook;
   final bool phoneSteps, telemetry, barcodeLookup, cycleTracking;
@@ -612,6 +612,17 @@ class MoreSettingsView extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x10),
               children: [
+                // App style first, where it is found: WHOOP mode turns the
+                // app into WHOOP's screens and colours; off is Koop's own
+                // layout, exactly as it was.
+                settingsGroup(c, 'App style', [
+                  SetRow(LucideIcons.palette, C.blue, 'WHOOP mode',
+                      sub: 'WHOOP’s screens, tabs, dials and colours. Off '
+                          'brings back Koop’s own',
+                      value: whoopLook ? on : off,
+                      chevron: false,
+                      onTap: onToggleWhoopLook),
+                ]),
                 // No "Edit profile" here. It lives in one place — Quick access
                 // on the Profile screen — because two doors to one form is how
                 // a user ends up unsure which one is the real setting.
@@ -673,14 +684,6 @@ class MoreSettingsView extends StatelessWidget {
                       value: units, onTap: onCycleUnits),
                   // No Appearance row: the app is dark-only (see
                   // ThemeController.effective), so a picker would do nothing.
-                  // WHOOP look: one switch for WHOOP's colours, rings and
-                  // type; off puts the previous look back.
-                  SetRow(LucideIcons.palette, C.blue, 'WHOOP look',
-                      sub: 'WHOOP’s colours, rings and numbers, measured '
-                          'from its screens. Off brings back your own look',
-                      value: whoopLook ? on : off,
-                      chevron: false,
-                      onTap: onToggleWhoopLook),
                   if (appIcon != null)
                     _IconRow(chosen: appIcon!, onPick: onPickIcon),
                   // Opt-in, and it says what it does rather than what it is

@@ -364,7 +364,10 @@ class SleepData {
       sri: (envValue((await repo.getInsights())['regularity'])?['sri'] as num?)
           ?.toDouble(),
       trends: await loadTrendSeries(
-          repo, const ['sleep_perf', 'sleep', 'efficiency', 'deep', 'rem', 'light']),
+          repo, const [
+        'sleep_perf', 'sleep', 'efficiency', 'deep', 'rem', 'light', //
+        'sleep_need_min', 'sleep_consistency',
+      ]),
       windows: () {
         final out = <NightWindow>[];
         for (final w in wins) {
@@ -583,7 +586,7 @@ class _SleepDetailState extends State<SleepDetail> {
 
     // The bar names the night (WHOOP: TODAY / YESTERDAY / the weekday) and is
     // the stepper; the ring below names the metric.
-    return detailScaffold(c, title, info: kInfoSleep,
+    return detailScaffold(c, title, info: kInfoSleep, coachBubble: true,
         center: dayCenter(_day ?? d.day, d.days, _goDay), [
 
       // ── WHOOP'S SCREEN, in WHOOP's order ──
@@ -605,47 +608,50 @@ class _SleepDetailState extends State<SleepDetail> {
       // 3 · the week
       ..._weekly(c, p, d),
 
-      // ── KOOP'S OWN, below WHOOP's ──
-      // The night itself: when it ran, in bed and watched, the hypnogram.
-      Section('The night', _answer(c, p, d, n, dial: false)),
-      const SizedBox(height: S.x3),
-      _night(c, p, d, n),
-      if (_scrub != null) _scrubCard(c, p, d),
+      // Not in WHOOP mode: WHOOP's Sleep screen ends with its week.
+      if (!Look.whoop) ...[
+        // ── KOOP'S OWN, below WHOOP's ──
+        // The night itself: when it ran, in bed and watched, the hypnogram.
+        Section('The night', _answer(c, p, d, n, dial: false)),
+        const SizedBox(height: S.x3),
+        _night(c, p, d, n),
+        if (_scrub != null) _scrubCard(c, p, d),
 
-      // Whose window this is, and naps.
-      ...?_windowCard(c, p, d, n),
-      ..._napsButton(c, l, d.day),
+        // Whose window this is, and naps.
+        ...?_windowCard(c, p, d, n),
+        ..._napsButton(c, l, d.day),
 
-      // ── AGAINST THE USER'S OWN NIGHTS ──
-      if (_versusUsual(c, p, d, n) case final versus?)
-        Section(l?.sleepDetailVersusUsualSection ?? 'Against your usual', versus),
+        // ── AGAINST THE USER'S OWN NIGHTS ──
+        if (_versusUsual(c, p, d, n) case final versus?)
+          Section(l?.sleepDetailVersusUsualSection ?? 'Against your usual', versus),
 
-      // ── 5 · WHAT STOOD OUT ──
-      // Named after the night the nav bar is already showing. "Unusual last
-      // night — Nothing stood out." is a present-tense all-clear, and it was
-      // printed over a night that could be days old.
-      if (unusual != null)
-        Section(
-            (daysBehind(_noonOf(d.day)) ?? 0) <= 0
-                ? (l?.sleepDetailUnusualLastNight ?? 'Unusual last night')
-                : (l?.sleepDetailUnusualOnDay(prettyDay(d.day, l)) ??
-                    'Unusual on ${prettyDay(d.day, l)}'),
-            unusual),
+        // ── 5 · WHAT STOOD OUT ──
+        // Named after the night the nav bar is already showing. "Unusual last
+        // night — Nothing stood out." is a present-tense all-clear, and it was
+        // printed over a night that could be days old.
+        if (unusual != null)
+          Section(
+              (daysBehind(_noonOf(d.day)) ?? 0) <= 0
+                  ? (l?.sleepDetailUnusualLastNight ?? 'Unusual last night')
+                  : (l?.sleepDetailUnusualOnDay(prettyDay(d.day, l)) ??
+                      'Unusual on ${prettyDay(d.day, l)}'),
+              unusual),
 
-      // ── 6 · THE SIGNALS UNDERNEATH ──
-      Section(l?.sleepDetailOvernightSection ?? 'Overnight signals',
-          _overnight(c, p, d)),
+        // ── 6 · THE SIGNALS UNDERNEATH ──
+        Section(l?.sleepDetailOvernightSection ?? 'Overnight signals',
+            _overnight(c, p, d)),
 
-      // ── 7 · ONE TAKEAWAY ──
-      Section(l?.sleepDetailTonightSection ?? 'Tonight', _tonight(c, p, d)),
+        // ── 7 · ONE TAKEAWAY ──
+        Section(l?.sleepDetailTonightSection ?? 'Tonight', _tonight(c, p, d)),
 
-      const SizedBox(height: S.x5),
-      // The night this screen is steered to, not the newest one. Dropping it
-      // meant stepping back to Tuesday and then tapping Nerd stats landed
-      // on last night — the same numbers every time, whichever day you
-      // came from.
-      investigateRow(
-          c, () => go(c, Investigate('sleep', day: _day ?? d.day))),
+        const SizedBox(height: S.x5),
+        // The night this screen is steered to, not the newest one. Dropping it
+        // meant stepping back to Tuesday and then tapping Nerd stats landed
+        // on last night — the same numbers every time, whichever day you
+        // came from.
+        investigateRow(
+            c, () => go(c, Investigate('sleep', day: _day ?? d.day))),
+      ],
     ]);
   }
 
@@ -885,6 +891,99 @@ class _SleepDetailState extends State<SleepDetail> {
               : math.max(0, tstW[i]! / (effW[i]! / 100) - tstW[i]!).toDouble(),
         ),
     ];
+    final restorative = WeekTrendCard(
+      title: 'Restorative sleep (hours)',
+      days: days,
+      kind: TrendKind.stacked,
+      values: week('rem'),
+      values2: week('deep'),
+      color2: C.stageDeep,
+      format: hmOfMin,
+      colorOf: (_) => C.stageRem,
+      legend: const [('Deep sleep', C.stageDeep), ('REM sleep', C.stageRem)],
+      onTap: () => go(c, const MetricDetail('deep')),
+    );
+    final timeInBed = bedOn.any((v) => v != null)
+        ? WeekTrendCard(
+            title: 'Time in bed',
+            days: days,
+            kind: TrendKind.span,
+            values: bedOn,
+            values2: bedOff,
+            format: clockOfAxis,
+            colorOf: (_) => sleepCol,
+          )
+        : null;
+    final efficiency = WeekTrendCard(
+      title: 'Sleep efficiency',
+      days: days,
+      kind: TrendKind.line,
+      values: week('efficiency'),
+      format: (v) => '${v.round()}%',
+      colorOf: (_) => sleepCol,
+      onTap: () => go(c, const MetricDetail('efficiency')),
+    );
+    final perfCard = WeekTrendCard(
+      title: 'Sleep performance',
+      days: days,
+      values: week('sleep_perf'),
+      format: (v) => '${v.round()}%',
+      colorOf: (_) => sleepCol,
+      onTap: () => go(c, const MetricDetail('sleep_perf')),
+    );
+    // WHOOP mode: WHOOP's own week, in its order. Each day's need and
+    // consistency are the stored cross-day series; hours vs. needed (%) is
+    // that day's sleep over that day's need, absent when either is.
+    final slept = week('sleep'), need = week('sleep_need_min');
+    final needCol = p.on(C.green);
+    if (Look.whoop) {
+      final cards = <Widget>[
+        perfCard,
+        WeekTrendCard(
+          title: 'Hours vs. needed (hours)',
+          days: days,
+          kind: TrendKind.line,
+          values: slept,
+          values2: need,
+          color2: needCol,
+          format: hmOfMin,
+          colorOf: (_) => sleepCol,
+          legend: [('Hours of sleep', sleepCol), ('Sleep needed', needCol)],
+        ),
+        WeekTrendCard(
+          title: 'Hours vs. needed (%)',
+          days: days,
+          values: [
+            for (var i = 0; i < days.length; i++)
+              slept[i] == null || need[i] == null || need[i]! <= 0
+                  ? null
+                  : slept[i]! / need[i]! * 100,
+          ],
+          format: (v) => '${v.round()}%',
+          colorOf: (_) => sleepCol,
+        ),
+        restorative,
+        WeekTrendCard(
+          title: 'Sleep consistency',
+          days: days,
+          values: week('sleep_consistency'),
+          format: (v) => '${v.round()}%',
+          colorOf: (_) => sleepCol,
+        ),
+        ?timeInBed,
+        efficiency,
+      ];
+      if (!d.trends.values.any((s) => s.isNotEmpty) && d.windows.isEmpty) {
+        return const [];
+      }
+      return [
+        Padding(
+          padding: const EdgeInsets.only(top: S.x6, bottom: S.x3),
+          child: Text('Weekly Trends', style: F.t2.copyWith(color: p.ink)),
+        ),
+        for (final w in cards) ...[w, const SizedBox(height: S.x3)],
+      ];
+    }
     final cards = <Widget>[
       if (nights.any((n) => n.deep != null || n.rem != null || n.light != null))
         WeekStagesCard(nights: nights),

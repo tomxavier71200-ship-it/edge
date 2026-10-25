@@ -723,6 +723,7 @@ Map<String, Widget> _nutritionAndWellnessCases() {
         oneLiner: 'Your long sleep last night cleared the debt from the week.',
         onTap: () {}),
     'coach_bubble_empty': CoachBubble(oneLiner: null, onTap: () {}),
+    'coach_disc': CoachDisc(onTap: () {}),
     'health_checks': HealthChecksCard(
         checks: appHealthChecks(
       now: DateTime(2026, 10, 12, 9),

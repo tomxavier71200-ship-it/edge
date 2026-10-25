@@ -177,9 +177,10 @@ class _HealthMonitorScreenState extends State<HealthMonitorScreen> {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x4),
         decoration: BoxDecoration(
-            color: p.dark ? p.bg : p.card2,
+            // WHOOP mode: WHOOP's bar is the page's darkest tone, no edge.
+            color: Look.whoop ? p.bgBottom : p.dark ? p.bg : p.card2,
             borderRadius: R.rLg,
-            border: Border.all(color: p.line)),
+            border: Look.whoop ? null : Border.all(color: p.line)),
         child: Row(children: [
           Icon(LucideIcons.watch, size: 22, color: p.ink2),
           const SizedBox(width: S.x3),

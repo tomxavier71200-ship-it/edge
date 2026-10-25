@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'grammar.dart';
+import 'koop_mark.dart';
 import 'theme.dart';
 
 /// Every destination. The ORDER is persisted (`Prefs.shellTab` stores the
@@ -43,6 +44,15 @@ enum ShellDomain {
   /// Whether the domain has its own slot in the bar. Off-bar domains are
   /// reached from More (and by deep link) and light the More slot while open.
   final bool inBar;
+
+  /// In WHOOP mode the bar is WHOOP's: Home, Health and More only, and the
+  /// last slot reads "More". Workout moves inside More with the rest.
+  bool get shown => Look.whoop
+      ? this == home || this == health || this == more
+      : inBar;
+  String get barLabel => Look.whoop && this == more ? 'More' : label;
+  IconData get barIcon =>
+      Look.whoop && this == more ? LucideIcons.menu : icon;
 }
 
 /// Lets a screen inside the shell switch tabs — More uses it to open
@@ -83,6 +93,10 @@ class AppShell extends StatefulWidget {
   final void Function(BuildContext context, ValueChanged<ShellDomain> select)?
       onAction;
 
+  /// WHOOP mode's round button beside the bar: the coach, where Koop has
+  /// "+". Null keeps "+" in both modes.
+  final void Function(BuildContext context)? onCoach;
+
   /// Pinned between the domain and the tab bar, above every tab. This is not
   /// a general slot — it exists for state that is RUNNING and is not on
   /// screen, which today means a minimised workout. A domain's own content
@@ -95,6 +109,7 @@ class AppShell extends StatefulWidget {
     this.initial = ShellDomain.home,
     this.onSelect,
     this.onAction,
+    this.onCoach,
     this.banner,
   });
 
@@ -154,9 +169,12 @@ class _AppShellState extends State<AppShell> {
           _TabBar(
             current: _current,
             onTap: _select,
-            onAction: widget.onAction == null
-                ? null
-                : () => widget.onAction!(c, _select),
+            onAction: Look.whoop && widget.onCoach != null
+                ? () => widget.onCoach!(c)
+                : widget.onAction == null
+                    ? null
+                    : () => widget.onAction!(c, _select),
+            coach: Look.whoop && widget.onCoach != null,
           ),
         ]),
       ),
@@ -170,14 +188,21 @@ class _TabBar extends StatelessWidget {
   final ValueChanged<ShellDomain> onTap;
   final VoidCallback? onAction;
 
-  const _TabBar({required this.current, required this.onTap, this.onAction});
+  /// The round button is the coach (WHOOP mode), not "+".
+  final bool coach;
+
+  const _TabBar(
+      {required this.current,
+      required this.onTap,
+      this.onAction,
+      this.coach = false});
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     // An off-bar domain (Nutrition, Wellness) is reached through More, so
     // More is what reads as "here".
-    final lit = current.inBar ? current : ShellDomain.more;
+    final lit = current.shown ? current : ShellDomain.more;
     return SafeArea(
       top: false,
       child: Padding(
@@ -191,7 +216,7 @@ class _TabBar extends StatelessWidget {
               shadow: p.el(3),
               child: Row(children: [
                 for (final d in ShellDomain.values)
-                  if (d.inBar)
+                  if (d.shown)
                     Expanded(
                       child: _Tab(
                         domain: d,
@@ -207,7 +232,9 @@ class _TabBar extends StatelessWidget {
           ),
           if (onAction != null) ...[
             const SizedBox(width: S.x3),
-            _ActionButton(onTap: onAction!),
+            coach
+                ? CoachDisc(onTap: onAction!)
+                : _ActionButton(onTap: onAction!),
           ],
         ]),
       ),
@@ -230,18 +257,18 @@ class _Tab extends StatelessWidget {
       selected: on,
       child: Pressable(
         onTap: onTap,
-        semanticLabel: domain.label,
+        semanticLabel: domain.barLabel,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedScale(
               scale: on ? 1.08 : 1,
               duration: motion(c, Motion.base),
-              child: Icon(domain.icon, size: 22, color: ink),
+              child: Icon(domain.barIcon, size: 22, color: ink),
             ),
             const SizedBox(height: 4),
             Text(
-              domain.label,
+              domain.barLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: F.over.copyWith(
@@ -292,6 +319,40 @@ class _ActionButton extends StatelessWidget {
           boxShadow: p.el(3),
         ),
         child: Icon(LucideIcons.plus, size: 28, color: p.bg),
+      ),
+    );
+  }
+}
+
+/// WHOOP mode's round button: WHOOP keeps its coach one tap away, beside the
+/// bar and floating on every detail screen, in a dark disc ringed in its
+/// blue. Koop's mark sits where WHOOP's logo does.
+class CoachDisc extends StatelessWidget {
+  final VoidCallback onTap;
+  final double size;
+
+  const CoachDisc({super.key, required this.onTap, this.size = 64});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Pressable(
+      semanticLabel: 'Coach',
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        onTap();
+      },
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: p.card,
+          border: Border.all(color: p.on(C.blue).withValues(alpha: .7), width: 2),
+          boxShadow: p.el(3),
+        ),
+        alignment: Alignment.center,
+        child: KoopMark(size: size * .53),
       ),
     );
   }

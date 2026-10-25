@@ -1813,10 +1813,18 @@ class ScreenTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(S.x1, S.x2, S.x1, S.x3),
       child: Row(
         children: [
+          // WHOOP mode: a tab's name centred in spaced capitals ("HEALTH"),
+          // balanced by an empty slot as wide as the ⓘ.
+          if (Look.whoop && info != null && trailing == null)
+            const SizedBox(width: S.x2 + 32),
           Expanded(
             child: Text(
-              title,
-              style: F.t1.copyWith(color: p.ink),
+              Look.whoop ? title.toUpperCase() : title,
+              textAlign: Look.whoop ? TextAlign.center : TextAlign.start,
+              style: Look.whoop
+                  ? F.label.copyWith(
+                      color: p.ink, letterSpacing: 2, fontWeight: FontWeight.w700)
+                  : F.t1.copyWith(color: p.ink),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -2491,9 +2499,15 @@ class NavBar extends StatelessWidget {
             child: center ?? Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // WHOOP mode: WHOOP's spaced capitals ("HEALTH MONITOR").
                 Text(
-                  title,
-                  style: F.head.copyWith(color: p.ink),
+                  Look.whoop ? title.toUpperCase() : title,
+                  style: Look.whoop
+                      ? F.label.copyWith(
+                          color: p.ink,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w700)
+                      : F.head.copyWith(color: p.ink),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

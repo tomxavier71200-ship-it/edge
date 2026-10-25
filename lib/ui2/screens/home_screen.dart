@@ -2526,10 +2526,17 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 Expanded(
                   child: _days.length < 2
                       ? Center(
-                          child: Text(
-                            prettyDay(d.dayId, l),
-                            style: F.head.copyWith(color: p.ink),
-                          ),
+                          // WHOOP mode: WHOOP's spaced "TODAY".
+                          child: Look.whoop && d.dayId == todayLabel()
+                              ? Text('TODAY',
+                                  style: F.label.copyWith(
+                                      color: p.ink,
+                                      letterSpacing: 2,
+                                      fontWeight: FontWeight.w700))
+                              : Text(
+                                  prettyDay(d.dayId, l),
+                                  style: F.head.copyWith(color: p.ink),
+                                ),
                         )
                       : DayNav(
                           day: _day ?? d.dayId,
@@ -3490,5 +3497,19 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         ),
       ],
     ),
+  );
+}
+
+/// WHOOP mode's coach line under a detail screen's dial, as WHOOP's Sleep
+/// screen has it: today's one-line briefing, or the invitation to ask. Null
+/// without a coach set up — nothing would be behind it to open.
+Widget? coachLine(BuildContext c) {
+  if (!coachReady(c)) return null;
+  final period = currentBriefingPeriod(DateTime.now());
+  final b = BriefingStore.read(period);
+  return CoachBubble(
+    oneLiner: b?.oneLiner,
+    onTap: () => go(
+        c, b == null ? const CoachScreen() : AiBriefingScreen(period: period)),
   );
 }

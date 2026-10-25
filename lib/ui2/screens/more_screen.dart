@@ -66,7 +66,8 @@ class MoreScreen extends StatelessWidget {
         );
 
     return ListView(padding: pad, children: [
-      const ScreenTitle('You'),
+      // WHOOP mode names the slot as WHOOP does.
+      ScreenTitle(Look.whoop ? 'More' : 'You'),
       // You, first: the door every setting is behind.
       DoorRow(LucideIcons.user, C.blue, 'Profile and settings',
           'Devices, data, notifications and privacy',
@@ -132,6 +133,11 @@ class MoreScreen extends StatelessWidget {
       ]),
       head('Track'),
       grid([
+        // WHOOP mode's bar has no Workout slot, so its door is here.
+        if (Look.whoop)
+          DoorTile(LucideIcons.dumbbell, C.domMove, 'Workout',
+              'Start, log and review activities',
+              onTap: () => open(ShellDomain.workout)),
         DoorTile(LucideIcons.utensils, C.domFood, 'Nutrition',
             'Meals, water, calories',
             onTap: () => open(ShellDomain.nutrition)),

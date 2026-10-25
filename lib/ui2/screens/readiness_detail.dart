@@ -377,15 +377,19 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
                   label: 'Recovery',
                 ),
               ),
-              const SizedBox(height: S.x4),
-              Text(band.label,
-                  style: F.head.copyWith(color: p.on(band.color))),
+              // WHOOP mode: WHOOP's dial carries no word under it.
+              if (!Look.whoop) ...[
+                const SizedBox(height: S.x4),
+                Text(band.label,
+                    style: F.head.copyWith(color: p.on(band.color))),
+              ],
             ]),
           ),
 
         // The arithmetic behind the dial — shown only when it sums to it.
+        // Not in WHOOP mode: WHOOP goes straight from the dial to the list.
         if (recoveryPartRows(d.method, (v ?? d.early.value)?.toDouble()) case final made?
-            when !d.rough) ...[
+            when !d.rough && !Look.whoop) ...[
           Section("How today's number was made", RecoveryMadeOf(made)),
           const SizedBox(height: S.x3),
         ],
@@ -410,7 +414,9 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             if (todayAndYesterday(d.trends[k] ?? const []) case (final t, final y))
               (label, t, y, f),
         ] case final pairs
-            when pairs.any((r) => r.$2 != null || r.$3 != null)) ...[
+            // Not in WHOOP mode: WHOOP's app has Behavior Insights next.
+            when !Look.whoop &&
+                pairs.any((r) => r.$2 != null || r.$3 != null)) ...[
           DayPairCard(rows: pairs),
           const SizedBox(height: S.x3),
         ],
@@ -423,7 +429,9 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             onTap: () => go(c, const JournalFindings())),
         const SizedBox(height: S.x5),
 
-        if (d.breakdown.isNotEmpty) ...[
+        // Not in WHOOP mode: WHOOP's Recovery goes from Behavior Insights
+        // to its week, and ends there.
+        if (!Look.whoop && d.breakdown.isNotEmpty) ...[
           Section(l?.readinessDetailWhatWentIntoIt ?? 'What went into it',
               _breakdown(c, p, d)),
           const SizedBox(height: S.x4),
@@ -443,7 +451,7 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
               ),
             ]),
           ),
-        ] else if (v != null)
+        ] else if (!Look.whoop && v != null)
           Section(
             l?.readinessDetailWhatWentIntoIt ?? 'What went into it',
             StatusCard(
@@ -472,6 +480,7 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
 
         // The header used to say "Last 90 days" over a chart of five points.
         // It says what is drawn.
+        if (!Look.whoop) ...[
         Section(
           _historyTitle(c, d),
           !d.series.any((v) => v != null)
@@ -485,6 +494,7 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
         ),
         const SizedBox(height: S.x5),
         investigateRow(c, () => go(c, const Investigate('readiness'))),
+        ],
       ],
     ]);
   }

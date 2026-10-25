@@ -204,6 +204,11 @@ class Look {
   static double ringStroke(double classic) =>
       ring == RingStyle.thin ? classic * .8 : classic;
   static bool get glow => ring == RingStyle.glow;
+
+  /// Profile → Settings → WHOOP mode: WHOOP's surfaces AND its layout (the
+  /// three-tab bar with the coach disc, WHOOP's Health tab, thick dials).
+  /// Off is Koop's own layout, untouched.
+  static bool get whoop => P.skin == Skin.whoop;
 }
 
 /// A ThemeData extension whose only job is to differ when [Look] changes, so
@@ -486,7 +491,8 @@ class F {
   /// The hero numeral sized to its dial, as WHOOP's is: about three tenths
   /// of the ring's width. The wordmark and label scale with it.
   static TextStyle heroFor(double dial) =>
-      hero.copyWith(fontSize: dial * .29 * (Look.rounded ? .8 : 1));
+      hero.copyWith(
+          fontSize: dial * (Look.whoop ? .31 : .29) * (Look.rounded ? .8 : 1));
   static TextStyle dialMark(double dial) => head.copyWith(fontSize: dial * .062);
   static TextStyle dialLabel(double dial) => over.copyWith(fontSize: dial * .048);
 

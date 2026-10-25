@@ -56,6 +56,9 @@ void main() {
       devMode: true,
       onGallery: () => opened = true,
     )));
+    // The list builds lazily; scroll the Developer group into view first.
+    await tester.scrollUntilVisible(find.text('Component gallery'), 300,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('Developer'), findsOneWidget);
     await tester.ensureVisible(find.text('Component gallery'));
     await tester.pumpAndSettle();
