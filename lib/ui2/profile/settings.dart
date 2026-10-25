@@ -1102,6 +1102,17 @@ class NotificationSettingsView extends StatelessWidget {
                         chevron: false,
                         onTap: () => set(prefs.copyWith(
                             movementEnabled: !prefs.movementEnabled))),
+                    // WHOOP's daily stress summary: one note in the evening
+                    // with the day's measured stress. Opt-in.
+                    SetRow(LucideIcons.brain, C.green, 'Daily stress summary',
+                        sub: 'One note after 8 pm with your time at high and '
+                            'medium stress today and its peak. Needs an hour '
+                            'of readings',
+                        value: prefs.stressSummaryEnabled ? on : off,
+                        chevron: false,
+                        onTap: () => set(prefs.copyWith(
+                            stressSummaryEnabled:
+                                !prefs.stressSummaryEnabled))),
                     // The wind-down nudge. Silent until the Sleep Coach has
                     // actually LEARNED a bedtime — the nudge's whole content
                     // is that time, so there is no honest fallback.

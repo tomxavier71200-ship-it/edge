@@ -479,6 +479,17 @@ class F {
       (Look.rounded ? _r(_c48) : _c48).copyWith(
           fontSize: 64 * (Look.rounded ? .8 : 1),
           fontWeight: Look.rounded ? FontWeight.w600 : FontWeight.w500);
+  /// The hero numeral sized to its dial, as WHOOP's is: about three tenths
+  /// of the ring's width. The wordmark and label scale with it.
+  static TextStyle heroFor(double dial) =>
+      hero.copyWith(fontSize: dial * .29 * (Look.rounded ? .8 : 1));
+  static TextStyle dialMark(double dial) => head.copyWith(fontSize: dial * .062);
+  static TextStyle dialLabel(double dial) => over.copyWith(fontSize: dial * .048);
+
+  /// A detail screen's contributor row at WHOOP's size: the label a step
+  /// over [over], the value larger than [n24].
+  static TextStyle get rowLabel => over.copyWith(fontSize: 11.5);
+  static TextStyle get rowValue => n24.copyWith(fontSize: 28);
   static TextStyle get n48 => Look.rounded ? _r(_c48) : _c48;
   static TextStyle get n34 => Look.rounded ? _r(_c34) : _c34;
   static TextStyle get n24 => Look.rounded ? _r(_c24) : _c24;

@@ -449,13 +449,16 @@ class _ContributorRow extends StatelessWidget {
         const SizedBox(width: S.x3),
         Expanded(
           child: Text(r.label.toUpperCase(),
-              style: F.over.copyWith(
-                  color: p.ink, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+              style: F.rowLabel.copyWith(
+                  color: p.ink,
+                  letterSpacing: 1.1,
+                  fontWeight: FontWeight.w700)),
         ),
         const SizedBox(width: S.x2),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(r.value, style: F.n24.copyWith(color: p.ink)),
+            Text(r.value,
+                style: F.rowValue.copyWith(color: p.ink)),
             SizedBox(
               width: 18,
               child: r.direction == null || r.direction == 0
@@ -507,8 +510,10 @@ class BandRow extends StatelessWidget {
         const SizedBox(width: S.x3),
         Expanded(
           child: Text(label.toUpperCase(),
-              style: F.over.copyWith(
-                  color: p.ink, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+              style: F.rowLabel.copyWith(
+                  color: p.ink,
+                  letterSpacing: 1.1,
+                  fontWeight: FontWeight.w700)),
         ),
         const SizedBox(width: S.x2),
         for (final b in Band3.values) ...[
@@ -528,7 +533,8 @@ class BandRow extends StatelessWidget {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerRight,
-            child: Text(value, style: F.n24.copyWith(color: p.ink)),
+            child: Text(value,
+                style: F.rowValue.copyWith(color: p.ink)),
           ),
         ),
       ]),

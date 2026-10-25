@@ -112,6 +112,12 @@ NotifClass? classOf(NotificationEvent e) => switch (e.category) {
           when e.priority == NotifPriority.normal &&
               routePath(e.route ?? '') == kRouteSteps =>
         NotifClass.prompt,
+      // The evening stress summary: a report on the day's measured stress,
+      // route-keyed like the step goal. Off switch: stressSummaryEnabled.
+      NotifCategory.reminders
+          when e.priority == NotifPriority.normal &&
+              routePath(e.route ?? '') == kRouteStress =>
+        NotifClass.prompt,
       // Same mechanism, one more route-keyed sanction: the forgotten-workout
       // nudge ("Still working out?" — WorkoutIdleWatch). A report about
       // something measured — an open session whose trailing 20 minutes were

@@ -73,6 +73,11 @@ class NotificationPrefs {
   /// it was refused, which is why it has never fired for anyone (issue #123).
   final bool movementEnabled;
 
+  /// WHOOP's daily stress summary: one evening note with the day's time at
+  /// high and medium stress and its peak, from 20:00, once a day, only when
+  /// the day has an hour of readings. Opt-in, off by default.
+  final bool stressSummaryEnabled;
+
   /// The medication reminder: one notification per scheduled dose the user
   /// entered themselves, and ONLY for a dose that is still upcoming — a slot
   /// already marked taken or deliberately skipped is not armed at all.
@@ -146,6 +151,7 @@ class NotificationPrefs {
     this.waterIntervalMin = 120, // every 2 hours
     this.autoDetectEnabled = true,
     this.movementEnabled = false,
+    this.stressSummaryEnabled = false,
     this.medsEnabled = false,
     this.checkInEnabled = false,
     this.batteryAlertPct = batteryPctDefault,
@@ -167,6 +173,7 @@ class NotificationPrefs {
   static const _kWaterInterval = 'notif_water_interval';
   static const _kAutoDetect = 'notif_auto_detect';
   static const _kMovement = 'notif_movement';
+  static const _kStressSummary = 'notif_stress_summary';
   static const _kMeds = 'notif_meds';
   static const _kCheckIn = 'notif_checkin';
 
@@ -196,6 +203,7 @@ class NotificationPrefs {
       waterIntervalMin: p.getInt(_kWaterInterval) ?? 120,
       autoDetectEnabled: p.getBool(_kAutoDetect) ?? true,
       movementEnabled: p.getBool(_kMovement) ?? false,
+      stressSummaryEnabled: p.getBool(_kStressSummary) ?? false,
       medsEnabled: p.getBool(_kMeds) ?? false,
       checkInEnabled: p.getBool(_kCheckIn) ?? false,
       batteryAlertPct: ((p.getInt(_kBatteryPct) ?? batteryPctDefault)
@@ -222,6 +230,7 @@ class NotificationPrefs {
     await p.setInt(_kWaterInterval, waterIntervalMin);
     await p.setBool(_kAutoDetect, autoDetectEnabled);
     await p.setBool(_kMovement, movementEnabled);
+    await p.setBool(_kStressSummary, stressSummaryEnabled);
     await p.setBool(_kMeds, medsEnabled);
     await p.setBool(_kCheckIn, checkInEnabled);
     await p.setInt(
@@ -245,6 +254,7 @@ class NotificationPrefs {
     int? waterIntervalMin,
     bool? autoDetectEnabled,
     bool? movementEnabled,
+    bool? stressSummaryEnabled,
     bool? medsEnabled,
     bool? checkInEnabled,
     int? batteryAlertPct,
@@ -267,6 +277,8 @@ class NotificationPrefs {
         waterIntervalMin: waterIntervalMin ?? this.waterIntervalMin,
         autoDetectEnabled: autoDetectEnabled ?? this.autoDetectEnabled,
         movementEnabled: movementEnabled ?? this.movementEnabled,
+        stressSummaryEnabled:
+            stressSummaryEnabled ?? this.stressSummaryEnabled,
         medsEnabled: medsEnabled ?? this.medsEnabled,
         checkInEnabled: checkInEnabled ?? this.checkInEnabled,
         batteryAlertPct: batteryAlertPct ?? this.batteryAlertPct,
@@ -321,6 +333,10 @@ class NotificationPrefs {
     // check, which does.
     if (!movementEnabled &&
         routePath(event.route ?? '') == kRouteMovement) {
+      return false;
+    }
+    if (!stressSummaryEnabled &&
+        routePath(event.route ?? '') == kRouteStress) {
       return false;
     }
     // The step-goal achievement's off switch — same route-keyed shape. (The

@@ -31,6 +31,7 @@ import 'ui2/screens/calm_breathing.dart';
 import 'ui2/screens/what_changed.dart';
 import 'ui2/screens/health_screen.dart';
 import 'ui2/screens/home_screen.dart';
+import 'ui2/screens/stress_monitor.dart' show StressMonitorScreen;
 import 'ui2/screens/journal_compose.dart';
 import 'ui2/screens/more_screen.dart';
 import 'ui2/screens/log_workout.dart';
@@ -376,6 +377,7 @@ ShellDomain domainForRoute(String route) => switch (routePath(route)) {
       // on Today, and neither has a screen of its own to push.
       kRouteRecovery => ShellDomain.home,
       kRouteSteps => ShellDomain.home,
+      kRouteStress => ShellDomain.health,
       kRouteWorkoutSuggestion => ShellDomain.workout,
       // The forgotten-workout nudge. The Workouts tab is the destination
       // itself — the live session bar with its finish control is pinned to
@@ -414,6 +416,7 @@ ShellDomain domainForRoute(String route) => switch (routePath(route)) {
 /// `/ai/*` used to be in that list too. It now lands on the briefing itself,
 /// which also carries the exact snapshot that was sent to produce it.
 Widget? screenForRoute(String route) => switch (routePath(route)) {
+      kRouteStress => const StressMonitorScreen(),
       kRouteAiMorning =>
         const AiBriefingScreen(period: BriefingPeriod.morning),
       kRouteAiEvening =>

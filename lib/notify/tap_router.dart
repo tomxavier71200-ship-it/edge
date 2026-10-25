@@ -52,6 +52,12 @@ const String kRouteRecovery = '/today/recovery';
 /// NotificationPrefs.stepGoalEnabled.
 const String kRouteSteps = '/today/steps';
 
+/// The evening stress summary (WHOOP's "daily stress summary"): a report on
+/// the day's measured stress, on its own route so it rides the prompt class
+/// without re-opening the reminders channel. Off switch:
+/// NotificationPrefs.stressSummaryEnabled. Opens the Stress Monitor.
+const String kRouteStress = '/health/stress';
+
 /// The deep link for ONE detected bout. The id is the `workout_suggestions`
 /// row's, so the screen can open on that bout rather than a list the user has
 /// to find it in.

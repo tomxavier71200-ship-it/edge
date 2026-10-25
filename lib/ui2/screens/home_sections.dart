@@ -37,7 +37,7 @@ import 'workout_screen.dart' show openActivityPicker;
 import 'log_workout.dart'
     show LogWorkout, Suggestion, WorkoutSuggestionScreen, activeSuggestions;
 import 'metric_detail.dart' show MetricDetail, MetricSpec, specOf;
-import 'stress_monitor.dart' show StressMonitorScreen;
+import 'stress_monitor.dart' show StressDay, StressMonitorScreen;
 import 'strength_screen.dart' show StrengthScreen;
 import 'overview_screen.dart' show OverviewScreen;
 import 'vo2max_screen.dart' show Vo2maxScreen, vo2Points;
@@ -47,7 +47,7 @@ import '../../data/db.dart' show LocalDb;
 import 'sleep_detail.dart';
 import 'health_monitor.dart' show StressSparkline;
 import 'stress_detail.dart'
-    show StressReading, kStressMinMinutes, stressEnough, stressMinutes, stressReadings;
+    show StressLine, StressReading, kStressMinMinutes, stressEnough, stressMinutes, stressReadings;
 
 /// Days a dashboard average needs before it exists.
 const kBaselineMin = 4;
@@ -1474,7 +1474,9 @@ class StressDashRow extends StatefulWidget {
 }
 
 class _StressDashRowState extends State<StressDashRow> {
-  List<StressReading> _r = const [];
+  /// The last 24 hours with sleep and workouts — the Stress Monitor's own
+  /// read, so the row shows what the screen behind it shows.
+  StressDay? _d = StressDay.shown[todayLabel()];
 
   @override
   void initState() {
@@ -1486,17 +1488,19 @@ class _StressDashRowState extends State<StressDashRow> {
     final repo = repoOf(context);
     if (repo == null) return;
     try {
-      final today = todayLabel();
-      final r = stressReadings(await repo.getDayStress(today), today)
-        ..sort((a, b) => a.at.compareTo(b.at));
-      if (mounted) setState(() => _r = r);
+      final d = await StressDay.load(repo, todayLabel());
+      if (mounted) setState(() => _d = d);
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final last = stressEnough(_r) ? _r.last : null;
+    final d = _d;
+    final r = d == null
+        ? const <StressReading>[]
+        : (d.readings.toList()..sort((a, b) => a.at.compareTo(b.at)));
+    final last = stressEnough(r) ? r.last : null;
     final v = last?.v;
     final lvl = v == null ? null : stressLevelOf(v);
     return Surface(
@@ -1513,22 +1517,34 @@ class _StressDashRowState extends State<StressDashRow> {
                 style: F.over.copyWith(
                     color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
           ),
-          Text(v == null ? '—' : v.toStringAsFixed(1),
-              style: F.n34.copyWith(color: v == null ? p.ink3 : p.ink)),
-          const SizedBox(width: S.x2),
-          if (lvl != null)
+          if (lvl != null) ...[
             Text(kStressLevelWords[lvl].toUpperCase(),
                 style: F.over.copyWith(
                     color: p.on(kStressLevelColors[lvl]),
                     letterSpacing: 1.2,
                     fontWeight: FontWeight.w700)),
+            const SizedBox(width: S.x2),
+          ],
+          Text(v == null ? '—' : v.toStringAsFixed(1),
+              style: F.n34.copyWith(color: v == null ? p.ink3 : p.ink)),
         ]),
-        if (_r.length >= 2) ...[
+        // WHOOP's row: the day's line with a moon over sleep and a mark over
+        // each workout, ending at now.
+        if (d != null && d.window.length >= 2) ...[
           const SizedBox(height: S.x3),
-          SizedBox(height: 56, child: StressSparkline(_r)),
+          StressLine(
+            readings: d.window,
+            sleep: d.sleep,
+            work: d.work,
+            day: DateTime.parse(d.day),
+            from: d.from,
+            to: d.to,
+            markEnd: d.isToday,
+            height: 96,
+          ),
         ] else ...[
           const SizedBox(height: S.x2),
-          Text(_r.isEmpty ? 'No readings yet today' : 'Calculating',
+          Text(r.isEmpty ? 'No readings yet today' : 'Calculating',
               style: F.cap.copyWith(color: p.ink3)),
         ],
       ]),

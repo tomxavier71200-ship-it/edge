@@ -109,6 +109,18 @@ StressSplit stressSplit(List<StressReading> r,
   return StressSplit(total, outside, asleep);
 }
 
+/// The evening summary's line: "1:15 at high stress and 3:20 at medium
+/// today. It peaked at 2.4 around 14:30." Null under [kStressMinMinutes] of
+/// readings — a thin day gets no summary.
+String? stressSummaryText(List<StressReading> r) {
+  if (!stressEnough(r)) return null;
+  final t = stressSplit(r).total;
+  final peak = r.reduce((a, b) => b.v > a.v ? b : a);
+  return '${hmOfMin(t[2].toDouble())} at high stress and ${hmOfMin(t[1].toDouble())} at medium '
+      'today. It peaked at ${peak.v.toStringAsFixed(1)} around '
+      '${clock(peak.at.hour * 60 + peak.at.minute)}.';
+}
+
 /// The usual day: the mean of each bucket over [days]. Null under two days —
 /// one earlier Friday is an anecdote, not a typical Friday.
 StressSplit? typicalSplit(List<StressSplit> days) {

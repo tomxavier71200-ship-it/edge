@@ -23,6 +23,9 @@ class HeroDial extends StatelessWidget {
 
   /// Optional target, as fractions 0…1 of the circle.
   final (double, double)? band;
+
+  /// The dial's width at most: WHOOP's takes about seven tenths of the
+  /// screen, so it also never grows past 72% of the space it is given.
   final double size;
 
   /// False for a value that changes live (a running workout): it is drawn
@@ -36,7 +39,7 @@ class HeroDial extends StatelessWidget {
     required this.number,
     required this.label,
     this.band,
-    this.size = 210,
+    this.size = 280,
     this.animate = true,
   });
 
@@ -54,15 +57,19 @@ class HeroDial extends StatelessWidget {
         tween: Tween(begin: fresh ? 0 : 1, end: 1),
         duration: motion(c, Motion.sweep),
         curve: Curves.easeOutCubic,
-        builder: (c, t, _) => SizedBox.square(
+        builder: (c, t, _) => LayoutBuilder(builder: (c, box) {
+          final size = box.maxWidth.isFinite
+              ? math.min(this.size, box.maxWidth * .72)
+              : this.size;
+          return SizedBox.square(
           dimension: size,
           child: CustomPaint(
             painter: _Dial(value.clamp(0.0, 1.0) * t, p.on(color), p.track,
                 band: band,
                 bandColor: p.on(color).withValues(alpha: .28),
-                stroke: size * .035),
+                stroke: size * .05),
             child: Padding(
-              padding: EdgeInsets.all(size * .16),
+              padding: EdgeInsets.all(size * .15),
               // Scaled down, never clipped, at large text sizes.
               child: FittedBox(
                 fit: BoxFit.scaleDown,
@@ -71,16 +78,19 @@ class HeroDial extends StatelessWidget {
                   // WHOOP prints its own name.
                   ExcludeSemantics(
                     child: Text('KOOP',
-                        style: F.head.copyWith(
+                        style: F.dialMark(size).copyWith(
                             color: p.ink3,
                             fontWeight: FontWeight.w300,
                             letterSpacing: 6)),
                   ),
-                  Text(number(t), style: F.hero.copyWith(color: p.ink)),
+                  // Sized with the dial, as WHOOP's numeral is: about a
+                  // quarter of the ring's width tall.
+                  Text(number(t),
+                      style: F.heroFor(size).copyWith(color: p.ink)),
                   const SizedBox(height: S.x1),
                   Text(label.toUpperCase(),
                       textAlign: TextAlign.center,
-                      style: F.over.copyWith(
+                      style: F.dialLabel(size).copyWith(
                           color: p.ink,
                           letterSpacing: 1.6,
                           fontWeight: FontWeight.w700)),
@@ -88,7 +98,8 @@ class HeroDial extends StatelessWidget {
               ),
             ),
           ),
-        ),
+          );
+        }),
       ),
     );
   }

@@ -127,3 +127,6 @@ payload*.json
 # resolve. The test code stays; the pictures do not.
 test/goldens/
 MULTIDEVICE_PROGRESS.md
+
+# replica-skill working files (WHOOP reference screenshots hold health data)
+replica/

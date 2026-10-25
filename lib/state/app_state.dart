@@ -70,6 +70,8 @@ import 'smart_wake.dart';
 import 'prefs.dart';
 import '../ble/adapters/signals.dart' show InputSignal;
 import '../ui2/profile/devices.dart' show liveSources, rankSources;
+import '../ui2/screens/stress_detail.dart'
+    show stressReadings, stressSummaryText;
 import '../data/db.dart';
 import '../ecg/ble_ecg_transport.dart';
 import '../ecg/ecg_controller.dart';
@@ -1932,6 +1934,7 @@ class AppState extends ChangeNotifier {
       if (!isPaired) return;
       await _ensureRemindersScheduled();
       await _maybeNotifyStepGoal();
+      await _maybeNotifyStressSummary();
       await _maybeNotifyInactivity();
       // Opt-in auto-import of Health workouts (off by default; self-gates on
       // permission + a 1 h throttle — see AutoWorkoutImport). Foreground
@@ -2060,6 +2063,40 @@ class AppState extends ChangeNotifier {
           body: 'You hit about $steps steps — at or above your $goal goal.',
           date: date,
           route: kRouteSteps,
+        ),
+      );
+    } catch (_) {
+      /* best-effort */
+    }
+  }
+
+  /// WHOOP's daily stress summary: from 20:00, once a day, the day's
+  /// minutes at high and medium stress and its peak, read from the same
+  /// `stress_day` readings and split the Stress Monitor shows. Nothing under
+  /// an hour of readings (kStressMinMinutes) — no summary of a thin day.
+  /// Foreground cadence only, like the step goal.
+  static const String _kLastStressSummaryDay = 'last_stress_summary_day';
+  Future<void> _maybeNotifyStressSummary({DateTime? now}) async {
+    try {
+      final at = now ?? DateTime.now();
+      if (at.hour < 20) return;
+      final r = repo;
+      if (r == null) return;
+      final day = todayLabel();
+      final readings = stressReadings(await r.getDayStress(day), day);
+      final text = stressSummaryText(readings);
+      if (text == null) return;
+      await NotificationCenter.instance.emitOncePerDay(
+        prefsKey: _kLastStressSummaryDay,
+        dayId: day,
+        e: NotificationEvent(
+          dedupeKey: '$day:stress_summary',
+          category: NotifCategory.reminders,
+          priority: NotifPriority.normal,
+          title: 'Your stress today',
+          body: text,
+          date: day,
+          route: kRouteStress,
         ),
       );
     } catch (_) {
