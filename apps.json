@@ -11,20 +11,20 @@
       "iconURL": "https://raw.githubusercontent.com/tomxavier71200-ship-it/edge/whoop-ui/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png",
       "tintColor": "#1E9BFF",
       "localizedDescription": "Local-first companion for your WHOOP band. Not affiliated with WHOOP, Inc.",
-      "size": 21729001,
+      "size": 21732409,
       "screenshotURLs": [],
-      "version": "0.10.55",
-      "versionDate": "2026-10-23T19:19:43Z",
-      "versionDescription": "Koop 0.10.55 (build 55).",
-      "downloadURL": "https://github.com/tomxavier71200-ship-it/edge/releases/download/koop-ios/koop-55.ipa",
+      "version": "0.10.56",
+      "versionDate": "2026-10-25T13:53:55Z",
+      "versionDescription": "Koop 0.10.56 (build 56).",
+      "downloadURL": "https://github.com/tomxavier71200-ship-it/edge/releases/download/koop-ios/koop-56.ipa",
       "versions": [
         {
-          "version": "0.10.55",
-          "buildVersion": "55",
-          "date": "2026-10-23T19:19:43Z",
-          "localizedDescription": "Koop 0.10.55 (build 55).",
-          "downloadURL": "https://github.com/tomxavier71200-ship-it/edge/releases/download/koop-ios/koop-55.ipa",
-          "size": 21729001,
+          "version": "0.10.56",
+          "buildVersion": "56",
+          "date": "2026-10-25T13:53:55Z",
+          "localizedDescription": "Koop 0.10.56 (build 56).",
+          "downloadURL": "https://github.com/tomxavier71200-ship-it/edge/releases/download/koop-ios/koop-56.ipa",
+          "size": 21732409,
           "minOSVersion": "15.0"
         }
       ]
