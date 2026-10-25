@@ -262,8 +262,10 @@ class AlarmScreenView extends StatelessWidget {
           on: set.id == activeSetId,
           onSave: (s) async {
             await onSaveSet?.call(s);
-            // A first schedule is the one you meant to use.
-            if (isNew && activeSetId == null) await onActivate?.call(s.id);
+            // A schedule you just made is the one you meant to use: it goes
+            // on, and whichever was on goes off. Leaving it off behind an
+            // older schedule looked like the alarm ignoring you.
+            if (isNew) await onActivate?.call(s.id);
           },
           onDelete: isNew ? null : () async => onDeleteSet?.call(set.id),
         ),
