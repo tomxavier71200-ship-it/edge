@@ -156,6 +156,8 @@ class _MoreSettingsState extends State<MoreSettings> {
       onGallery: () => goto(c, const GalleryScreen()),
       units: units.system.label,
       appearance: theme.choice.label,
+      whoopLook: theme.whoopLook,
+      onToggleWhoopLook: () => theme.setWhoopLook(!theme.whoopLook),
       cycleTracking: app.cycleTrackingEnabled,
       zoneAlertEnabled: app.zoneAlertEnabled,
       zoneAlertZone: app.zoneAlertTargetZone,
@@ -481,6 +483,10 @@ Future<void> _confirmReset(BuildContext c, AppState app) async {
 
 class MoreSettingsView extends StatelessWidget {
   final String units, appearance;
+
+  /// Profile → Settings → WHOOP look (ThemeController.setWhoopLook).
+  final bool whoopLook;
+  final VoidCallback? onToggleWhoopLook;
   final bool phoneSteps, telemetry, barcodeLookup, cycleTracking;
 
   /// The live-workout HR-zone-crossing haptic. Off by default; [zoneAlertZone]
@@ -545,6 +551,8 @@ class MoreSettingsView extends StatelessWidget {
     super.key,
     this.units = 'Metric',
     this.appearance = 'System',
+    this.whoopLook = false,
+    this.onToggleWhoopLook,
     this.appIcon,
     this.onPickIcon,
     this.phoneSteps = false,
@@ -665,6 +673,14 @@ class MoreSettingsView extends StatelessWidget {
                       value: units, onTap: onCycleUnits),
                   // No Appearance row: the app is dark-only (see
                   // ThemeController.effective), so a picker would do nothing.
+                  // WHOOP look: one switch for WHOOP's colours, rings and
+                  // type; off puts the previous look back.
+                  SetRow(LucideIcons.palette, C.blue, 'WHOOP look',
+                      sub: 'WHOOP’s colours, rings and numbers, measured '
+                          'from its screens. Off brings back your own look',
+                      value: whoopLook ? on : off,
+                      chevron: false,
+                      onTap: onToggleWhoopLook),
                   if (appIcon != null)
                     _IconRow(chosen: appIcon!, onPick: onPickIcon),
                   // Opt-in, and it says what it does rather than what it is

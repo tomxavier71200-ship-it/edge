@@ -1907,7 +1907,18 @@ Widget detailScaffold(BuildContext c, String title, List<Widget> body,
   final p = P.of(c);
   return Scaffold(
     backgroundColor: p.bg,
-    body: SafeArea(
+    // The WHOOP look carries WHOOP's page fade onto detail screens too, as
+    // its own detail screens have (the tabs already draw it — app_shell).
+    body: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: P.skin == Skin.whoop
+            ? LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [p.bgTop, p.bgBottom])
+            : null,
+      ),
+      child: SafeArea(
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: S.x4),
@@ -1929,6 +1940,7 @@ Widget detailScaffold(BuildContext c, String title, List<Widget> body,
               children: body),
         ),
       ]),
+    ),
     ),
   );
 }

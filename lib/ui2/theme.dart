@@ -164,7 +164,11 @@ enum Skin {
   slate('Slate', [0xFF1B2229, 0xFF28313A, 0xFF303A43, 0xFF38424C, 0xFF3B454F, 0xFF2A343D, 0xFF12171C]),
   midnight('Midnight', [0xFF0E1319, 0xFF19202A, 0xFF212935, 0xFF2A3340, 0xFF2C3542, 0xFF18202A, 0xFF06080B]),
   graphite('Graphite', [0xFF1C1C1F, 0xFF28282C, 0xFF313136, 0xFF3A3A40, 0xFF3C3C42, 0xFF2C2C30, 0xFF111113]),
-  ocean('Deep blue', [0xFF0F2031, 0xFF182C40, 0xFF1F3550, 0xFF2A4260, 0xFF2C4563, 0xFF173450, 0xFF07121D]);
+  ocean('Deep blue', [0xFF0F2031, 0xFF182C40, 0xFF1F3550, 0xFF2A4260, 0xFF2C4563, 0xFF173450, 0xFF07121D]),
+  // WHOOP's own, sampled from the owner's WHOOP screenshots (2026-10-10): the
+  // page fades from #242F34 at the top to #0E1313 at the bottom, cards a step
+  // lighter (#262A2D), rows inside them #31373C. The "WHOOP look" switch.
+  whoop('WHOOP', [0xFF191F23, 0xFF262A2D, 0xFF31373C, 0xFF3A3F44, 0xFF3B4046, 0xFF242F34, 0xFF0E1313]);
 
   final String label;
 

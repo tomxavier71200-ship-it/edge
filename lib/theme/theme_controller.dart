@@ -8,6 +8,8 @@
 // "Ember on Char" from the login/signup screen onward. The choice is persisted
 // and editable later from onboarding and Profile; UI updates live on change.
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -120,6 +122,63 @@ class ThemeController extends ChangeNotifier {
     await prefs.setBool(_kRounded, ui2.Look.rounded);
     await prefs.setBool(_kCompact, ui2.Look.compact);
     await prefs.setDouble(_kText, ui2.Look.textScale);
+  }
+
+  static const String _kBeforeWhoop = 'ui.before_whoop';
+
+  /// Profile → Settings → WHOOP look: on while the WHOOP surface family is
+  /// the one in use.
+  bool get whoopLook => ui2.P.skin == ui2.Skin.whoop;
+
+  /// The "WHOOP look" switch. On: remembers the current look, then sets
+  /// WHOOP's surfaces (sampled from its screens), its blue, solid rings,
+  /// condensed numbers, normal spacing and text. Off: puts back exactly the
+  /// look that was there before.
+  Future<void> setWhoopLook(bool on) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (on) {
+      if (whoopLook) return;
+      await prefs.setString(_kBeforeWhoop, jsonEncode({
+        'skin': ui2.P.skin.name,
+        'accent': ui2.P.accentColor.toARGB32(),
+        'ring': ui2.Look.ring.name,
+        'rounded': ui2.Look.rounded,
+        'compact': ui2.Look.compact,
+        'text': ui2.Look.textScale,
+      }));
+      ui2.P.skin = ui2.Skin.whoop;
+      ui2.P.accentColor = ui2.kAccents.first.$2;
+      await prefs.setString(_kSkin, ui2.P.skin.name);
+      await prefs.setInt(_kAccent, ui2.P.accentColor.toARGB32());
+      await setLook(
+          ring: ui2.RingStyle.classic,
+          rounded: false,
+          compact: false,
+          textScale: 1);
+      return;
+    }
+    if (!whoopLook) return;
+    Map<String, dynamic> b = const {};
+    try {
+      b = jsonDecode(prefs.getString(_kBeforeWhoop) ?? '{}')
+          as Map<String, dynamic>;
+    } catch (_) {}
+    final skin = ui2.Skin.values.firstWhere((s) => s.name == b['skin'],
+        orElse: () => ui2.Skin.carbon);
+    ui2.P.skin = skin == ui2.Skin.whoop ? ui2.Skin.carbon : skin;
+    final a = b['accent'];
+    ui2.P.accentColor = a is int && ui2.kAccents.any((k) => k.$2.toARGB32() == a)
+        ? Color(a)
+        : ui2.kAccents.first.$2;
+    await prefs.setString(_kSkin, ui2.P.skin.name);
+    await prefs.setInt(_kAccent, ui2.P.accentColor.toARGB32());
+    await prefs.remove(_kBeforeWhoop);
+    await setLook(
+        ring: ui2.RingStyle.values.firstWhere((r) => r.name == b['ring'],
+            orElse: () => ui2.RingStyle.thin),
+        rounded: b['rounded'] == true,
+        compact: b['compact'] == true,
+        textScale: (b['text'] as num?)?.toDouble() ?? 1);
   }
 
   /// Customize → Reset: every look choice back to the design default.

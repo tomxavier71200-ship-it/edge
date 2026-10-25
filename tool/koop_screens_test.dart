@@ -239,6 +239,9 @@ StressDay _stressDay(int n) {
 }
 
 void main() {
+  // `--dart-define=KOOP_SKIN=whoop`: render in another surface family.
+  P.skin = Skin.values.byName(
+      const String.fromEnvironment('KOOP_SKIN', defaultValue: 'carbon'));
   setUpAll(() async {
     await loadAppFonts();
     // The icon font, under the package-qualified family Flutter asks for.
