@@ -724,6 +724,8 @@ Map<String, Widget> _nutritionAndWellnessCases() {
         onTap: () {}),
     'coach_bubble_empty': CoachBubble(oneLiner: null, onTap: () {}),
     'coach_disc': CoachDisc(onTap: () {}),
+    'whoop_band_badge': const WhoopBandBadge(
+        paired: true, connected: true, battery: (23, false)),
     'health_checks': HealthChecksCard(
         checks: appHealthChecks(
       now: DateTime(2026, 10, 12, 9),

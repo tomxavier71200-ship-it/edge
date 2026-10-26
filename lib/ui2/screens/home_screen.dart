@@ -311,6 +311,60 @@ bool bandConnectedOf(BuildContext c) {
 /// One line under Home's header: which band, whether it is connected, and
 /// its battery. A green dot is a live link; grey is paired but away; orange
 /// is no band at all, and the line becomes the way to pair one.
+/// WHOOP mode's corner badge on Home: the band's battery and a band icon
+/// with a dot — green while connected — as WHOOP's top right shows it.
+/// "--%" before the band has reported a battery. Opens the devices screen.
+class WhoopBandBadge extends StatelessWidget {
+  final bool paired, connected;
+  final (double, bool)? battery;
+  final VoidCallback? onTap;
+
+  const WhoopBandBadge({
+    super.key,
+    required this.paired,
+    required this.connected,
+    this.battery,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final b = battery;
+    final low = b != null && lowBattery(b.$1, b.$2);
+    final dot = !paired
+        ? p.on(C.orange)
+        : connected
+            ? p.on(C.green)
+            : p.ink3;
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: [
+        paired ? (connected ? 'Band connected' : 'Band not connected') : 'No band paired',
+        if (b != null) 'battery ${b.$1.round()} percent',
+      ].join(', '),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(b == null ? '--%' : '${b.$1.round()}%',
+            style: F.label.copyWith(
+                color: low ? p.on(C.red) : p.ink2, fontWeight: FontWeight.w700)),
+        const SizedBox(width: S.x1),
+        Stack(clipBehavior: Clip.none, children: [
+          Icon(LucideIcons.watch, size: 24, color: p.ink),
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+}
+
 class BandStatusLine extends StatelessWidget {
   /// Null when no band is paired.
   final String? band;
@@ -1021,6 +1075,19 @@ class RingTrio extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: S.x4),
         child: Column(
           children: [
+            // WHOOP mode: the thin wide-spaced wordmark over the three rings,
+            // where WHOOP prints its own.
+            if (Look.whoop)
+              Padding(
+                padding: const EdgeInsets.only(bottom: S.x5),
+                child: ExcludeSemantics(
+                  child: Text('KOOP',
+                      style: F.t2.copyWith(
+                          color: p.ink,
+                          fontWeight: FontWeight.w300,
+                          letterSpacing: 8)),
+                ),
+              ),
             // ALWAYS three across, whatever the text size: the row of dials is the
             // shape of this screen. At a large text size the words under each ring
             // shrink to fit their column (see [_RingText]) instead of the trio
@@ -1263,9 +1330,11 @@ class _RingState {
   /// reading, so it is not one.
   bool get measured => why == null && !calibrating;
 
+  // WHOOP mode draws an early estimate in its full colour, as WHOOP's
+  // dial does; the words under it still say it is an early estimate.
   Color arc(P p) => calibrating
       ? p.ink3
-      : early
+      : early && !Look.whoop
           ? p.on(color).withValues(alpha: .5)
           : p.on(color);
   Color ink(P p) => measured ? p.on(color) : p.ink3;
@@ -1520,7 +1589,7 @@ class _Dial extends StatelessWidget {
                     stroke: w,
                     t: t,
                     solid: r.measured,
-                    glow: Look.glow && !r.early,
+                    glow: Look.glow && !r.early && !Look.whoop,
                   ),
           ),
           if (valueInside && r.measured)
@@ -1528,10 +1597,9 @@ class _Dial extends StatelessWidget {
               padding: EdgeInsets.all(stroke * 2),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text(
+                child: _ringNumber(
                   r.n != null && r.fmt != null ? r.fmt!(r.n! * t) : r.value,
-                  maxLines: 1,
-                  style: F.n34.copyWith(color: p.ink),
+                  F.n34.copyWith(color: p.ink),
                 ),
               ),
             )
@@ -1559,8 +1627,10 @@ class _RingColumn extends StatelessWidget {
     semanticLabel: r.spoken,
     child: Column(
       children: [
+        // WHOOP mode: WHOOP's Home rings, measured off its screen — about
+        // 22% of the screen across, the stroke 4% of the ring.
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 112),
+          constraints: BoxConstraints(maxWidth: Look.whoop ? 92 : 112),
           child: AspectRatio(
             aspectRatio: 1,
             // Home's rings fly into their screens; elsewhere (the gallery)
@@ -1568,8 +1638,10 @@ class _RingColumn extends StatelessWidget {
             child: heroes
                 ? RingHero(
                     tag: RingHero.of(r.kind.name),
-                    child: _Dial(r, stroke: 9, icon: 22, valueInside: true))
-                : _Dial(r, stroke: 9, icon: 22, valueInside: true),
+                    child: _Dial(r,
+                        stroke: Look.whoop ? 4 : 9, icon: 22, valueInside: true))
+                : _Dial(r,
+                    stroke: Look.whoop ? 4 : 9, icon: 22, valueInside: true),
           ),
         ),
         const SizedBox(height: S.x3),
@@ -1601,6 +1673,31 @@ class _RingText extends StatelessWidget {
       fit: BoxFit.scaleDown,
       child: Text(s, maxLines: 1, style: st, textAlign: align),
     );
+    // WHOOP mode: "SLEEP ›" in bold ink and nothing under it — except the
+    // words an early, calibrating or missing ring owes its reader.
+    if (Look.whoop) {
+      return Column(crossAxisAlignment: cross, children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(r.label.toUpperCase(),
+                maxLines: 1,
+                style: F.label.copyWith(
+                    color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 2),
+            Icon(LucideIcons.chevronRight, size: 14, color: p.ink2),
+          ]),
+        ),
+        if (!r.measured) ...[
+          const SizedBox(height: S.x1),
+          fit(r.value, F.cap.copyWith(color: p.ink2)),
+        ],
+        if ((r.early || r.calibrating) && r.sub.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          fit(r.sub, F.cap.copyWith(color: p.ink3)),
+        ],
+      ]);
+    }
     return Column(
       crossAxisAlignment: cross,
       children: [
@@ -2555,21 +2652,31 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 ),
                 const SizedBox(width: S.x3),
                 // The battery moved into the band line below; the slot keeps
-                // the day centred.
-                const SizedBox(width: 40),
+                // the day centred. WHOOP mode puts it here, as WHOOP does.
+                if (Look.whoop)
+                  WhoopBandBadge(
+                    paired: bandNameOf(c) != null,
+                    connected: bandConnectedOf(c),
+                    battery: deviceBatteryOf(c),
+                    onTap: () => go(c, const MyDevices()),
+                  )
+                else
+                  const SizedBox(width: 40),
               ],
             ),
           ),
           // ── the band: which one, connected, battery ──
-          Padding(
-            padding: const EdgeInsets.only(top: S.x3),
-            child: BandStatusLine(
-              band: bandNameOf(c),
-              connected: bandConnectedOf(c),
-              battery: deviceBatteryOf(c),
-              onTap: () => go(c, const MyDevices()),
+          // (WHOOP mode: in the corner badge above instead.)
+          if (!Look.whoop)
+            Padding(
+              padding: const EdgeInsets.only(top: S.x3),
+              child: BandStatusLine(
+                band: bandNameOf(c),
+                connected: bandConnectedOf(c),
+                battery: deviceBatteryOf(c),
+                onTap: () => go(c, const MyDevices()),
+              ),
             ),
-          ),
           if (d.whoopNumbers)
             Padding(
               padding: const EdgeInsets.only(top: S.x2),
@@ -2580,6 +2687,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
               ),
             ),
           // ── how far the data reaches · the coach · Customize ──
+          // (Not in WHOOP mode, whose Home has no such line: pull down to
+          // sync, as WHOOP's.)
+          if (!Look.whoop)
           Padding(
             padding: const EdgeInsets.only(bottom: S.x2),
             child: Row(
@@ -3511,5 +3621,18 @@ Widget? coachLine(BuildContext c) {
     oneLiner: b?.oneLiner,
     onTap: () => go(
         c, b == null ? const CoachScreen() : AiBriefingScreen(period: period)),
+  );
+}
+
+/// A Home ring's number. WHOOP mode sets a trailing "%" at about half the
+/// numeral's size, as WHOOP's "77%" is.
+Widget _ringNumber(String n, TextStyle st) {
+  if (!Look.whoop || !n.endsWith('%')) return Text(n, maxLines: 1, style: st);
+  return Text.rich(
+    TextSpan(children: [
+      TextSpan(text: n.substring(0, n.length - 1), style: st),
+      TextSpan(text: '%', style: F.smallPercent(st)),
+    ]),
+    maxLines: 1,
   );
 }

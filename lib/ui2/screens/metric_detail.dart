@@ -2042,6 +2042,52 @@ class DayNav extends StatelessWidget {
 
     // WHOOP's header: the day as a WORD in tracked caps, the date under it.
     final (word, date) = dayNavWords(day);
+    // WHOOP mode: WHOOP's Home pill — "< THU, OCT 15 >" in one line, the
+    // arrows inside it; "TODAY" for today.
+    if (Look.whoop) {
+      Widget a(IconData icon, String label, String? to) => Pressable(
+            onTap: to == null ? null : () => onDay(to),
+            semanticLabel: label,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(icon,
+                  size: 20, color: to == null ? p.ink3 : p.ink),
+            ),
+          );
+      return Container(
+        decoration: BoxDecoration(color: p.card2, borderRadius: R.rPill),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          a(LucideIcons.chevronLeft,
+              l?.metricDetailPreviousDay ?? 'Previous day', older),
+          Flexible(
+            child: Pressable(
+              onTap: () async {
+                final picked = await showDayCalendar(c,
+                    days: days, current: day, colors: colors);
+                if (picked != null && picked != day) onDay(picked);
+              },
+              semanticLabel: l?.metricDetailChooseDayShowing(dayNavLabel(day)) ??
+                  'Choose a day. Showing ${dayNavLabel(day)}',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: S.x3),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(newer == null ? 'TODAY' : date,
+                      maxLines: 1,
+                      style: F.label.copyWith(
+                          color: p.ink,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ),
+          ),
+          a(LucideIcons.chevronRight, l?.metricDetailNextDay ?? 'Next day',
+              newer),
+        ]),
+      );
+    }
     return Row(children: [
       arrow(LucideIcons.chevronLeft, l?.metricDetailPreviousDay ?? 'Previous day',
           older),

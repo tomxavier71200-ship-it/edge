@@ -558,6 +558,9 @@ class F {
   static TextStyle heroFor(double dial) =>
       hero.copyWith(
           fontSize: dial * .29 * (Look.rounded && !Look.whoop ? .8 : 1));
+  /// A trailing "%" at about half its numeral's size, WHOOP's "77%".
+  static TextStyle smallPercent(TextStyle n) =>
+      n.copyWith(fontSize: n.fontSize! * .55);
   static TextStyle dialMark(double dial) => head.copyWith(fontSize: dial * .062);
   static TextStyle dialLabel(double dial) => over.copyWith(fontSize: dial * .048);
 
