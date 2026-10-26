@@ -42,7 +42,11 @@ import 'hr_max.dart'
 import 'night_hrv.dart' show weightedNightRmssd;
 import 'quiet_level.dart' show personalQuietHrr;
 import 'whoop_calibration.dart'
-    show calibratedRecoveryParts, calibratedSleepPerformance;
+    show
+        calibratedRecoveryParts,
+        calibratedSleepPerformance,
+        whoopDayStrain,
+        whoopStrainLoadPerMin;
 import 'profile.dart' show workoutSex;
 import 'step_cadence.dart' show cadenceSpmForMinutes;
 // Same argument: a pure `DateTime` lookup, no DB / IO / Flutter binding. It is
@@ -1021,7 +1025,7 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // baseline; raw TRIMP kept as a detail. `perMin` is the wake window the TRIMP
   // was accumulated over, so it sets the baseline that gets subtracted.
   final rawTrimp = trimp.present ? trimp.value : null;
-  final strainMetric = strainScoreMetric(
+  final koopStrainMetric = strainScoreMetric(
     rawTrimp,
     wakeMinutes: perMin.isEmpty ? null : perMin.length.toDouble(),
     // THE REFERENCE LEVEL, NOT THIS USER'S (edge#226 is still open). analytics
@@ -1037,6 +1041,22 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
     quietHrr: quietHrr,
     female: workoutSex(sex) == 'female',
   );
+  // WHOOP-MATCHED DAY STRAIN (whoop_calibration.dart, the owner's choice,
+  // v112): minutes in WHOOP's own zones plus the cost of a worn day, fitted to
+  // the owner's export. It takes the score only where Koop's own scorer was
+  // allowed to score — same anchors, same gates — so an absent strain stays
+  // absent. The Banister TRIMP stays as the detail (`trimp`).
+  final whoopLoad = _whoopStrainLoad(wakeHr, rhrForTrimp, hrMax);
+  final strainMetric = !koopStrainMetric.present || whoopLoad == null
+      ? koopStrainMetric
+      : Metric<double>(
+          value: whoopDayStrain(load: whoopLoad, wornMin: wornMin.toDouble()),
+          confidence: koopStrainMetric.confidence,
+          tier: koopStrainMetric.tier,
+          inputs_used: const ['hr_1hz', 'resting_hr', 'max_hr', 'worn_min'],
+          note: 'WHOOP-matched day strain: minutes in WHOOP heart-rate zones '
+              '(40/60/70/80/90 % of reserve) plus the cost of a worn day',
+        );
 
   // ── curve series for the UI ────────────────────────────────────────────────
   final hrCurve = _downsampleHr(d.dayTsSec, d.dayHr);
@@ -1064,13 +1084,15 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // the wall-clock instant that clock starts at, the same `hrvOriginMs` the
   // timeline above is placed on.
   final nightShape = nightHrvShape(nn, nnTimes);
-  final strainCurve = _strainCurve(
-    wakeHr,
-    restingHr: rhrForTrimp,
-    maxHr: hrMax,
-    sex: sex,
-    quietHrr: quietHrr,
-  );
+  final strainCurve = strainMetric == koopStrainMetric
+      ? _strainCurve(
+          wakeHr,
+          restingHr: rhrForTrimp,
+          maxHr: hrMax,
+          sex: sex,
+          quietHrr: quietHrr,
+        )
+      : _whoopStrainCurve(wakeHr, rhrForTrimp, hrMax, wornMin.toDouble());
   final zoneTimeline = zoneSet == null
       ? const <Map<String, num>>[]
       : _zoneTimeline(wakeHr, zoneSet);
@@ -1917,6 +1939,41 @@ List<Map<String, num>> _zoneTimeline(
     if (best == null || m < best.bpm) best = (bpm: m, tsSec: e.key * 60);
   }
   return best;
+}
+
+/// The day's WHOOP zone load over its wake minutes, or null without anchors.
+double? _whoopStrainLoad(
+    List<_WakeMinuteHr> wakeHr, double? restingHr, double? maxHr) {
+  if (wakeHr.isEmpty) return null;
+  var load = 0.0;
+  for (final p in wakeHr) {
+    final w = whoopStrainLoadPerMin(p.hr, restingHr, maxHr);
+    if (w == null) return null;
+    load += w;
+  }
+  return load;
+}
+
+/// The WHOOP-matched strain through the day, on the headline's own formula:
+/// the zone load so far, and the worn-day share accruing evenly across the
+/// wake minutes so the last point IS the headline.
+List<Map<String, num>> _whoopStrainCurve(List<_WakeMinuteHr> wakeHr,
+    double? restingHr, double? maxHr, double wornMin) {
+  final out = <Map<String, num>>[];
+  var load = 0.0;
+  for (var i = 0; i < wakeHr.length; i++) {
+    final w = whoopStrainLoadPerMin(wakeHr[i].hr, restingHr, maxHr);
+    if (w == null) return const [];
+    load += w;
+    out.add({
+      't': wakeHr[i].tsSec,
+      'v': _round(
+          whoopDayStrain(
+              load: load, wornMin: wornMin * (i + 1) / wakeHr.length),
+          2),
+    });
+  }
+  return out;
 }
 
 List<Map<String, num>> _strainCurve(

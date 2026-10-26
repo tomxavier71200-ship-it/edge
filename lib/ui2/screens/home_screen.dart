@@ -1421,9 +1421,12 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
     case HomeRingKind.sleep:
       final v = d.sleepMin.value;
       final need = d.sleepNeedMin.value;
-      // A past day has no live need, but may have its own stored performance.
+      // ONE sleep performance: the stored, WHOOP-matched one (hours vs. last
+      // night's need, plus consistency) whenever the day has it — the same
+      // number the Sleep screen and the trends show. The ring used to divide
+      // by tonight's need itself and printed 93% beside a stored 100%.
       final perf = d.sleepPerf.value;
-      if (v != null && (need == null || need <= 0) && perf != null) {
+      if (v != null && perf != null) {
         return _RingState(
           k,
           l?.homeRingSleep ?? 'Sleep',

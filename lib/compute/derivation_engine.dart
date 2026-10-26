@@ -60,6 +60,7 @@ import 'derive_prepare.dart';
 import 'onehz_pipeline.dart';
 import 'step_cadence.dart';
 import 'profile.dart';
+import 'bout_trim.dart' show trimGaitEdges;
 import 'quiet_level.dart' show personalQuietHrr;
 import 'substrate.dart';
 import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
@@ -1831,7 +1832,18 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // Stress Monitor's line is near-continuous like WHOOP's; each bin carries
 // its length (`sec`) and readers count minutes, not bins (an hour still
 // gates a level). Same score formula. kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 111;
+//
+// v112 (2026-10-26) — the owner's data audit:
+//   * DAY STRAIN is WHOOP-matched (whoop_calibration.whoopDayStrain): minutes
+//     in WHOOP's own zones (40/60/70/80/90 % HRR) plus the cost of a worn day,
+//     fitted to the owner's export. The old score subtracted ordinary living
+//     and gave a 14 h waking day 0.05; WHOOP's quietest day was 4.0.
+//   * SLEEP CONSISTENCY counts every worn minute (awake unless asleep), not
+//     just minutes inside a sleep segment — that compared sleep with sleep and
+//     read 96–100 % on nights WHOOP put at 36–56 %, pinning sleep performance
+//     at 100. None before four nights (WHOOP's floor).
+// Both move stored scalars, so every day re-derives. kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 112;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -8451,6 +8463,50 @@ class DerivationEngine {
     );
   }
 
+  /// [b] with walking-pace minutes trimmed off its edges, avg/peak HR and
+  /// duration recomputed over what is left — or [b] itself when the band has
+  /// no step counter, the bout is a walk or run, or nothing needs trimming.
+  static ana.DetectedWorkout _trimGaitEdges(Substrate s, ana.DetectedWorkout b) {
+    final minutes = ((b.endSec - b.startSec) / 60).ceil();
+    if (minutes <= 0) return b;
+    final first = List<int?>.filled(minutes, null);
+    final last = List<int?>.filled(minutes, null);
+    for (var i = 0; i < s.length; i++) {
+      final t = s.tsSec[i];
+      if (t < b.startSec || t >= b.endSec) continue;
+      final c = s.stepCounterAt(i);
+      if (c == null) continue;
+      final m = (t - b.startSec) ~/ 60;
+      first[m] ??= c;
+      last[m] = c;
+    }
+    final spm = [
+      for (var m = 0; m < minutes; m++)
+        first[m] == null ? null : (last[m]! - first[m]!) % 65536,
+    ];
+    final cut = trimGaitEdges(spm);
+    if (cut == null) return b;
+    final start = b.startSec + cut.first * 60;
+    final end = math.min(b.endSec, b.startSec + cut.end * 60);
+    var sum = 0, n = 0, peak = 0;
+    for (var i = 0; i < s.length; i++) {
+      final t = s.tsSec[i];
+      if (t < start || t >= end || s.hr[i] <= 0) continue;
+      sum += s.hr[i];
+      n++;
+      if (s.hr[i] > peak) peak = s.hr[i];
+    }
+    if (n == 0) return b;
+    return ana.DetectedWorkout(
+      startSec: start,
+      endSec: end,
+      avgBpm: (sum / n).round(),
+      peakBpm: peak,
+      durationMin: ((end - start) / 60).round(),
+      sport: b.sport,
+    );
+  }
+
   /// PURE compute half of workout SUGGESTIONS (`autoDetectWorkouts`) + HRR.
   ///
   /// Runs inside the day-blocks isolate: one detector pass over the day's 1 Hz HR
@@ -8510,7 +8566,7 @@ class DerivationEngine {
       // can't compute a trustworthy %HRR floor and ordinary daytime HR reads as a
       // workout. If we don't have a nightly RHR for this day yet, skip detection
       // entirely (HRR for already-saved sessions below still runs).
-      final bouts = rhr == null
+      final detected = rhr == null
           ? const <ana.DetectedWorkout>[]
           : (ana.autoDetectWorkouts(
                 hrTs: hrTs,
@@ -8521,6 +8577,9 @@ class DerivationEngine {
                 savedSpans: savedSpans,
               ).value ??
               const <ana.DetectedWorkout>[]);
+      // Walking minutes at a bout's edges are not the bout (bout_trim.dart):
+      // the detector follows heart rate, which stays up on the walk home.
+      final bouts = [for (final b in detected) _trimGaitEdges(s, b)];
 
       // HRR per bout from the per-second HR tail bracketing each bout end.
       final drops = <double>[];

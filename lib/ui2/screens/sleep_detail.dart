@@ -723,21 +723,22 @@ class _SleepDetailState extends State<SleepDetail> {
     ];
   }
 
-  /// Sleep performance for the night on screen: time asleep over TODAY's
-  /// computed need for the newest night only (the need moves with debt and
-  /// strain, so dividing an older night by it would score that night against
-  /// a need it never had). An older night uses the performance stored on its
-  /// own day. Null when neither exists.
+  /// Sleep performance for the night on screen: the performance stored on
+  /// its own day, and only for a newest night with none stored yet, time
+  /// asleep over TODAY's computed need. Null when neither exists.
   double? _perfOf(SleepData d, Map<String, dynamic> n) {
+    // ONE sleep performance: the stored, WHOOP-matched one for this night
+    // whenever it exists (Home and the trends show the same number). Only a
+    // newest night not yet scored falls back to slept ÷ need.
+    final noon = _noonOf(d.day);
+    for (final pt in d.trends['sleep_perf'] ?? const <ChartPoint>[]) {
+      if (pt.t == noon) return pt.v;
+    }
     final tst = (n['duration_min'] as num?)?.toDouble();
     final need = d.need.value?.toDouble();
     final newest = d.days.isEmpty || d.day == d.days.first;
     if (newest) {
       return tst != null && need != null && need > 0 ? tst / need * 100 : null;
-    }
-    final noon = _noonOf(d.day);
-    for (final pt in d.trends['sleep_perf'] ?? const <ChartPoint>[]) {
-      if (pt.t == noon) return pt.v;
     }
     return null;
   }

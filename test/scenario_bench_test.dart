@@ -363,16 +363,19 @@ void main() {
     expect(sc(busy(days))['strain'] as num, greaterThan(1));
   });
 
-  test('a restless nothing-day is not billed strain against its own level', () {
-    // Waking HR 92 — ordinary living above the 0.20 reference.
+  test("a restless nothing-day scores WHOOP's quiet day, not a workout", () {
+    // Waking HR 92 — ordinary living, never reaching WHOOP's zone 1 (40 %
+    // HRR). WHOOP-matched day strain (v112) bills it the cost of a worn day
+    // only: WHOOP's own quietest day was 4.0. The old quiet-level subtraction
+    // no longer moves the number, so a personal level changes nothing.
     final scene = Scene(start: start, wakeHr: 92, workoutFrom: 0, workoutTo: 0);
     final ref = sc(busy(derive(scene)))['strain'] as num;
     final q = sc(busy(derive(scene)))['quiet_hrr'] as num;
     final own = sc(busy(derive(scene, quiet: List.filled(10, q.toDouble()))))['strain'] as num;
     // ignore: avoid_print
     print('nothing-day strain: reference $ref, personal $own (quiet $q)');
-    expect(own, lessThan(ref));
-    expect(own, lessThan(2));
+    expect(own, closeTo(ref, 1e-9));
+    expect(own, lessThan(4.5));
   });
 
   test('no night worn: no resting HR, no HRV, no readiness', () {

@@ -1045,15 +1045,48 @@ bool _isNextDay(String a, String b) {
 /// the day's hypnogram (stage != 'wake' within [onset,wake] => asleep; minutes
 /// with no hypnogram coverage => valid=false), concatenate across days, then run
 /// the true Phillips SRI. If too few covered days, the package returns absent.
+/// Nights the sleep-consistency index needs — WHOOP shows none before four.
+const int kSriMinNights = 4;
+
 ana.Metric<ana.SriResult> _crossDaySri(List<Map<String, dynamic>> days) {
   const epochsPerDay = 1440; // 1-minute epochs over 24 h
   final sleepWake = <bool>[];
   final valid = <bool>[];
+  var nights = 0;
+
+  // Mark [start, end) (epoch seconds) on a clock-minute grid, wrapping past
+  // local midnight rather than dropping the segment.
+  void mark(List<bool> grid, double start, double end) {
+    final startMin = _localTodMin(start.round()).floor();
+    final endMinRaw = _localTodMin(end.round()).ceil();
+    final endMin = endMinRaw < startMin ? endMinRaw + epochsPerDay : endMinRaw;
+    final span = math.min(endMin - startMin, epochsPerDay);
+    for (var k = 0; k < span; k++) {
+      grid[(startMin + k) % epochsPerDay] = true;
+    }
+  }
 
   for (final d in days) {
     // Fresh blank day grid (all wake, all invalid until covered).
     final asleep = List<bool>.filled(epochsPerDay, false);
     final cov = List<bool>.filled(epochsPerDay, false);
+
+    // EVERY WORN MINUTE IS OBSERVED, AWAKE UNLESS A SLEEP SEGMENT SAYS
+    // OTHERWISE. Covering only the hypnogram's own minutes made the index
+    // compare sleep with sleep: a minute asleep one night and awake the next
+    // was dropped as unobserved instead of counted as the mismatch it is, so
+    // a run of nights at 23:30, 05:00, 03:00 and 02:30 scored 96–100 % — and
+    // sleep performance, which adds consistency in, sat at its 100 cap.
+    final wear = d['wear'];
+    final segs = wear is Map ? wear['segments'] : null;
+    if (segs is List) {
+      for (final seg in segs) {
+        if (seg is! Map || seg['on'] != true) continue;
+        final start = (seg['start'] as num?)?.toDouble();
+        final end = (seg['end'] as num?)?.toDouble();
+        if (start != null && end != null && end > start) mark(cov, start, end);
+      }
+    }
 
     final hyp = d['hypnogram'];
     if (hyp is List) {
@@ -1090,8 +1123,19 @@ ana.Metric<ana.SriResult> _crossDaySri(List<Map<String, dynamic>> days) {
         }
       }
     }
+    if (asleep.contains(true)) nights++;
     sleepWake.addAll(asleep);
     valid.addAll(cov);
+  }
+
+  // WHOOP's own floor: consistency needs four nights. Under that, a night is
+  // mostly compared with itself and the index is meaningless.
+  if (nights < kSriMinNights) {
+    return ana.Metric<ana.SriResult>.absent(
+      tier: ana.Tier.estimate,
+      inputs_used: const ['hypnogram', 'wear'],
+      note: ana.needBaselineNote(have: nights, need: kSriMinNights),
+    );
   }
 
   // SLP-08's per-pair floor. The analytics default is half a clock day (720

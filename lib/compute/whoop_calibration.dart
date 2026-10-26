@@ -28,6 +28,20 @@
 //                 error worse (8.0) and is weighted 0. The previous
 //                 constants (60.67/9.00/2.32/2.07/9.73) were fitted against a
 //                 whole-period baseline and score 10.4 under this honest one.
+//   DAY STRAIN (applied 2026-10-26, kAlgoVersion 112) — the same curve, refit
+//   on the 2026-10-21 export's 40 scored workouts (LOO 0.22):
+//                 strain = 4.122·min(1, worn/24 h) + 17.079·ln(1 + load/193.5)
+//                 load = Σ minutes in WHOOP's zone k × 2^(k−1), the zones at
+//                 40/60/70/80/90 % of heart-rate reserve (WHOOP's own).
+//                 The 4.1 is WHOOP's "cost of a worn day": its quietest day in
+//                 the export (max HR 109, never reaching zone 1) scored 4.0.
+//                 It accrues with wear so a morning does not open at 4.
+//                 Checked on the owner's own Koop days: 24 Oct (avg/max HR
+//                 71/125) → 6.8 against a WHOOP day at 71/126 → 7.8; 25 Oct
+//                 (76/112) → 4.6 against WHOOP 69/109 → 4.0. The old score
+//                 subtracted ordinary living and put 25 Oct at 0.05.
+//                 SAME CAVEAT AS BELOW: zone 4–5 weights are unmeasured, so a
+//                 long hard session may score high; capped at 21.
 //   NOT APPLIED — workout strain = 4.06 + 14.73·ln(1 + load/160),
 //                 load = Σ minutes in HR zone k × 2^(k−1), LOO 0.20 on the
 //                 export's 48 workouts (strain 4.2–11.8). Those held ONE minute
@@ -41,6 +55,8 @@
 // only replaces the composite on a night the composite itself was allowed to
 // score — every baseline and z-cap gate still applies — and only when last
 // night's sleep performance is known.
+
+import 'dart:math' as math;
 
 import 'package:openstrap_analytics/onehz.dart' show robustZ;
 
@@ -212,5 +228,37 @@ double whoopSleepNeedMin({
   final s = strain.clamp(0.0, 21.0);
   return (baselineMin + debtMin + kNeedStrainSq * s * s - napMin)
       .clamp(6 * 60.0, 11 * 60.0)
+      .toDouble();
+}
+
+
+// ── DAY STRAIN, WHOOP-matched ─────────────────────────────────────────────────
+
+const double kStrainWornDay = 4.122;
+const double kStrainScale = 17.079;
+const double kStrainLoadK = 193.494;
+
+/// WHOOP's zone floors as fractions of heart-rate reserve (zone 1..5).
+const List<double> kStrainZoneFloors = [.4, .6, .7, .8, .9];
+
+/// One minute at [hr]: its strain load, 2^(zone−1) in zones 1–5, 0 below
+/// zone 1. Null when the anchors cannot define a reserve.
+double? whoopStrainLoadPerMin(double hr, double? restingHr, double? maxHr) {
+  if (restingHr == null || maxHr == null || !(maxHr > restingHr)) return null;
+  if (!hr.isFinite || hr <= 0) return 0;
+  final hrr = (hr - restingHr) / (maxHr - restingHr);
+  var w = 0.0;
+  for (var z = 0; z < kStrainZoneFloors.length; z++) {
+    if (hrr >= kStrainZoneFloors[z]) w = (1 << z).toDouble();
+  }
+  return w;
+}
+
+/// The day's WHOOP-matched strain (0–21) from its zone [load] and the minutes
+/// the band was worn. See the file header for the fit.
+double whoopDayStrain({required double load, required double wornMin}) {
+  final worn = (wornMin / (24 * 60)).clamp(0.0, 1.0);
+  return (kStrainWornDay * worn + kStrainScale * math.log(1 + load / kStrainLoadK))
+      .clamp(0.0, 21.0)
       .toDouble();
 }
