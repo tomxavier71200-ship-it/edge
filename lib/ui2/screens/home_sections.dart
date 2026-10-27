@@ -539,7 +539,7 @@ Widget yourDayCard(BuildContext c, HomeData d) {
           strain?.toStringAsFixed(1) ?? '—',
           hhmm(start),
           end == null ? '' : hhmm(end),
-          () => go(c, DayStrainDetail(day: past)),
+          () => go(c, DayStrainDetail(day: past ?? d.cycleDay)),
           // WHOOP's "Edit activity": the sport and the times, right here
           // instead of three screens deep. Not for a live session: it has
           // no end to edit yet.

@@ -63,7 +63,8 @@ import 'profile.dart';
 import 'bout_trim.dart' show trimGaitEdges;
 import 'quiet_level.dart' show personalQuietHrr;
 import 'substrate.dart';
-import 'whoop_calibration.dart' show whoopDayStrain, whoopStrainLoad;
+import 'whoop_calibration.dart'
+    show whoopDayStrain, whoopStrainCurve, whoopStrainLoad;
 import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 
 /// Analytics/bundle version — bump to force a recompute of non-finalized days.
@@ -1852,6 +1853,10 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // cross-day record never carried `wear`, so consistency still compared
 // sleep with sleep (94.9 %). Both now go through the same code
 // (whoop_calibration.whoopStrainLoad; `_crossDayRecord` carries `wear`).
+// The Strain screen's line and `clinical.strain` now come from the same
+// recompute as the scalar. New scalars: `strain_load` (the zone load under
+// the strain) and `cycle_strain` (WHOOP's day, which runs until the next
+// sleep: a day with no night of its own scored with the day before it).
 // kAnalyticsPin UNCHANGED.
 const int kAlgoVersion = 113;
 
@@ -4804,6 +4809,31 @@ class DerivationEngine {
               'No sleep recorded last night; scored against your resting heart '
               'rate of ${(c['value'] as num).round()} bpm from ${c['date']}.';
         }
+      } else if (scMap != null && scMap['strain'] is num) {
+        // Both halves scored, each off its own inputs: the envelope takes the
+        // scalar every surface reads. v112 left them at 4.14 and 0.05 on the
+        // same day.
+        final strainEnv = (bundle['clinical'] as Map?)?['strain'];
+        if (strainEnv is Map) strainEnv['value'] = scMap['strain'];
+      }
+
+      // WHOOP'S DAY RUNS UNTIL THE NEXT SLEEP. A day with no night of its own
+      // (still up at 03:00, or the band off overnight) is still the cycle that
+      // began the day before, so its strain is both days' zone minutes on the
+      // one formula, worn time capped at a day. Approximate at one edge: the
+      // day before's minutes before ITS night belong to the cycle before.
+      // Null on a day with its own night, so a value from earlier in the day
+      // cannot outlive the night that ended the cycle.
+      if (scMap != null) {
+        final d0 = DateTime.parse(day.date);
+        final prev = dayLabelOf(DateTime(d0.year, d0.month, d0.day - 1));
+        scMap['cycle_strain'] = cycleStrain(
+          tstMin: scMap['tst_min'] as num?,
+          load: scMap['strain_load'] as num?,
+          wornMin: scMap['worn_min'] as num?,
+          prevLoad: await LocalDb.metricValueOn(prev, 'strain_load'),
+          prevWornMin: await LocalDb.metricValueOn(prev, 'worn_min'),
+        );
       }
 
       // DB writes + notification the pure compute deferred to us (DB-owning isolate).
@@ -4976,6 +5006,10 @@ class DerivationEngine {
         // previous version's daytime-RHR strain left behind, not keep it.
         'strain': sc('strain'),
         'trimp': sc('trimp'),
+        // The zone load under the strain, and the strain of the cycle still
+        // running on a day with no night of its own (see `cycle_strain`).
+        'strain_load': sc('strain_load'),
+        'cycle_strain': sc('cycle_strain'),
         // `strain_effort`, `spo2` and `odi_per_hour` used to be listed here.
         // Nothing in the tree ever produced them (12 rows, 0 values per key on
         // a real install), so they were three permanently-null series with a
@@ -5810,6 +5844,30 @@ class DerivationEngine {
   static Map<String, dynamic>? _decodeBundle(Object? json) =>
       SeriesCodec.decodePayloadJson(json);
 
+  /// The strain of the WHOOP cycle still running on a day with no night of
+  /// its own ([tstMin] null): this day's zone load and the day before's, on
+  /// the one formula, worn time capped at a day. Null on a day with its own
+  /// night, or when either day has no load to add.
+  @visibleForTesting
+  static double? cycleStrain({
+    required num? tstMin,
+    required num? load,
+    required num? wornMin,
+    required num? prevLoad,
+    required num? prevWornMin,
+  }) {
+    if (tstMin != null ||
+        load == null ||
+        wornMin == null ||
+        prevLoad == null ||
+        prevWornMin == null) {
+      return null;
+    }
+    return whoopDayStrain(
+        load: (prevLoad + load).toDouble(),
+        wornMin: math.min(24 * 60, prevWornMin + wornMin).toDouble());
+  }
+
   /// [_crossDayRecord], for tests.
   @visibleForTesting
   static Map<String, dynamic>? crossDayRecord(
@@ -6403,6 +6461,7 @@ class DerivationEngine {
     // a daytime "resting" HR, and `if (strain != null)` kept exactly those.
     final strain = (wake['strain'] as num?)?.toDouble();
     scMap?['strain'] = strain;
+    scMap?['strain_load'] = (wake['strain_load'] as num?)?.toDouble();
     final calories = (wake['calories'] as num?)?.toDouble();
     if (calories != null) scMap?['calories'] = calories;
     final steps = (wake['steps'] as num?)?.toDouble();
@@ -6896,6 +6955,12 @@ class DerivationEngine {
     final hrMax = estimatedMaxHr(profile.ageYears, daySub.deviceFamily);
     final rhrForTrimp = restingHr ?? profile.restingHrManual?.toDouble();
     double? strain;
+    // The curve under [strain], when it is the WHOOP-matched one — so the
+    // Strain screen's line ends on the headline it sits under.
+    List<Map<String, num>>? strainCurve;
+    // The zone load under [strain], kept so a day with no night of its own
+    // can be scored together with the day before it (`cycle_strain`).
+    double? strainLoad;
     // Why each absent activity figure is absent, in the order the gates below
     // apply. Absence is never a bare nothing here: the day carries its own
     // reason PER FIGURE so every caller can say what is missing instead of
@@ -6996,6 +7061,15 @@ class DerivationEngine {
             strain = load == null || worn == null
                 ? score.value
                 : whoopDayStrain(load: load, wornMin: worn);
+            if (load != null && worn != null) {
+              strainLoad = load;
+              strainCurve = whoopStrainCurve(
+                  [for (final k in wakeSeries.keys) k * 60],
+                  perMin,
+                  rhrForTrimp,
+                  hrMax,
+                  worn);
+            }
           }
         }
         // Every named input was there and the scorer still abstained. We do not
@@ -7080,6 +7154,8 @@ class DerivationEngine {
       'active_min': activeMin,
       'movement_min': movementMin,
       'strain': strain,
+      'strain_curve': strainCurve,
+      'strain_load': strainLoad,
       // Machine-readable reason `strain` is null (see `strainAbsent`). Null
       // when a strain WAS produced.
       'strain_absent': strain == null ? strainAbsent : null,
@@ -8369,6 +8445,12 @@ class DerivationEngine {
     );
 
     bundlePatch['daytime_hrv'] = _daytimeHrv(daySub, onset, offset);
+    // ONE STRAIN. The pipeline drew its own curve off its own resting HR; the
+    // headline is this recompute's (a carried night's RHR when today has
+    // none), so the line it sits on comes from here too.
+    if (wake['strain_curve'] case final List<Map<String, num>> c) {
+      seriesPatch['strain_curve'] = c;
+    }
     seriesPatch['hrv_day'] = dayHrvCurve(daySub);
     seriesPatch['resp_day'] = dayRespCurve(daySub);
     seriesPatch['skin_temp_day'] = _daySkinTempCurve(daySub);

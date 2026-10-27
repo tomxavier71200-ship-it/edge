@@ -46,8 +46,8 @@ import 'whoop_calibration.dart'
         calibratedRecoveryParts,
         calibratedSleepPerformance,
         whoopDayStrain,
-        whoopStrainLoad,
-        whoopStrainLoadPerMin;
+        whoopStrainCurve,
+        whoopStrainLoad;
 import 'profile.dart' show workoutSex;
 import 'step_cadence.dart' show cadenceSpmForMinutes;
 // Same argument: a pure `DateTime` lookup, no DB / IO / Flutter binding. It is
@@ -1094,7 +1094,8 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
           sex: sex,
           quietHrr: quietHrr,
         )
-      : _whoopStrainCurve(wakeHr, rhrForTrimp, hrMax, wornMin.toDouble());
+      : whoopStrainCurve([for (final p in wakeHr) p.tsSec],
+          [for (final p in wakeHr) p.hr], rhrForTrimp, hrMax, wornMin.toDouble());
   final zoneTimeline = zoneSet == null
       ? const <Map<String, num>>[]
       : _zoneTimeline(wakeHr, zoneSet);
@@ -1941,28 +1942,6 @@ List<Map<String, num>> _zoneTimeline(
     if (best == null || m < best.bpm) best = (bpm: m, tsSec: e.key * 60);
   }
   return best;
-}
-
-/// The WHOOP-matched strain through the day, on the headline's own formula:
-/// the zone load so far, and the worn-day share accruing evenly across the
-/// wake minutes so the last point IS the headline.
-List<Map<String, num>> _whoopStrainCurve(List<_WakeMinuteHr> wakeHr,
-    double? restingHr, double? maxHr, double wornMin) {
-  final out = <Map<String, num>>[];
-  var load = 0.0;
-  for (var i = 0; i < wakeHr.length; i++) {
-    final w = whoopStrainLoadPerMin(wakeHr[i].hr, restingHr, maxHr);
-    if (w == null) return const [];
-    load += w;
-    out.add({
-      't': wakeHr[i].tsSec,
-      'v': _round(
-          whoopDayStrain(
-              load: load, wornMin: wornMin * (i + 1) / wakeHr.length),
-          2),
-    });
-  }
-  return out;
 }
 
 List<Map<String, num>> _strainCurve(

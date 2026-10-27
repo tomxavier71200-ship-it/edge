@@ -467,6 +467,12 @@ class LocalRepositoryImpl extends LocalRepository {
         'ESTIMATE',
         note: activityNote('strain'),
       ),
+      // WHOOP's day: the strain of the cycle still running before today has
+      // a night of its own (the engine's `cycle_strain`).
+      'cycle_strain': _scalarMetric(
+        activityBundle == null ? null : _scalar(activityBundle, 'cycle_strain'),
+        'ESTIMATE',
+      ),
       'wear_min': _scalarMetric(
         activityBundle == null
             ? (wakeFeatures?['wear_min'] as num?)?.toDouble()

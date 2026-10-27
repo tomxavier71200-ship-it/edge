@@ -1784,6 +1784,10 @@ class HomeData {
   /// The day the switcher stepped back to, or null for today's own load —
   /// [dayId] alone cannot say: today's may be the day still being served.
   final String? pastDay;
+
+  /// The day the running WHOOP cycle began on, when [strain] is that cycle's
+  /// (today has no night of its own yet); null when it is today's own.
+  final String? cycleDay;
   final Metric readiness;
 
   /// The early readiness estimate (4+ nights of baseline), present only
@@ -1855,6 +1859,7 @@ class HomeData {
     this.name,
     this.dayId,
     this.pastDay,
+    this.cycleDay,
     this.readiness = Metric.empty,
     this.readinessEarly = Metric.empty,
     this.readinessRough = Metric.empty,
@@ -1902,6 +1907,8 @@ class HomeData {
     bedtime: bedtime,
     strainTarget: strainTarget,
     heldOverNight: heldOverNight,
+    pastDay: pastDay,
+    cycleDay: cycleDay,
     illnessState: state,
     illnessDay: day,
     illnessZ: z,
@@ -2044,12 +2051,33 @@ class HomeData {
       timeline = await repo.getDayTimeline(todayLabel());
     } catch (_) {}
 
+    // WHOOP'S DAY RUNS UNTIL THE NEXT SLEEP. Before today has a night of its
+    // own, the cycle that began with the held-over night is still today:
+    // its strain is the engine's `cycle_strain`, and My Day lists that
+    // night and everything since — not an empty list at 03:00.
+    final cycleStrain = metricOf(d('cycle_strain'));
+    final inCycle = heldOver != null && heldOver != todayLabel();
+    if (inCycle) {
+      try {
+        final held = await repo.getDayTimeline(heldOver);
+        timeline = {
+          'date': todayLabel(),
+          'sleep': held['sleep'] ?? const [],
+          'sessions': [
+            ...(held['sessions'] as List? ?? const []),
+            ...(timeline['sessions'] as List? ?? const []),
+          ],
+        };
+      } catch (_) {}
+    }
+
     return HomeData(
       series: series,
       timeline: timeline,
       name: profile['name']?.toString(),
       dayId: (today['status'] as Map?)?['today_day']?.toString(),
       heldOverNight: heldOver,
+      cycleDay: inCycle && cycleStrain.value != null ? heldOver : null,
       illnessState: illness is Map ? illness['state']?.toString() : null,
       illnessDay: illness is Map ? illness['date']?.toString() : null,
       illnessZ: illness is Map ? (illness['z'] as num?)?.toDouble() : null,
@@ -2064,7 +2092,9 @@ class HomeData {
         for (final e in (gbDrivers is List ? gbDrivers : const []))
           if (e is Map) e.cast<String, dynamic>(),
       ],
-      strain: metricOf(d('strain')),
+      strain: inCycle && cycleStrain.value != null
+          ? cycleStrain
+          : metricOf(d('strain')),
       sleepMin: overnightMetric(today, s('duration_min'), l),
       sleepPerf: sleepPerf,
       rhr: overnightMetric(today, d('resting_hr'), l),
@@ -2270,7 +2300,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     go(c, switch (k) {
       HomeRingKind.recovery =>
         past == null ? const ReadinessDetail() : const MetricDetail('readiness'),
-      HomeRingKind.strain => DayStrainDetail(day: past),
+      // The cycle still running is the held-over day's (see [HomeData.cycleDay]).
+      HomeRingKind.strain => DayStrainDetail(day: past ?? _d?.cycleDay),
       HomeRingKind.sleep => SleepDetail(day: past),
     });
   }

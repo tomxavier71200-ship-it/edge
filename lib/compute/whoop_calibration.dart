@@ -270,6 +270,25 @@ double? whoopStrainLoad(
   return load;
 }
 
+/// The WHOOP-matched strain through the day, one point per wake minute
+/// ([tsSec], [hrPerMin]): the zone load so far, and the worn-day share
+/// accruing evenly across the minutes so the last point IS the headline.
+/// Empty when the anchors cannot define a reserve.
+List<Map<String, num>> whoopStrainCurve(List<int> tsSec, List<double> hrPerMin,
+    double? restingHr, double? maxHr, double wornMin) {
+  final n = math.min(tsSec.length, hrPerMin.length);
+  final out = <Map<String, num>>[];
+  var load = 0.0;
+  for (var i = 0; i < n; i++) {
+    final w = whoopStrainLoadPerMin(hrPerMin[i], restingHr, maxHr);
+    if (w == null) return const [];
+    load += w;
+    final v = whoopDayStrain(load: load, wornMin: wornMin * (i + 1) / n);
+    out.add({'t': tsSec[i], 'v': (v * 100).round() / 100});
+  }
+  return out;
+}
+
 /// The day's WHOOP-matched strain (0–21) from its zone [load] and the minutes
 /// the band was worn. See the file header for the fit.
 double whoopDayStrain({required double load, required double wornMin}) {
