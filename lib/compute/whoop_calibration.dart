@@ -254,6 +254,22 @@ double? whoopStrainLoadPerMin(double hr, double? restingHr, double? maxHr) {
   return w;
 }
 
+/// The zone load of a run of per-minute heart rates, or null when the anchors
+/// cannot define a reserve. ONE definition for both day-strain producers (the
+/// pure pipeline and the engine's calendar-day pass): v112 wired only the
+/// first, and the second kept writing the old score into the stored scalar.
+double? whoopStrainLoad(
+    Iterable<double> hrPerMin, double? restingHr, double? maxHr) {
+  if (hrPerMin.isEmpty) return null;
+  var load = 0.0;
+  for (final hr in hrPerMin) {
+    final w = whoopStrainLoadPerMin(hr, restingHr, maxHr);
+    if (w == null) return null;
+    load += w;
+  }
+  return load;
+}
+
 /// The day's WHOOP-matched strain (0–21) from its zone [load] and the minutes
 /// the band was worn. See the file header for the fit.
 double whoopDayStrain({required double load, required double wornMin}) {

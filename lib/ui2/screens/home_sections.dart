@@ -493,8 +493,12 @@ Widget yourDayCard(BuildContext c, HomeData d) {
   final p = P.of(c);
   final t = d.timeline;
   final rows = <Widget>[];
+  // A past day the switcher is on lists that day's sleep and activities, as
+  // WHOOP's does; the add/start buttons are for today only.
+  final today = todayLabel();
+  final past = d.pastDay == today ? null : d.pastDay;
   // Only the day this bundle is FOR — see the file header.
-  if (t['date'] == todayLabel()) {
+  if (t['date'] == (past ?? today)) {
     String hhmm(int s) {
       final x = DateTime.fromMillisecondsSinceEpoch(s * 1000);
       return clock(x.hour * 60 + x.minute);
@@ -508,7 +512,7 @@ Widget yourDayCard(BuildContext c, HomeData d) {
       final mins = ((off - on) / 60).round();
       rows.add(_dayRow(c, p, LucideIcons.moon, C.sleep, 'Sleep',
           '${mins ~/ 60}:${(mins % 60).toString().padLeft(2, '0')}',
-          hhmm(on), hhmm(off), () => go(c, const SleepDetail())));
+          hhmm(on), hhmm(off), () => go(c, SleepDetail(day: past))));
     }
     for (final w in (t['sessions'] as List? ?? const [])) {
       if (w is! Map || w['start_ts'] is! num) continue;
@@ -535,7 +539,7 @@ Widget yourDayCard(BuildContext c, HomeData d) {
           strain?.toStringAsFixed(1) ?? '—',
           hhmm(start),
           end == null ? '' : hhmm(end),
-          () => go(c, const DayStrainDetail()),
+          () => go(c, DayStrainDetail(day: past)),
           // WHOOP's "Edit activity": the sport and the times, right here
           // instead of three screens deep. Not for a live session: it has
           // no end to edit yet.
@@ -577,7 +581,7 @@ Widget yourDayCard(BuildContext c, HomeData d) {
       );
   return Surface(
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text("TODAY'S ACTIVITIES",
+      Text(past == null ? "TODAY'S ACTIVITIES" : 'ACTIVITIES',
           style: F.over.copyWith(
               color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
       const SizedBox(height: S.x3),
@@ -585,14 +589,16 @@ Widget yourDayCard(BuildContext c, HomeData d) {
         Padding(
           padding: const EdgeInsets.only(bottom: S.x3),
           child: Text(
-              'Nothing synced for today yet. Your sleep and workouts show up '
-              'here after the band syncs.',
+              past != null
+                  ? 'No sleep or activity recorded on this day.'
+                  : 'Nothing synced for today yet. Your sleep and workouts '
+                      'show up here after the band syncs.',
               style: F.body.copyWith(color: p.ink3)),
         )
       else
         for (final r in rows) ...[r, const SizedBox(height: S.x2)],
       const SizedBox(height: S.x1),
-      Row(children: [
+      if (past == null) Row(children: [
         action(LucideIcons.plus, 'Add activity',
             () => go(c, const LogWorkout())),
         const SizedBox(width: S.x2),
@@ -642,6 +648,10 @@ class _MonitorTilesState extends State<MonitorTiles> {
   /// level waits for [kStressMinMinutes] of them.
   List<StressReading> _readings = const [];
 
+  /// The day [_readings] are from when it is not today: the held-over day,
+  /// before today has a night to score stress against.
+  String? _readingsDay;
+
   @override
   void initState() {
     super.initState();
@@ -662,9 +672,20 @@ class _MonitorTilesState extends State<MonitorTiles> {
     if (repo == null) return;
     try {
       final today = todayLabel();
-      final r = stressReadings(await repo.getDayStress(today), today)
-        ..sort((a, b) => a.at.compareTo(b.at));
-      if (mounted) setState(() => _readings = r);
+      var day = today;
+      var r = stressReadings(await repo.getDayStress(today), today);
+      // Stress is scored against the night's resting heart rate, so a day
+      // whose night has not happened yet has none; until then the held-over
+      // day is the current one, as on the rings.
+      final held = widget.d.heldOverNight;
+      if (r.isEmpty && held != null && held != today) {
+        day = held;
+        r = stressReadings(await repo.getDayStress(held), held);
+      }
+      r.sort((a, b) => a.at.compareTo(b.at));
+      if (mounted) {
+        setState(() => (_readings = r, _readingsDay = day == today ? null : day));
+      }
     } catch (_) {}
   }
 
@@ -676,26 +697,40 @@ class _MonitorTilesState extends State<MonitorTiles> {
   /// ago is not today's status, and "Within range" on it was a stale verdict
   /// in the today slot. [ranged] says whether any range exists at all, so the
   /// tile can tell "no reading today" from "range still building".
-  ({(int, int)? counts, bool ranged}) _inRange() {
+  ///
+  /// Until today has a sleep of its own, Home holds the previous night over
+  /// ([HomeData.heldOverNight]) and that night is still the current one:
+  /// WHOOP's day runs until the next sleep, so at 03:00 before bed it still
+  /// shows the night before. [lastSleep] says the verdict is that night's.
+  ({(int, int)? counts, bool ranged, bool lastSleep}) _inRange() {
     var inside = 0, total = 0;
-    var ranged = false;
+    var ranged = false, lastSleep = false;
+    final heldOver = widget.d.heldOverNight;
     for (final k in const ['resp_rate', 'resting_hr', 'hrv', 'skin_temp']) {
       final pts = widget.d.series[k] ?? const [];
       final r = normalRangeOf(pts).range;
       if (r == null || pts.isEmpty) continue;
       ranged = true;
       final newest = pts.reduce((a, b) => b.t > a.t ? b : a);
-      if (daysBehind(newest.t) != 0) continue;
+      final day =
+          dayLabelOf(DateTime.fromMillisecondsSinceEpoch(newest.t * 1000));
+      final held = heldOver != null && day == heldOver;
+      if (daysBehind(newest.t) != 0 && !held) continue;
+      if (held) lastSleep = true;
       total++;
       if (r.contains(newest.v)) inside++;
     }
-    return (counts: total == 0 ? null : (inside, total), ranged: ranged);
+    return (
+      counts: total == 0 ? null : (inside, total),
+      ranged: ranged,
+      lastSleep: lastSleep,
+    );
   }
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final (counts: hr, :ranged) = _inRange();
+    final (counts: hr, :ranged, :lastSleep) = _inRange();
     final r = _readings;
     final last = stressEnough(r) ? r.last : null;
     final v = last?.v;
@@ -780,7 +815,9 @@ class _MonitorTilesState extends State<MonitorTiles> {
             ]),
             hr == null
                 ? (ranged ? 'Not yet today' : 'Needs 7 nights')
-                : 'Last night',
+                : lastSleep
+                    ? 'Last sleep'
+                    : 'Last night',
           ),
           const SizedBox(width: S.x3),
           tile(
@@ -796,7 +833,8 @@ class _MonitorTilesState extends State<MonitorTiles> {
               ],
             ]),
             last != null
-                ? 'as of ${clock(last.at.hour * 60 + last.at.minute)}'
+                ? 'as of ${_readingsDay == null ? '' : daysBehind(last.at.millisecondsSinceEpoch ~/ 1000) == 1 ? 'yesterday ' : '$_readingsDay '}'
+                    '${clock(last.at.hour * 60 + last.at.minute)}'
                 : r.isEmpty
                     ? 'Not yet today'
                     : '${stressMinutes(r)} of $kStressMinMinutes min',

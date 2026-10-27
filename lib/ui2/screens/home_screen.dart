@@ -1780,6 +1780,10 @@ class _GapRow extends StatelessWidget {
 class HomeData {
   final String? name;
   final String? dayId;
+
+  /// The day the switcher stepped back to, or null for today's own load —
+  /// [dayId] alone cannot say: today's may be the day still being served.
+  final String? pastDay;
   final Metric readiness;
 
   /// The early readiness estimate (4+ nights of baseline), present only
@@ -1850,6 +1854,7 @@ class HomeData {
     this.timeline = const {},
     this.name,
     this.dayId,
+    this.pastDay,
     this.readiness = Metric.empty,
     this.readinessEarly = Metric.empty,
     this.readinessRough = Metric.empty,
@@ -1955,11 +1960,18 @@ class HomeData {
     // WHOOP's imported numbers, where the person has them for this day, are
     // what the rings show (labelled); otherwise Koop's own.
     final w = overview['whoop'] is Map ? overview['whoop'] as Map : const {};
+    // That day's sleep and activities, for "My Day".
+    Map<String, dynamic> timeline = const {};
+    try {
+      timeline = await repo.getDayTimeline(date);
+    } catch (_) {}
     return HomeData(
       whoopNumbers: w.isNotEmpty,
       series: series ?? await _dashSeries(repo),
+      timeline: timeline,
       name: profile['name']?.toString(),
       dayId: date,
+      pastDay: date,
       readiness: metricOf(w['readiness'] ?? overview['readiness']),
       // The same labelled estimates the day showed when it was today, so a
       // past day does not read "Not scored" where it once read "Early
@@ -2010,6 +2022,16 @@ class HomeData {
 
     final heldOver = heldOverNightOf(today);
 
+    // The stored sleep performance of the night the ring shows — today's own,
+    // or the held-over one before today has a night. Without it the ring
+    // divided the night by TONIGHT's need and printed 102 % beside a stored
+    // 100 %.
+    var sleepPerf = Metric.empty;
+    try {
+      final ov = await repo.getDayOverview(heldOver ?? todayLabel());
+      sleepPerf = overnightMetric(today, ov['sleep_perf'], l);
+    } catch (_) {}
+
     // Same envelope Health reads. The watch runs on NOCTURNAL RESTING HEART
     // RATE ALONE — it has never been given a temperature series — so nothing
     // here may imply a second signal.
@@ -2044,6 +2066,7 @@ class HomeData {
       ],
       strain: metricOf(d('strain')),
       sleepMin: overnightMetric(today, s('duration_min'), l),
+      sleepPerf: sleepPerf,
       rhr: overnightMetric(today, d('resting_hr'), l),
       steps: metricOf(d('steps')),
       calories: metricOf(d('calories')),
@@ -2819,11 +2842,12 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   // Tonight and the plan are skipped on a past day — "3,000 steps
                   // left" or "bed by 22:40" about a day already over is an
                   // instruction, not a fact.
-                  'day' when isToday => [
+                  'day' => [
                     Section(
                       'My Day',
                       Column(children: [
-                        if (_review(c) case final w?) ...[
+                        if (isToday)
+                          if (_review(c) case final w?) ...[
                           w,
                           const SizedBox(height: S.x3),
                         ],

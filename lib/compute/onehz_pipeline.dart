@@ -46,6 +46,7 @@ import 'whoop_calibration.dart'
         calibratedRecoveryParts,
         calibratedSleepPerformance,
         whoopDayStrain,
+        whoopStrainLoad,
         whoopStrainLoadPerMin;
 import 'profile.dart' show workoutSex;
 import 'step_cadence.dart' show cadenceSpmForMinutes;
@@ -1046,7 +1047,8 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // the owner's export. It takes the score only where Koop's own scorer was
   // allowed to score — same anchors, same gates — so an absent strain stays
   // absent. The Banister TRIMP stays as the detail (`trimp`).
-  final whoopLoad = _whoopStrainLoad(wakeHr, rhrForTrimp, hrMax);
+  final whoopLoad =
+      whoopStrainLoad([for (final p in wakeHr) p.hr], rhrForTrimp, hrMax);
   final strainMetric = !koopStrainMetric.present || whoopLoad == null
       ? koopStrainMetric
       : Metric<double>(
@@ -1939,19 +1941,6 @@ List<Map<String, num>> _zoneTimeline(
     if (best == null || m < best.bpm) best = (bpm: m, tsSec: e.key * 60);
   }
   return best;
-}
-
-/// The day's WHOOP zone load over its wake minutes, or null without anchors.
-double? _whoopStrainLoad(
-    List<_WakeMinuteHr> wakeHr, double? restingHr, double? maxHr) {
-  if (wakeHr.isEmpty) return null;
-  var load = 0.0;
-  for (final p in wakeHr) {
-    final w = whoopStrainLoadPerMin(p.hr, restingHr, maxHr);
-    if (w == null) return null;
-    load += w;
-  }
-  return load;
 }
 
 /// The WHOOP-matched strain through the day, on the headline's own formula:

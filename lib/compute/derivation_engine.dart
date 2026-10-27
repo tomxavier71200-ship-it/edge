@@ -63,6 +63,7 @@ import 'profile.dart';
 import 'bout_trim.dart' show trimGaitEdges;
 import 'quiet_level.dart' show personalQuietHrr;
 import 'substrate.dart';
+import 'whoop_calibration.dart' show whoopDayStrain, whoopStrainLoad;
 import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 
 /// Analytics/bundle version — bump to force a recompute of non-finalized days.
@@ -1843,7 +1844,16 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 //     read 96–100 % on nights WHOOP put at 36–56 %, pinning sleep performance
 //     at 100. None before four nights (WHOOP's floor).
 // Both move stored scalars, so every day re-derives. kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 112;
+//
+// v113 (2026-10-27) — v112 reached one path of two, read off the owner's
+// phone: the clinical strain said 4.14 while the stored scalar (what Home,
+// trends and the coach read) still said 0.05, because the engine's
+// calendar-day pass scores strain again and kept the old scorer; and the
+// cross-day record never carried `wear`, so consistency still compared
+// sleep with sleep (94.9 %). Both now go through the same code
+// (whoop_calibration.whoopStrainLoad; `_crossDayRecord` carries `wear`).
+// kAnalyticsPin UNCHANGED.
+const int kAlgoVersion = 113;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -5800,6 +5810,12 @@ class DerivationEngine {
   static Map<String, dynamic>? _decodeBundle(Object? json) =>
       SeriesCodec.decodePayloadJson(json);
 
+  /// [_crossDayRecord], for tests.
+  @visibleForTesting
+  static Map<String, dynamic>? crossDayRecord(
+          Map<String, dynamic> row, Map<String, dynamic> payload) =>
+      _crossDayRecord(row, payload);
+
   /// Build the cross-day record from a day_result row + its payload bundle.
   static Map<String, dynamic>? _crossDayRecord(
     Map<String, dynamic> row,
@@ -5860,6 +5876,10 @@ class DerivationEngine {
           ? null
           : observedSec / inBedSec,
       'hypnogram': series?['hypnogram'],
+      // When the band was on: sleep consistency counts every worn minute,
+      // awake unless asleep (crossday `_crossDaySri`). Without it the index
+      // only ever compared sleep with sleep.
+      'wear': payload['wear'],
       // 24 local-hour means of this day's HR curve — the ONLY intraday series
       // that survives long enough to support cross-day circadian analysis.
       // `day_result` is never pruned; the 1 Hz substrate is gone after 3 days,
@@ -6967,7 +6987,16 @@ class DerivationEngine {
             quietHrr: quietHrr,
             female: _workoutSex(sex) == 'female',
           );
-          if (score.present) strain = score.value;
+          // The same WHOOP-matched score the pipeline puts on the bundle
+          // (whoop_calibration.dart), so the stored scalar and the clinical
+          // envelope are one number. Gated on Koop's scorer the same way.
+          final load = whoopStrainLoad(perMin, rhrForTrimp, hrMax);
+          final worn = (wear['worn_min'] as num?)?.toDouble();
+          if (score.present) {
+            strain = load == null || worn == null
+                ? score.value
+                : whoopDayStrain(load: load, wornMin: worn);
+          }
         }
         // Every named input was there and the scorer still abstained. We do not
         // know why; saying so is the honest floor, and it is what the rule
@@ -8502,7 +8531,7 @@ class DerivationEngine {
       endSec: end,
       avgBpm: (sum / n).round(),
       peakBpm: peak,
-      durationMin: ((end - start) / 60).round(),
+      durationMin: (end - start) ~/ 60,
       sport: b.sport,
     );
   }
