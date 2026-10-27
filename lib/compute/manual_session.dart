@@ -28,11 +28,14 @@
 // renders "—". A duration alone NEVER becomes a strain or a calorie figure.
 
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:openstrap_analytics/onehz.dart' as ana;
 
 import 'hr_max.dart' show smoothedMaxHr;
 import 'profile.dart';
+import 'whoop_calibration.dart'
+    show whoopStrainLoad, whoopWorkoutKcalPerS, whoopWorkoutStrain;
 
 /// Shortest window we accept. Below a minute the 1 Hz substrate cannot say
 /// anything useful and the entry is almost certainly a mis-tap.
@@ -261,25 +264,12 @@ double? strainFromPerMinuteHr(
   if (perMinuteHr.isEmpty || hrMax == null || restingHr == null || sex == null) {
     return null;
   }
-  final trimp = ana.banisterTrimp(
-    perMinuteHr,
-    restingHr: restingHr,
-    maxHr: hrMax,
-    sex: workoutSex(sex) == 'female' ? ana.Sex.female : ana.Sex.male,
-  );
-  if (!trimp.present || trimp.value == null) return null;
-  // The window's own length is the baseline window: strain is the load earned
-  // ABOVE quiet waking, and the same sex constant has to price the baseline as
-  // priced the TRIMP or the subtraction is off by the male/female coefficient.
-  final score = ana.strainScoreMetric(
-    trimp.value,
-    wakeMinutes: perMinuteHr.length.toDouble(),
-    // This person's quiet-waking level (quiet_level.dart), the same one the
-    // day's strain subtracts.
-    quietHrr: quietHrr,
-    female: workoutSex(sex) == 'female',
-  );
-  return score.present ? score.value : null;
+  // WHOOP-MATCHED (whoop_calibration.dart, v113): minutes in WHOOP's zones on
+  // the day formula. [quietHrr] priced the Banister score this replaced and
+  // has no part in WHOOP's; the gates above are unchanged, so a strain that
+  // abstained still abstains.
+  final load = whoopStrainLoad(perMinuteHr, restingHr, hrMax);
+  return load == null ? null : whoopWorkoutStrain(load);
 }
 
 /// Score a manual window from its 1 Hz HR.
@@ -353,21 +343,27 @@ ManualSessionStats computeManualSessionStats({
       age != null &&
       weightKg != null &&
       sex != null) {
-    // Real anchors only — `usedDefaultAnchors` stays false, so we are never
-    // persisting a kcal figure built on a fabricated 220/60.
-    final bout = ana.Calories.estimateBoutCalories(
-      wornTs,
-      [for (final v in worn) v.toDouble()],
-      profile: ana.WorkoutUserProfile(
-        weightKg: weightKg,
-        heightCm: profile.heightCm ?? 170.0,
-        age: age,
-        sex: workoutSex(sex),
-      ),
-      hrmax: hrMax,
-      restingHr: restingHr,
-    );
-    if (!bout.usedDefaultAnchors && bout.kcal > 0) calories = bout.kcal;
+    // Real anchors only: no gate, no figure — never one built on a
+    // fabricated 220/60. WHOOP's line per second (whoop_calibration.dart),
+    // floored at the resting rate, integrated the way the analytics bout
+    // estimator integrates: each sample carries the gap to the next, capped.
+    if (restingHr != null &&
+        ana.Calories.activeGateHr(hrMax, restingHr) != null) {
+      final restingRate = ana.Calories.restingKcalPerS(
+          ana.Calories.resolveCoeffs(workoutSex(sex)),
+          weightKg,
+          profile.heightCm ?? 170.0,
+          age);
+      var kcal = 0.0;
+      for (var i = 0; i < worn.length; i++) {
+        final gap = i < worn.length - 1 ? wornTs[i + 1] - wornTs[i] : 1;
+        final dur = gap > 0
+            ? math.min(gap.toDouble(), ana.Calories.defaultMergeGapCapS)
+            : 1.0;
+        kcal += whoopWorkoutKcalPerS(worn[i].toDouble(), restingRate) * dur;
+      }
+      if (kcal > 0) calories = kcal;
+    }
   }
 
   return ManualSessionStats(

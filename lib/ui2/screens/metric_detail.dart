@@ -277,7 +277,7 @@ const _specs = <String, MetricSpec>{
     color: C.purple,
     icon: LucideIcons.zap,
     method: 'Cardiovascular load over the day, compressed onto a 0–21 scale.',
-    citation: 'Banister TRIMP family · log-compressed',
+    citation: "WHOOP's zone-minute formula, fitted to your WHOOP export",
     requires: {InputSignal.hr1Hz},
   ),
   'trimp': MetricSpec(

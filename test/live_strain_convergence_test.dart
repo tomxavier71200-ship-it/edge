@@ -78,7 +78,9 @@ void main() {
         w.accrueHr(150);
       }
       expect(w.perMinuteHr(), hasLength(60));
-      expect(w.strain, closeTo(11.62, 0.05));
+      // WHOOP's formula: 150 bpm is zone 3 (72 % of reserve), load 4 a minute
+      // -> 4.122 + 17.079 * ln(1 + 240/193.494) = 17.90.
+      expect(w.strain, closeTo(17.90, 0.05));
       expect(w.strain, lessThanOrEqualTo(21.0));
     });
 

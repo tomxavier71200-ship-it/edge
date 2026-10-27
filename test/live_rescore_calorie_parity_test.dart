@@ -1,6 +1,11 @@
 // A live session and the substrate re-score of the SAME heart-rate stream must
 // report the same calories.
 //
+// v113: both now bill WHOOP's per-second line (whoop_calibration.dart,
+// −18.55 + 0.210·bpm kcal/min, floored at the resting rate) instead of the
+// Keytel rate above a gate. The agreement below is unchanged; the pinned
+// figures are WHOOP's line.
+//
 // They did not. The live tick billed the raw Keytel active rate for every
 // second the band delivered a heart rate, with no activity gate and no resting
 // floor, while `Calories.estimateBoutCalories` (which the re-score and every
@@ -108,14 +113,12 @@ void main() {
       reason: 'the gauge must survive its own re-score',
     );
 
-    // Pinned against the published formulas by hand, so this test fails if the
-    // two paths ever agree on a WRONG number. Keytel (male, 72 kg, 34 y) at
-    // 140 bpm:
-    //   -55.0969 + 0.6309*140 + 0.1988*72 + 0.2017*34
-    //     = 54.4005 kJ/min / 251.04                  = 0.2167005 kcal/s
+    // Pinned by hand, so this test fails if the two paths ever agree on a
+    // WRONG number. WHOOP's line at 140 bpm:
+    //   (-18.55 + 0.210*140) / 60                    = 0.1808333 kcal/s
     //   Harris-Benedict resting = 1714.15 kcal/day / 86400 = 0.0198397 kcal/s
-    //   300 * 0.2167005 + 300 * 0.0198397            = 70.96 kcal
-    expect(live.calories, closeTo(70.96, 0.25));
+    //   300 * 0.1808333 + 300 * 0.0198397            = 60.20 kcal
+    expect(live.calories, closeTo(60.20, 0.25));
   });
 
   test('seconds below the bout gate bill the resting rate, not the Keytel rate',
@@ -144,8 +147,8 @@ void main() {
 
     final live = _run(hard);
 
-    // 600 s * 0.2167005 = 130.02 kcal
-    expect(live.calories, closeTo(130.02, 0.25));
+    // 600 s * 0.1808333 = 108.50 kcal
+    expect(live.calories, closeTo(108.50, 0.25));
     expect(live.calories, closeTo(_rescore(hard), 0.25));
   });
 
@@ -180,7 +183,7 @@ void main() {
       isNotNull,
       reason: 'the anchor arriving must score the seconds already banked',
     );
-    expect(s.calories, greaterThan(60.0));
+    expect(s.calories, greaterThan(50.0));
   });
 
   test('an interval that crosses the gate mid-minute splits the minute', () {
@@ -198,17 +201,15 @@ void main() {
     final live = _run(intervals);
 
     expect(live.calories, closeTo(_rescore(intervals), 0.25));
-    // 180 s * activeKcalPerS(130) + 180 s * restingRate
-    //   = 180 * 0.1915691 + 180 * 0.0198397 = 38.05 kcal
-    expect(live.calories, closeTo(38.05, 0.25));
-    // Gating on the minute mean (95 bpm, active, for all 360 s) says 37.30.
-    // The two are only 0.75 kcal apart on this shape, because Keytel is nearly
-    // linear over 60-130 bpm and the mean lands close to the split. The gap
-    // widens with the swing; the sawtooth case below is where it is decisive.
+    // 180 s at WHOOP's line for 130 + 180 s at rest (60 is under the floor)
+    //   = 180 * 0.1458333 + 180 * 0.0198397 = 29.82 kcal
+    expect(live.calories, closeTo(29.82, 0.25));
+    // The minute mean (95 bpm, for all 360 s) prices at 360 * 0.0233333 =
+    // 8.40 kcal: the floor is per sample, not per minute.
     expect(
       live.calories,
-      greaterThan(37.6),
-      reason: 'the gate is a per-sample decision, not a per-minute one',
+      greaterThan(20.0),
+      reason: 'the floor is a per-sample decision, not a per-minute one',
     );
   });
 
@@ -240,10 +241,12 @@ void main() {
     // What minute-mean gating would have billed: all 600 s at the resting rate,
     // because no minute's mean ever clears the gate. Derived from the same
     // estimator rather than stated, so it tracks the gate too.
+    // WHOOP's line has no step at the gate, so the above-gate half costs a
+    // little more than the below-gate half, not double.
     final allRest = _rescore([for (var i = 0; i < 600; i++) below]);
     expect(
       live.calories,
-      greaterThan(allRest * 1.5),
+      greaterThan(allRest),
       reason: 'billing an above-gate half-minute as rest is the bug this pins',
     );
   });
@@ -265,8 +268,8 @@ void main() {
     expect(live.calories, closeTo(_rescore(withGap), 0.25));
     // 300 billed seconds at 140 bpm: 239 one-second steps, the 61 s the pre-gap
     // sample carries across the outage, and one representative second for the
-    // final sample. 300 * 0.2167005 = 65.01 kcal.
-    expect(live.calories, closeTo(65.01, 0.25));
+    // final sample. 300 * 0.1808333 = 54.25 kcal.
+    expect(live.calories, closeTo(54.25, 0.25));
   });
 
   test('an outage longer than the cap stops billing at the cap', () {
@@ -289,8 +292,8 @@ void main() {
     // 389 billed seconds at 140 bpm, NOT the 439 seconds of wall clock: 119
     // one-second steps before the outage, 150 (not 200) carried across it, 119
     // after, and one representative second for the final sample.
-    // 389 * 0.2167005 = 84.30 kcal.
-    expect(live.calories, closeTo(84.30, 0.25));
+    // 389 * 0.1808333 = 70.34 kcal.
+    expect(live.calories, closeTo(70.34, 0.25));
   });
 
   test('a non-1 Hz stream bills real seconds, not sample counts', () {
@@ -307,9 +310,9 @@ void main() {
 
     expect(live.calories, closeTo(_rescore(sparse, stepSec: 5), 0.25));
     // 300 s at 140 (60 samples x 5 s) + 296 s at 70 (59 x 5 s + the final
-    // sample's one representative second) = 65.01 + 5.87 = 70.88 kcal. 70 bpm
-    // is below the gate, so those 296 s bill the resting rate.
-    expect(live.calories, closeTo(70.88, 0.25));
+    // sample's one representative second) = 54.25 + 5.87 = 60.12 kcal. 70 bpm
+    // is under the resting floor, so those 296 s bill the resting rate.
+    expect(live.calories, closeTo(60.12, 0.25));
   });
 
   test('time before the first sample is not billed', () {
@@ -329,7 +332,7 @@ void main() {
     }
 
     // 60 billed seconds (59 one-second steps + the trailing second), not 105.
-    expect(s.calories, closeTo(60 * 0.2167005, 0.25));
+    expect(s.calories, closeTo(60 * 0.1808333, 0.25));
   });
 
   test('abstains for a profile without the Keytel anchors', () {

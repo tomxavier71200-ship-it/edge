@@ -53,6 +53,7 @@ import '../compute/derive_scheduler.dart';
 import '../compute/manual_session.dart'
     show strainFromPerMinuteHr, supersededSuggestionIds;
 import '../compute/hr_max.dart';
+import '../compute/whoop_calibration.dart' show whoopWorkoutKcalPerS;
 import '../compute/profile.dart';
 import '../data/day_label.dart';
 import '../data/journal_fields.dart'
@@ -7429,17 +7430,11 @@ class LiveWorkoutState {
         ana.Calories.restingKcalPerS(coeffs, weightKg, heightCm, age);
 
     var kcal = 0.0;
+    // WHOOP's line (whoop_calibration.dart), floored at rest — the same rate
+    // `computeManualSessionStats` bills, so the gauge and the re-score agree.
+    // The gate above still decides whether there is a figure at all.
     void bill(int bpm, double seconds) {
-      final rate = bpm < gate
-          ? restingRate
-          : ana.Calories.activeKcalPerS(
-              coeffs,
-              bpm.toDouble(),
-              maxHr,
-              weightKg,
-              age,
-            );
-      kcal += rate * seconds;
+      kcal += whoopWorkoutKcalPerS(bpm.toDouble(), restingRate) * seconds;
     }
 
     _secondsByBpm.forEach(bill);

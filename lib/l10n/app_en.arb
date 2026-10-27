@@ -9641,7 +9641,7 @@
   "@dayStrainInputsSection": {
     "description": "Section header above the paragraph explaining what the strain score is built from"
   },
-  "dayStrainInputsBase": "Banister TRIMP over your waking heart rate, scaled to 0–21.",
+  "dayStrainInputsBase": "Minutes in WHOOP's heart-rate zones (40–90 % of your heart-rate reserve) plus the time the band was worn, on WHOOP's 0–21 scale, fitted to your WHOOP export.",
   "@dayStrainInputsBase": {
     "description": "First sentence of the day strain 'what this is made of' explanation"
   },

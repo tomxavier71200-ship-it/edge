@@ -624,7 +624,7 @@ class _DayStrainDetailState extends State<DayStrainDetail> {
       child: Text(
         [
           l?.dayStrainInputsBase ??
-              'Banister TRIMP over your waking heart rate, scaled to 0–21.',
+              "Minutes in WHOOP's heart-rate zones (40–90 % of your heart-rate reserve) plus the time the band was worn, on WHOOP's 0–21 scale, fitted to your WHOOP export.",
           if (max != null)
             l?.dayStrainInputsMaxHr(max.round()) ??
                 'It was integrated against an assumed maximum of '

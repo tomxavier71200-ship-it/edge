@@ -392,8 +392,9 @@ void main() {
       final s = strainFromPerMinuteHr(perMin,
           profile: _profile, restingHr: 55, hrMax: _hrMax)!;
 
-      // The canonical figure for this effort.
-      expect(s, closeTo(11.62, 0.05));
+      // The canonical figure for this effort: WHOOP's formula, 60 minutes in
+      // zone 3 (load 240) -> 4.122 + 17.079 * ln(1 + 240/193.494) = 17.90.
+      expect(s, closeTo(17.90, 0.05));
       expect(s, lessThanOrEqualTo(21.0));
 
       // What the retired live accrual produced for the identical hour, so the
@@ -402,7 +403,7 @@ void main() {
       final legacy = hrrLive * 0.01 * 60 * 60;
       expect(legacy, greaterThan(21.0),
           reason: 'the old live formula left its own scale');
-      expect(legacy / s, greaterThan(2.0));
+      expect(legacy, greaterThan(s * 1.4));
     });
 
     test('never exceeds 21, even for an absurdly long maximal effort', () {

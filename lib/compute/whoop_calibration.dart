@@ -297,3 +297,32 @@ double whoopDayStrain({required double load, required double wornMin}) {
       .clamp(0.0, 21.0)
       .toDouble();
 }
+
+
+// ── WORKOUT STRAIN and CALORIES, WHOOP-matched ────────────────────────────────
+//
+// Fitted 2026-10-27 to the owner's export (48 workouts, 12–109 min, average HR
+// 96–139, strain 4.2–11.8), leave-one-out:
+//   * STRAIN is the day formula with a full day's worn share: 4.11 + 17.08 ·
+//     ln(1 + L/193.5), L the same zone load (intercept fitted free: 4.11, the
+//     day's worn term is 4.122). MAE 0.19. Koop's Banister score read 2–3
+//     points under it on the owner's rides (3.0 for 19 min at 125 bpm, where
+//     WHOOP scores ~6). Zone 4–5 weights are the day's, unmeasured here (1.3
+//     minutes of zone 4–5 in the export), as they are for the day.
+//   * CALORIES are a line in heart rate: kcal/min = −18.55 + 0.210 · HR, MAE
+//     0.13 kcal/min; Koop's Keytel read ~25 % above it on the same rides.
+//     Floored at the person's resting rate below ~94 bpm, where the line
+//     leaves the data. The owner's own fit (body mass is in the coefficients).
+
+/// WHOOP's kcal per minute at 0 bpm and per bpm, during a workout.
+const double kWorkoutKcalIntercept = -18.55;
+const double kWorkoutKcalPerBpm = 0.210;
+
+/// A workout's WHOOP-matched strain (0–21) from its zone [load].
+double whoopWorkoutStrain(double load) =>
+    whoopDayStrain(load: load, wornMin: 24 * 60);
+
+/// One second of a workout at [bpm]: WHOOP's line, never under
+/// [restingKcalPerS].
+double whoopWorkoutKcalPerS(double bpm, double restingKcalPerS) => math.max(
+    restingKcalPerS, (kWorkoutKcalIntercept + kWorkoutKcalPerBpm * bpm) / 60);
