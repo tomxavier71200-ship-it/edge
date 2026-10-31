@@ -32,6 +32,7 @@ Future<String?> showDayCalendar(
   final p = P.of(c);
   return showModalBottomSheet<String>(
     context: c,
+    sheetAnimationStyle: sheetMotion(c),
     backgroundColor: p.card,
     showDragHandle: true,
     isScrollControlled: true,

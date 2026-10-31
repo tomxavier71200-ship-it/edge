@@ -1859,6 +1859,7 @@ class InfoButton extends StatelessWidget {
       semanticLabel: 'About $title',
       onTap: () => showModalBottomSheet<void>(
         context: c,
+        sheetAnimationStyle: sheetMotion(c),
         backgroundColor: p.card,
         showDragHandle: true,
         builder: (s) => SafeArea(
@@ -2606,7 +2607,14 @@ class _DaySwipeState extends State<DaySwipe>
   void _start(DragStartDetails _) {
     // Grab it where it is, even mid-settle.
     _x.stop();
-    _raw = _x.value;
+    final shown = _x.value;
+    final open = shown > 0 ? _older != null : _newer != null;
+    // Invert boundary resistance before tracking again. Reusing the displayed
+    // (already resisted) displacement would apply rubber-banding twice.
+    final remaining = _w - shown.abs();
+    _raw = !open && remaining > 0
+        ? shown * _w / (.55 * remaining)
+        : shown;
   }
 
   void _update(DragUpdateDetails e) {
@@ -2626,19 +2634,27 @@ class _DaySwipeState extends State<DaySwipe>
     if (to != null) {
       HapticFeedback.selectionClick();
       widget.onDay(to);
-      // The new day arrives from the side the finger pushed toward,
-      // carrying the finger's speed into the settle.
-      if (Motion.enabled(context)) _x.value = _x.value.sign * -_w * .25;
+      // Keep the current presentation position through the content change.
+      // Replacing it with a fixed offset creates a visible jump.
     }
+    _settle(v, momentum: to != null && v != 0);
+  }
+
+  void _cancel() {
+    _raw = 0;
+    _settle(0);
+  }
+
+  void _settle(double velocity, {bool momentum = false}) {
     if (!Motion.enabled(context)) {
       _x.value = 0;
       return;
     }
     _x.animateWith(SpringSimulation(
-        Motion.spring(response: .35, damping: to != null ? .85 : 1),
+        Motion.spring(response: .35, damping: momentum ? .85 : 1),
         _x.value,
         0,
-        to != null ? 0 : v));
+        velocity));
   }
 
   @override
@@ -2654,7 +2670,7 @@ class _DaySwipeState extends State<DaySwipe>
         onHorizontalDragStart: _start,
         onHorizontalDragUpdate: _update,
         onHorizontalDragEnd: _end,
-        onHorizontalDragCancel: () => _end(DragEndDetails()),
+        onHorizontalDragCancel: _cancel,
         child: Opacity(
           opacity: (1 - (dx.abs() / _w) * .35).clamp(.6, 1.0),
           child: Transform.translate(offset: Offset(dx, 0), child: widget.child),

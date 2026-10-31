@@ -24,6 +24,7 @@ Future<JournalFieldSpec?> showCustomJournalFieldSheet(
 }) {
   return showModalBottomSheet<JournalFieldSpec>(
     context: context,
+    sheetAnimationStyle: sheetMotion(context),
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (ctx) => Padding(

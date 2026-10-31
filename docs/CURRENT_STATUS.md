@@ -42,3 +42,10 @@ This is an incremental correction, not completion of the requested all-screen
 redesign or an empirical audit of every physiological algorithm. Device BLE,
 background execution, battery and frame profiling remain hardware-dependent.
 Historical rows whose source recordings were pruned cannot all be recomputed.
+
+## Apple interaction follow-up
+
+Day swipe cancellation, presentation continuity, release velocity and boundary
+re-grabbing are corrected. All UI2 modal sheets now pass the reduced-motion
+policy; the tab bar grows with accessibility text. 207 focused checks and static
+analysis passed. See `APPLE_DESIGN_AUDIT.md` for remaining device-review gaps.

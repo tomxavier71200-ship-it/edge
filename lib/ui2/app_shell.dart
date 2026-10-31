@@ -204,7 +204,11 @@ class _TabBar extends StatelessWidget {
         child: Row(children: [
           Expanded(
             child: Glass(
-              height: 64,
+              // Allow the icon, scaled label and focus mark to retain their
+              // spacing at accessibility text sizes.
+              height: (MediaQuery.textScalerOf(c).scale(F.over.fontSize!) *
+                          F.over.height! + 22 * 1.08 + S.x4 + S.x2)
+                      .clamp(64.0, double.infinity),
               color: p.card,
               radius: R.rXxl,
               shadow: p.el(3),

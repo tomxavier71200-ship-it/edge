@@ -877,6 +877,7 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
     final skipped = s.state == DoseState.skipped;
     await showModalBottomSheet<void>(
       context: c,
+      sheetAnimationStyle: sheetMotion(c),
       backgroundColor: p.card,
       showDragHandle: true,
       builder: (sheet) => SafeArea(
@@ -1203,6 +1204,7 @@ Future<MedSchedule?> pickMedSchedule(
   final l = AppLocalizations.of(c);
   return showModalBottomSheet<MedSchedule>(
     context: c,
+    sheetAnimationStyle: sheetMotion(c),
     backgroundColor: p.card,
     showDragHandle: true,
     isScrollControlled: true,

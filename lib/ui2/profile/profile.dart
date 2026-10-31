@@ -174,6 +174,7 @@ Future<void> _pickLanguage(BuildContext c) async {
   final options = <String?>[null, ...AppLocalizations.supportedLocales.map((l) => l.languageCode)];
   await showModalBottomSheet<void>(
     context: c,
+    sheetAnimationStyle: sheetMotion(c),
     backgroundColor: p.card,
     showDragHandle: true,
     builder: (sheet) => SafeArea(

@@ -311,6 +311,7 @@ class _CoachScreenState extends State<CoachScreen> {
     final l = AppLocalizations.of(context);
     await showModalBottomSheet<void>(
       context: context,
+      sheetAnimationStyle: sheetMotion(context),
       backgroundColor: p.card,
       showDragHandle: true,
       isScrollControlled: true,

@@ -8,6 +8,66 @@ import 'package:openstrap_edge/ui2/ui2.dart';
 void main() {
   const days = ['2026-10-15', '2026-10-14', '2026-10-13']; // newest first
 
+  Future<GestureDetector> controlled(WidgetTester t, String day,
+      List<String> selected) async {
+    await t.pumpWidget(MaterialApp(home: Scaffold(body: Center(
+      child: SizedBox(width: 400, height: 400, child: DaySwipe(day: day,
+        days: days, onDay: selected.add, child: const SizedBox.expand())),
+    ))));
+    return t.widget<GestureDetector>(find.descendant(
+      of: find.byType(DaySwipe), matching: find.byType(GestureDetector)));
+  }
+
+  double position(WidgetTester t) => t.widget<Transform>(find.descendant(
+    of: find.byType(DaySwipe), matching: find.byType(Transform))).transform.storage[12];
+
+  void drag(GestureDetector d, double distance) => d.onHorizontalDragUpdate!(
+    DragUpdateDetails(globalPosition: Offset(distance, 0), delta: Offset(distance, 0)));
+
+  testWidgets('cancelling past the navigation threshold keeps the current day', (t) async {
+    final selected = <String>[];
+    final d = await controlled(t, days[1], selected);
+    d.onHorizontalDragStart!(DragStartDetails());
+    drag(d, 180);
+    d.onHorizontalDragCancel!();
+    await t.pumpAndSettle();
+    expect(selected, isEmpty);
+    expect(position(t), closeTo(0, .01));
+  });
+
+  testWidgets('committing preserves visible position and release momentum', (t) async {
+    final selected = <String>[];
+    final d = await controlled(t, days[1], selected);
+    d.onHorizontalDragStart!(DragStartDetails());
+    drag(d, 180);
+    await t.pump();
+    final before = position(t);
+    d.onHorizontalDragEnd!(DragEndDetails(velocity: const Velocity(pixelsPerSecond: Offset(800, 0))));
+    await t.pump();
+    expect(selected, [days[2]]);
+    expect(position(t), closeTo(before, .01));
+    await t.pump(const Duration(milliseconds: 5));
+    expect(position(t), greaterThan(before), reason: 'release momentum continues before settling');
+    await t.pumpAndSettle();
+    expect(position(t), closeTo(0, .01));
+  });
+
+  testWidgets('regrabbing a resisted boundary does not jump', (t) async {
+    final selected = <String>[];
+    final d = await controlled(t, days.first, selected);
+    d.onHorizontalDragStart!(DragStartDetails());
+    drag(d, -160);
+    await t.pump();
+    final before = position(t);
+    d.onHorizontalDragStart!(DragStartDetails());
+    drag(d, 0);
+    await t.pump();
+    expect(position(t), closeTo(before, .01));
+    d.onHorizontalDragCancel!();
+    await t.pumpAndSettle();
+    expect(selected, isEmpty);
+  });
+
   Future<List<String>> swipe(WidgetTester t, String day, double dx) async {
     final got = <String>[];
     await t.pumpWidget(MaterialApp(
