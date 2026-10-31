@@ -1680,8 +1680,9 @@ class LocalRepositoryImpl extends LocalRepository {
 
   @override
   Future<Map<String, dynamic>> getDayTimeline(String date) async {
-    final b = await _bundleForDate(date);
-    if (b == null) return const {};
+    // Saved sessions outlive the sensor analysis and can exist before a day
+    // has derived at all. An absent bundle must not hide those activities.
+    final b = await _bundleForDate(date) ?? const <String, dynamic>{};
     final hrCurve = (_sub(b, 'series')?['hr_curve'] as List?) ?? const [];
 
     // Peak / lowest HR + their instants, from the day HR curve (seam-side; the
@@ -1723,7 +1724,9 @@ class LocalRepositoryImpl extends LocalRepository {
     }
 
     // Workouts + device events for that calendar day.
-    final sess = await LocalDb.sessionsInRange(dayStart, dayEnd);
+    // sessionsInRange has an inclusive upper bound; next midnight belongs
+    // to the next day, including on 23/25-hour DST days.
+    final sess = await LocalDb.sessionsInRange(dayStart, dayEnd - 1);
     // Bounded BY THE DAY, in SQL. This used to pull `unuploadedEvents(limit:
     // 2000)` — `ORDER BY ts ASC LIMIT 2000`, i.e. the OLDEST 2000 rows — and
     // then filter that page down to this day. Once `events` held more than 2000

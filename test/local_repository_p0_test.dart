@@ -54,6 +54,25 @@ void main() {
     await db.delete('sessions');
   });
 
+  test('a past day keeps its own saved workouts without a day-result bundle', () async {
+    final start = DateTime(2026, 3, 7, 10).millisecondsSinceEpoch ~/ 1000;
+    final nextMidnight = DateTime(2026, 3, 8).millisecondsSinceEpoch ~/ 1000;
+    for (final (id, at) in [('past', start), ('next', nextMidnight)]) {
+      await LocalDb.putSession({
+        'id': id, 'start_ts': at, 'end_ts': at + 1800,
+        'type': 'cycling', 'status': 'done', 'duration_min': 30,
+        'created_at': at * 1000,
+      });
+    }
+    final timeline = await repo.getDayTimeline('2026-03-07');
+    expect(timeline['date'], '2026-03-07');
+    expect([for (final s in timeline['sessions'] as List) s['id']], ['past']);
+    expect(timeline['sleep'], isEmpty);
+    expect(timeline['hr'], isEmpty);
+    final next = await repo.getDayTimeline('2026-03-08');
+    expect([for (final s in next['sessions'] as List) s['id']], ['next']);
+  });
+
   // ── fix 7 ────────────────────────────────────────────────────────────────
   test(
     'getCycle degrades to phase "unknown" on a sub-10-day mean cycle instead '

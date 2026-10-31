@@ -70,6 +70,28 @@ Future<void> _settle(WidgetTester t, {int n = 80}) async {
 }
 
 void main() {
+  testWidgets('a past day keeps its workout section even without analysis', (t) async {
+    final app = AppState.forTesting();
+    addTearDown(app.dispose);
+    app.repo = _WorkoutPastRepo();
+    await t.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.light),
+      home: ChangeNotifierProvider<AppState>.value(
+        value: app, child: const Scaffold(body: HomeScreen(hour: 9))),
+    ));
+    await _settle(t);
+    await t.tap(find.bySemanticsLabel('Previous day'));
+    await _settle(t);
+    await t.scrollUntilVisible(find.text('CYCLING'), 200,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('My Day'), findsOneWidget);
+    expect(find.text('ACTIVITIES'), findsOneWidget);
+    expect(find.text('CYCLING'), findsOneWidget);
+    expect(find.text('RUNNING'), findsNothing);
+    expect(find.text('No data for this day'), findsNothing);
+    expect(find.text('ADD ACTIVITY'), findsNothing);
+    expect(find.text('START ACTIVITY'), findsNothing);
+  });
   testWidgets('stepping to the previous day loads and shows ITS numbers',
       (t) async {
     final app = AppState.forTesting();
@@ -175,6 +197,21 @@ class _EmptyPastRepo extends LocalRepository {
   Future<Map<String, dynamic>> getDayStrain(String date) async => const {};
   @override
   Future<Map<String, dynamic>> getDaySleepV2(String date) async => const {};
+}
+
+class _WorkoutPastRepo extends _EmptyPastRepo {
+  @override
+  Future<Map<String, dynamic>> getDayTimeline(String date) async {
+    final d = DateTime.parse(date);
+    final start = DateTime(d.year, d.month, d.day, 10).millisecondsSinceEpoch ~/ 1000;
+    return {
+      'date': date,
+      'sessions': [
+        {'id': date, 'start_ts': start, 'end_ts': start + 1800,
+          'type': date == _today ? 'running' : 'cycling', 'status': 'done'},
+      ],
+    };
+  }
 }
 
 /// Yesterday has WHOOP's imported numbers beside Koop's own.

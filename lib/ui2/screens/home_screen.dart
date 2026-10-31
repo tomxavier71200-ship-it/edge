@@ -2785,7 +2785,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             // is the hold at work, not a sync problem — see [workoutHoldCard].
             // Only for TODAY: a live workout right now says nothing about why a
             // PAST day the switcher stepped onto has nothing on it.
-            isToday && (widget.workoutLive ?? workoutLiveOf(c))
+            if (isToday || (d.timeline['sessions'] as List? ?? const []).isEmpty)
+              isToday && (widget.workoutLive ?? workoutLiveOf(c))
                 ? workoutHoldCard(l)
                 : _bareStatusCard(c, d, l, pastDay: !isToday),
             // A day with nothing of its own still has your latest numbers — each
@@ -2799,9 +2800,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 action: 'Customize',
                 onAction: _openCustomize,
               ),
-            // Today's timeline is there before today's data is: it says what
-            // will fill it, rather than the section vanishing until a sync.
-            if (isToday && homeSections().any((s) => s.id == 'day' && s.on))
+            // The selected day's saved activities remain here even when no
+            // sensor analysis exists for that date.
+            if (homeSections().any((s) => s.id == 'day' && s.on))
               Section('My Day', yourDayCard(c, d)),
           ] else ...[
             // ── the three rings ──
