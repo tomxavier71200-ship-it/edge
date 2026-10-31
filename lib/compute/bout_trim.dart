@@ -38,6 +38,19 @@ const int kTrimMinMinutes = 10;
   var end = spm.length;
   for (var i = first; i + kGaitRunMin <= spm.length; i++) {
     if (List.generate(kGaitRunMin, (k) => gait(i + k)).every((g) => g)) {
+      // Walking BETWEEN sets is an interior recovery, not the end. Retain
+      // the bout if a sustained non-gait training block follows it. Use the
+      // existing minimum core duration, rather than inventing another floor.
+      var resumed = 0;
+      var hasLaterCore = false;
+      for (var j = i + kGaitRunMin; j < spm.length; j++) {
+        resumed = gait(j) ? 0 : resumed + 1;
+        if (resumed >= kTrimMinMinutes) {
+          hasLaterCore = true;
+          break;
+        }
+      }
+      if (hasLaterCore) continue;
       end = i;
       break;
     }

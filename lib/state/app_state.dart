@@ -51,7 +51,7 @@ import '../cloud/cloud_sync.dart';
 import '../compute/derivation_engine.dart';
 import '../compute/derive_scheduler.dart';
 import '../compute/manual_session.dart'
-    show strainFromPerMinuteHr, supersededSuggestionIds;
+    show strainFromHrSeconds, supersededSuggestionIds;
 import '../compute/hr_max.dart';
 import '../compute/whoop_calibration.dart' show whoopWorkoutKcalPerS;
 import '../compute/profile.dart';
@@ -7653,12 +7653,12 @@ class LiveWorkoutState {
     // ONE strain method across the app (see strainFromPerMinuteHr). Null when
     // an anchor is missing — the gauge shows "—" rather than a number built on
     // an invented HRmax or resting HR.
-    strain = strainFromPerMinuteHr(
-      perMinuteHr(),
+    strain = strainFromHrSeconds(
+      _secondsByBpm,
       profile: profile,
       restingHr: restingHr,
       hrMax: hrMax,
-      quietHrr: quietHrr,
+      currentSecondHr: _lastSampleHr,
     );
 
     // Calories re-score off the same series, through the same estimator the
@@ -7706,12 +7706,12 @@ class LiveWorkoutState {
       ..clear()
       ..addAll(secondsByBpm);
     maxHrSeen = maxHrSeenIn;
-    strain = strainFromPerMinuteHr(
-      perMinuteHr(),
+    strain = strainFromHrSeconds(
+      _secondsByBpm,
       profile: profile,
       restingHr: restingHr,
       hrMax: hrMax,
-      quietHrr: quietHrr,
+      currentSecondHr: _lastSampleHr,
     );
     _scoreCalories();
   }

@@ -2,7 +2,7 @@ name: test
 
 on:
   push:
-    branches: [main]
+    branches: [main, whoop-ui]
   pull_request:
   workflow_dispatch:
 
@@ -67,6 +67,9 @@ jobs:
 
       - name: Analyze
         run: flutter analyze
+
+      - name: Dashboard metric readers
+        run: node --test tool/dashboard_metrics_test.cjs
 
       # --concurrency=1: the suite uses sqflite_common_ffi against real database
       # files, and parallel workers race on them.

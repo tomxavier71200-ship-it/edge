@@ -352,33 +352,116 @@ void main() {
   //    substrate away between passes — so the same night comes back shorter and
   //    replaced the good one. "It got fixed, then a few syncs later it went
   //    back."
-  group('a night never re-stages shorter', () {
+  group('a banked night is protected only after recording loss', () {
     SleepSessionCandidate night(num? tstSec) => SleepSessionCandidate(
-          dayId: '2026-08-19',
-          confidence: 0.8,
-          flags: const [],
-          sleepJson: {'tst_sec': ?tstSec},
-          hypnoStages: const [],
-          sleepOnsetSec: 1000,
-          sleepOffsetSec: 2000,
-        );
+      dayId: '2026-08-19',
+      confidence: 0.8,
+      flags: const [],
+      sleepJson: {'tst_sec': ?tstSec},
+      hypnoStages: const [],
+      sleepOnsetSec: 1000,
+      sleepOffsetSec: 1000 + 8 * 3600,
+    );
 
     test('a shorter re-stage loses to the banked night', () {
-      expect(DerivationEngine.isRicherSleep(night(27000), night(9000)), isTrue);
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(27000),
+          night(9000),
+          previousWindowRecordedSec: 0,
+        ),
+        isTrue,
+      );
     });
 
     test('a longer re-stage wins — the band handed over more of it', () {
-      expect(DerivationEngine.isRicherSleep(night(9000), night(27000)), isFalse);
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(9000),
+          night(27000),
+          previousWindowRecordedSec: 0,
+        ),
+        isFalse,
+      );
     });
 
     test('an identical re-stage writes, so equal is not richer', () {
-      expect(DerivationEngine.isRicherSleep(night(27000), night(27000)), isFalse);
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(27000),
+          night(27000),
+          previousWindowRecordedSec: 0,
+        ),
+        isFalse,
+      );
     });
 
     test('a night beats no night, and no night never beats one', () {
-      expect(DerivationEngine.isRicherSleep(night(27000), night(null)), isTrue);
-      expect(DerivationEngine.isRicherSleep(night(null), night(27000)), isFalse);
-      expect(DerivationEngine.isRicherSleep(night(null), night(null)), isFalse);
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(27000),
+          night(null),
+          previousWindowRecordedSec: 0,
+        ),
+        isTrue,
+      );
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(null),
+          night(27000),
+          previousWindowRecordedSec: 0,
+        ),
+        isFalse,
+      );
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(null),
+          night(null),
+          previousWindowRecordedSec: 0,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a fully recorded night accepts a shorter corrected estimate', () {
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(27000),
+          night(9000),
+          previousWindowRecordedSec: 8 * 3600,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a fully recorded false night can be rejected on re-stage', () {
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(27000),
+          night(null),
+          previousWindowRecordedSec: 8 * 3600,
+        ),
+        isFalse,
+      );
+    });
+
+    test('the existing 80 percent recording floor controls protection', () {
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(27000),
+          night(9000),
+          previousWindowRecordedSec: 23039,
+        ),
+        isTrue,
+      );
+      expect(
+        DerivationEngine.isRicherSleep(
+          night(27000),
+          night(9000),
+          previousWindowRecordedSec: 23040,
+        ),
+        isFalse,
+      );
     });
   });
 

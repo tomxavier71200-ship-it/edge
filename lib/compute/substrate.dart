@@ -910,8 +910,6 @@ int? hardwareStepsFromCounter(
 }) {
   final wrap = cumulativeCounterModulus;
   if (wrap == null || wrap <= 0) return null;
-  const minGapSecForBudget = 60;
-  const maxGapSecForBudget = 3600;
   int? prev;
   int? prevTs;
   var total = 0;
@@ -922,17 +920,37 @@ int? hardwareStepsFromCounter(
     seen = true;
     final ts = sub.tsSec[i];
     if (prev != null && prevTs != null && ts > prevTs) {
-      final gap = ts - prevTs;
-      final budget =
-          gap.clamp(minGapSecForBudget, maxGapSecForBudget) * maxStepsPerSecond;
-      var delta = c - prev;
-      if (delta < 0) delta += wrap; // wrap candidate; a reset overshoots below
-      if (delta > 0 && delta <= budget) total += delta;
+      total +=
+          boundedStepCounterDelta(
+            previous: prev,
+            current: c,
+            gapSec: ts - prevTs,
+            modulus: wrap,
+            maxStepsPerSecond: maxStepsPerSecond,
+          ) ??
+          0;
     }
     prev = c;
     prevTs = ts;
   }
   return seen ? total : null;
+}
+
+/// A measured counter increment, or null for an ambiguous reset/jump.
+/// Shared by step totals and workout-edge trimming: modulo alone turns a
+/// reboot into tens of thousands of fictitious steps. See the budget above.
+int? boundedStepCounterDelta({
+  required int previous,
+  required int current,
+  required int gapSec,
+  required int modulus,
+  int maxStepsPerSecond = 5,
+}) {
+  if (gapSec <= 0 || modulus <= 0) return null;
+  final budget = gapSec.clamp(60, 3600) * maxStepsPerSecond;
+  var delta = current - previous;
+  if (delta < 0) delta += modulus;
+  return delta >= 0 && delta <= budget ? delta : null;
 }
 
 /// Seconds of a minute the band must call walking or running before that

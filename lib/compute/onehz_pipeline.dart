@@ -1047,8 +1047,13 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // the owner's export. It takes the score only where Koop's own scorer was
   // allowed to score — same anchors, same gates — so an absent strain stays
   // absent. The Banister TRIMP stays as the detail (`trimp`).
-  final whoopLoad =
-      whoopStrainLoad([for (final p in wakeHr) p.hr], rhrForTrimp, hrMax);
+  final strainCeiling = hrCeilingForAge((d.profile['age'] as num?)?.round());
+  final strainSeconds = [for (var i = 0; i < d.dayHr.length; i++)
+    if (d.dayHr[i] >= kHrFloorBpm && d.dayHr[i] <= strainCeiling &&
+        !(d.dayTsSec[i] >= d.sleepOnsetSec && d.dayTsSec[i] < d.sleepOffsetSec)) i];
+  final strainHr = [for (final i in strainSeconds) d.dayHr[i].toDouble()];
+  final whoopLoad = whoopStrainLoad(strainHr, rhrForTrimp, hrMax,
+      sampleDurationMin: 1 / 60);
   final strainMetric = !koopStrainMetric.present || whoopLoad == null
       ? koopStrainMetric
       : Metric<double>(
@@ -1094,8 +1099,9 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
           sex: sex,
           quietHrr: quietHrr,
         )
-      : whoopStrainCurve([for (final p in wakeHr) p.tsSec],
-          [for (final p in wakeHr) p.hr], rhrForTrimp, hrMax, wornMin.toDouble());
+      : whoopStrainCurve([for (final i in strainSeconds) d.dayTsSec[i]],
+          strainHr, rhrForTrimp, hrMax, wornMin.toDouble(),
+          sampleDurationMin: 1 / 60);
   final zoneTimeline = zoneSet == null
       ? const <Map<String, num>>[]
       : _zoneTimeline(wakeHr, zoneSet);

@@ -7,7 +7,7 @@ name: Dashboard to GitHub Pages
 on:
   push:
     branches: [whoop-ui]
-    paths: ['web/dashboard/**', '.github/workflows/dashboard-pages.yml']
+    paths: ['web/dashboard/**', 'tool/dashboard_metrics_test.cjs', '.github/workflows/dashboard-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check dashboard metric readers
+        run: node --test tool/dashboard_metrics_test.cjs
       - name: Copy the page onto gh-pages
         run: |
           repo="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"

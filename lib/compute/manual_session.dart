@@ -259,17 +259,52 @@ double? strainFromPerMinuteHr(
   required double? restingHr,
   required double? hrMax,
   double quietHrr = ana.quietWakingHrr,
+  double sampleDurationMin = 1,
+}) {
+  final secondsByHr = <num, double>{};
+  for (final hr in perMinuteHr) {
+    secondsByHr[hr] = (secondsByHr[hr] ?? 0) + sampleDurationMin * 60;
+  }
+  return strainFromHrSeconds(secondsByHr,
+      profile: profile, restingHr: restingHr, hrMax: hrMax);
+}
+
+/// Integrate each observed HR for its actual duration before applying the
+/// nonlinear zone weights. Shared by live and retrospectively scored sessions.
+double? strainFromHrSeconds(
+  Map<num, double> secondsByHr, {
+  required Profile profile,
+  required double? restingHr,
+  required double? hrMax,
+  int? currentSecondHr,
 }) {
   final sex = profile.sex?.toLowerCase();
-  if (perMinuteHr.isEmpty || hrMax == null || restingHr == null || sex == null) {
+  if ((secondsByHr.isEmpty && currentSecondHr == null) ||
+      hrMax == null || restingHr == null || sex == null) {
     return null;
   }
   // WHOOP-MATCHED (whoop_calibration.dart, v113): minutes in WHOOP's zones on
-  // the day formula. [quietHrr] priced the Banister score this replaced and
-  // has no part in WHOOP's; the gates above are unchanged, so a strain that
+  // the day formula. The former quiet-waking deduction has no part in this
+  // fitted score; the gates above are unchanged, so a strain that
   // abstained still abstains.
-  final load = whoopStrainLoad(perMinuteHr, restingHr, hrMax);
-  return load == null ? null : whoopWorkoutStrain(load);
+  var load = 0.0;
+  var observed = false;
+  final seconds = Map<num, double>.of(secondsByHr);
+  if (currentSecondHr != null) {
+    seconds[currentSecondHr] = (seconds[currentSecondHr] ?? 0) + 1;
+  }
+  for (final entry in seconds.entries) {
+    if (!entry.key.isFinite || entry.key <= 0 ||
+        !entry.value.isFinite || entry.value <= 0) {
+      continue;
+    }
+    final part = whoopStrainLoad([entry.key.toDouble()], restingHr, hrMax,
+        sampleDurationMin: entry.value / 60);
+    if (part == null) return null;
+    load += part;
+    observed = true;
+  }
+  return observed ? whoopWorkoutStrain(load) : null;
 }
 
 /// Score a manual window from its 1 Hz HR.
@@ -320,7 +355,6 @@ ManualSessionStats computeManualSessionStats({
   if (worn.isEmpty) return const ManualSessionStats();
 
   final avg = worn.reduce((a, b) => a + b) / worn.length;
-  final perMin = hrPerMinute(wornTs, worn);
 
   final age = profile.ageYears?.toDouble();
   // THE peak, spike-suppressed, at the point every save goes through (#127).
@@ -334,8 +368,12 @@ ManualSessionStats computeManualSessionStats({
   final weightKg = profile.weightKg;
   final sex = profile.sex?.toLowerCase();
 
-  final strain = strainFromPerMinuteHr(perMin,
-      profile: profile, restingHr: restingHr, hrMax: hrMax, quietHrr: quietHrr);
+  // The ledger is 1 Hz: one observed second earns 1/60 of a minute's load.
+  // A minute mean can erase intervals crossing zone boundaries, and one
+  // sample in an otherwise missing minute must not earn a full minute.
+  final strain = strainFromPerMinuteHr([for (final h in worn) h.toDouble()],
+      profile: profile, restingHr: restingHr, hrMax: hrMax,
+      quietHrr: quietHrr, sampleDurationMin: 1 / 60);
 
   double? calories;
   if (profile.hasCalorieAnchors &&

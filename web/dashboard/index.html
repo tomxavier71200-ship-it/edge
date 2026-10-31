@@ -177,15 +177,16 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 <!-- Integrity-pinned: a changed CDN file is refused instead of running beside the decrypted data. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm-memory-growth.js" integrity="sha384-HsZTUvpU2OF6Ji8M1RDRzicqZcrPbL3SJBk+mdTHEDDW2aBGac2IUl5f3I2ZQlHu" crossorigin="anonymous"></script>
+<script src="metrics.js"></script>
 <script>
 "use strict";
-const KEYS=["readiness","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min","awakenings","sol_min","whoop_readiness","whoop_rmssd","whoop_rhr","whoop_strain","whoop_resp_rate","whoop_tst_min","whoop_sleep_perf"];
+const KEYS=["readiness","readiness_early","readiness_rough","sleep_need_min","strain","rmssd","rhr","resp_rate","tst_min","deep_min","rem_min","light_min","efficiency","sleep_perf","steps","calories","active_min","awakenings","sol_min","whoop_readiness","whoop_rmssd","whoop_rhr","whoop_strain","whoop_resp_rate","whoop_tst_min","whoop_sleep_perf"];
 const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 let liveDb=null,data={},tab="recovery",range=1,day=null,chart,donut,sri=null,sriDay=null,sess=null;
 const iso=t=>t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
 const shift=(d,n)=>{const t=new Date(d+"T12:00:00");t.setDate(t.getDate()+n);return iso(t);};
 const get=(k,d)=>data[k]?.get(d)??null;
-const hm=m=>m==null?"—":Math.floor(m/60)+":"+String(Math.round(m%60)).padStart(2,"0");
+const hm=KoopMetrics.hoursMinutes;
 const nice=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
 const clock=t=>{const x=new Date(t*1000);return x.getHours()+":"+String(x.getMinutes()).padStart(2,"0");};
 const secs=t=>t==null?null:t>1e12?t/1000:t; // sessions store seconds; tolerate ms
@@ -247,12 +248,14 @@ function loadDb(db){
   const res=db.exec(`SELECT date,key,value FROM metric_series WHERE value IS NOT NULL AND key IN (${KEYS.map(k=>`'${k}'`).join(",")})`);
   let name=null;try{const p=db.exec("SELECT value FROM kv WHERE key='profile_name'");name=p[0]?.values[0][0]??null;}catch{}
   const d={};KEYS.concat(["inbed_min"]).forEach(k=>d[k]=new Map());(res[0]?.values||[]).forEach(([dt,k,v])=>d[k].set(dt,v));
-  // Time in bed: the night's accounting in the newest stored analysis of each day.
+  // Time in bed and provisional recovery belong to the newest stored analysis.
   try{const r=db.exec("SELECT day_id,payload_json FROM day_result d WHERE algo_version=(SELECT MAX(algo_version) FROM day_result WHERE day_id=d.day_id)");
-    (r[0]?.values||[]).forEach(([id,pj])=>{try{const s=JSON.parse(pj)?.sleep?.accounting?.value?.in_bed_sec;if(typeof s==="number"&&s>0)d.inbed_min.set(id,s/60);}catch{}});}catch{}
+    (r[0]?.values||[]).forEach(([id,pj])=>{try{const p=JSON.parse(pj),s=p?.sleep?.accounting?.value?.in_bed_sec;if(KoopMetrics.finite(s)&&s>0)d.inbed_min.set(id,s/60);
+      for(const k of ["readiness_early","readiness_rough"]){const v=p?.scalars?.[k];if(KoopMetrics.finite(v))d[k].set(id,v);}
+    }catch{}});}catch{}
   // Consistency (SRI) exists only as the latest cross-day value, so it is shown for the newest day only.
   sri=null;sriDay=null;try{const r=db.exec("SELECT payload_json,updated_at FROM baselines WHERE key='crossday'");
-    if(r[0]){const v=JSON.parse(r[0].values[0][0])?.regularity?.value?.sri;if(typeof v==="number")sri=v;}}catch{}
+    if(r[0]){const p=JSON.parse(r[0].values[0][0]),v=p?.regularity?.value?.sri;if(KoopMetrics.finite(v)&&/^\d{4}-\d{2}-\d{2}$/.test(p.built_for_day)){sri=v;sriDay=p.built_for_day;}}}catch{}
   liveDb?.close();liveDb=db;curveCache.clear();dcCache.clear(); // kept open: curves and workouts are read per day
   return {d,name};}
 
@@ -303,6 +306,7 @@ async function readWhoop(files){const csvs=[];
       if(kind==="w"){const st=wts(g(["workout start time","start time"]));if(st==null)continue;const en=wts(g(["workout end time","end time"]));
         work.push([`whoop_${st}`,st,en,(g(["activity name","activity"])||"other").toLowerCase(),"done",n(["activity strain","strain"]),
           n(["max hr (bpm)","max heart rate (bpm)"]),n(["average hr (bpm)","average heart rate (bpm)"]),kcal(),en!=null?Math.round((en-st)/60):null]);continue;}
+      if(KoopMetrics.isNap(g(["nap"])))continue;
       const at=wts(g(["wake onset","sleep onset","cycle start time"]))??wts(g(["cycle start time","sleep onset"]));if(at==null)continue;
       const date=iso(new Date(at*1000)),f={readiness:n(["recovery score %","recovery score"]),rhr:n(["resting heart rate (bpm)","resting heart rate"]),
         rmssd:n(["heart rate variability (ms)","heart rate variability (rmssd) (ms)"]),strain:n(["day strain","strain"]),calories:kcal(),
@@ -347,8 +351,8 @@ function dayCurve(d){
   if(!r[0])return {pts:[],on:null,off:null};
   const [pj,wj]=r[0].values[0];let pts=[],on=null,off=null,p=null;
   try{p=JSON.parse(pj);pts=decodeCurve(p?.series?.hr_curve);}catch{}
-  const take=v=>{if(v&&typeof v==="object"&&typeof v.onset_ms==="number"&&typeof v.offset_ms==="number"){on=v.onset_ms/1000;off=v.offset_ms/1000;}};
-  take(p?.sleep?.window?.value);if(on==null)try{take(JSON.parse(wj||"{}")?.value);}catch{}
+  const take=v=>{const w=KoopMetrics.sleepWindow(v);if(w){on=w.on;off=w.off;}};
+  take(p?.sleep?.window);if(on==null)try{take(JSON.parse(wj||"{}"));}catch{}
   return {pts,on,off};}
 
 function sessionsOn(d){
@@ -396,12 +400,15 @@ function mk(cfg){const el=document.getElementById("chart"),sig=c=>[c.type,c.opti
   if(chart&&chart._sig===sig(cfg)){chart.data=cfg.data;chart.options=cfg.options;chart.update();return chart;}
   chart?.destroy();const c=new Chart(el,cfg);c._sig=sig(cfg);return c;}
 
-function header(){const rc=get("readiness",day),st=get("strain",day),sp=get("sleep_perf",day),ts=get("tst_min",day);
+function header(){const recovery=KoopMetrics.recovery(get("readiness",day),get("readiness_early",day),get("readiness_rough",day));
+  const rc=recovery.value,st=get("strain",day),sp=get("sleep_perf",day),ts=get("tst_min",day);
+  document.querySelector('[data-tab="recovery"] .cap').textContent=recovery.label;
   ring("r-recovery",rc==null?null:rc/100,rc==null?css("--recovery"):recColor(rc),rc==null?"—":Math.round(rc)+"%");
   ring("r-strain",st==null?null:st/21,css("--strain"),st==null?"—":(+st).toFixed(1));
   document.getElementById("sp").textContent=sp==null?"—":Math.round(sp)+"%";
   document.getElementById("hs").firstChild.textContent=hm(ts);
-  document.getElementById("hn").firstChild.textContent=ts!=null&&sp?hm(ts/(sp/100)):"—";
+  document.getElementById("hn").firstChild.textContent=hm(KoopMetrics.needForNight(data,day,d=>shift(d,-1)));
+  document.getElementById("hn").title="Sleep need set for last night";
   document.getElementById("date").textContent=(day===iso(new Date())?"Today, ":"")+nice(day);document.getElementById("calic").textContent=+day.slice(8);
   const cal=document.getElementById("cal");cal.value=day;cal.max=iso(new Date());
   document.getElementById("today").hidden=day===iso(new Date());document.getElementById("next").disabled=day===iso(new Date());
@@ -677,7 +684,7 @@ async function load(blob,label,keep=false){
 function show(r,keep){const keepDay=keep?day:null;data=r.d;
   if(r.name){document.getElementById("name").textContent=r.name;document.getElementById("initial").textContent=r.name[0].toUpperCase();}
   const dates=[...data.readiness.keys(),...data.tst_min.keys(),...data.strain.keys()].sort();day=keepDay&&keepDay<=iso(new Date())?keepDay:dates.at(-1)||iso(new Date());
-  if(sri!=null)sriDay=[...data.tst_min.keys()].sort().at(-1)??null;if(!keep)workout=-1;render();}
+  if(!keep)workout=-1;render();}
 // A WHOOP export (its .zip, or the CSVs inside it): shown from this browser alone. The Drive
 // refresh stops (cloudAt) so the page does not swap it for the Koop Cloud copy.
 async function loadWhoop(files){status("Reading the WHOOP export…");const r=await readWhoop(files);

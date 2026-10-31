@@ -6,6 +6,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/compute/bout_trim.dart';
 
 void main() {
+  test('walking between two training blocks does not end the workout', () {
+    final spm = <int?>[
+      ...List<int>.filled(20, 0),
+      ...List<int>.filled(3, 90),
+      ...List<int>.filled(20, 0),
+    ];
+    expect(trimGaitEdges(spm), isNull);
+  });
+
+  test('a walk home is trimmed after an interior walking recovery', () {
+    final spm = <int?>[
+      ...List<int>.filled(20, 0),
+      ...List<int>.filled(3, 90),
+      ...List<int>.filled(20, 0),
+      ...List<int>.filled(3, 90),
+    ];
+    expect(trimGaitEdges(spm), (first: 0, end: 43));
+  });
   test('a ride with a walk before and after keeps only the ride', () {
     // Minute cadence from 13:30: 5 walking minutes, ~14 riding, then a walk.
     final spm = <int?>[

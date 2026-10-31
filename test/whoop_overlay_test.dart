@@ -37,6 +37,19 @@ void main() {
     } catch (_) {}
   });
 
+  test('a WHOOP nap never overwrites the main night on the same date', () async {
+    final csv = File(p.join(tmp.path, 'sleeps.csv'))..writeAsStringSync(
+      'Cycle start time,Sleep onset,Wake onset,Asleep duration (min),Nap\n'
+      '2026-03-07 00:00:00,2026-03-06 23:00:00,2026-03-07 07:00:00,420,False\n'
+      '2026-03-07 00:00:00,2026-03-07 14:00:00,2026-03-07 14:30:00,20,True\n');
+    await WhoopImporter.importFiles([csv.path]);
+    expect(await LocalDb.metricValueOn('2026-03-07', 'tst_min'), 420);
+    final row = await LocalDb.dayResult('2026-03-07');
+    final window = jsonDecode(row!['window_json'] as String) as Map;
+    final onset = window['onset_ms'] ?? (window['value'] as Map?)?['onset_ms'];
+    expect(onset, DateTime(2026, 3, 6, 23).millisecondsSinceEpoch);
+  });
+
   test('WHOOP numbers show everywhere; Koop\'s stored values are untouched',
       () async {
     // Koop's own measured day: recovery 91, HRV 88, 6 h asleep.

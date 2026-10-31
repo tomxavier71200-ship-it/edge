@@ -88,7 +88,8 @@ const double kCalZCap = 5.0;
 /// — the previous formula — when consistency is unknown.
 double? calibratedSleepPerformance(
     double? asleepMin, double? needMin, double? consistency) {
-  if (asleepMin == null || needMin == null || needMin <= 0 || asleepMin < 0) {
+  if (asleepMin == null || needMin == null || !asleepMin.isFinite ||
+      !needMin.isFinite || needMin <= 0 || asleepMin < 0) {
     return null;
   }
   final ratio = (asleepMin / needMin).clamp(0.0, 1.0) * 100;
@@ -175,9 +176,14 @@ RecoveryParts? calibratedRecoveryParts({
   // Every z is capped at ±[kCalZCap]: a baseline whose spread is tiny but not
   // zero turns an ordinary night into a z of 20+, and one input must not be
   // able to throw the score to the rail on its own.
-  double? cap(double? z) => z?.clamp(-kCalZCap, kCalZCap).toDouble();
-  final zH = cap(hrvLn == null ? null : robustZ(hrvLn, hrvLnHistory));
-  if (zH == null || sleepPerf == null) return null;
+  if (hrvLn == null || !hrvLn.isFinite || sleepPerf == null ||
+      !sleepPerf.isFinite || sleepPerf < 0 || sleepPerf > 100) {
+    return null;
+  }
+  double? cap(double? z) => z == null || !z.isFinite
+      ? null : z.clamp(-kCalZCap, kCalZCap).toDouble();
+  final zH = cap(robustZ(hrvLn, hrvLnHistory));
+  if (zH == null) return null;
   final zR = cap(rhr == null ? null : robustZ(rhr, rhrHistory));
   final zB = cap(resp == null ? null : robustZ(resp, respHistory));
   // Sleep performance is capped at 100, so a run of full nights has a MAD of
@@ -211,7 +217,11 @@ const double kDebtCapMin = 127;
 /// already held the debt before it, so the carry compounds the way WHOOP's
 /// does. Null without both inputs.
 double? whoopSleepDebtMin(double? lastNightNeedMin, double? lastNightAsleepMin) {
-  if (lastNightNeedMin == null || lastNightAsleepMin == null) return null;
+  if (lastNightNeedMin == null || lastNightAsleepMin == null ||
+      !lastNightNeedMin.isFinite || !lastNightAsleepMin.isFinite ||
+      lastNightNeedMin <= 0 || lastNightAsleepMin < 0) {
+    return null;
+  }
   final short = lastNightNeedMin - lastNightAsleepMin;
   return (kDebtCarry * short).clamp(0.0, kDebtCapMin).toDouble();
 }
@@ -244,7 +254,10 @@ const List<double> kStrainZoneFloors = [.4, .6, .7, .8, .9];
 /// One minute at [hr]: its strain load, 2^(zone−1) in zones 1–5, 0 below
 /// zone 1. Null when the anchors cannot define a reserve.
 double? whoopStrainLoadPerMin(double hr, double? restingHr, double? maxHr) {
-  if (restingHr == null || maxHr == null || !(maxHr > restingHr)) return null;
+  if (restingHr == null || maxHr == null || !restingHr.isFinite ||
+      !maxHr.isFinite || restingHr <= 0 || !(maxHr > restingHr)) {
+    return null;
+  }
   if (!hr.isFinite || hr <= 0) return 0;
   final hrr = (hr - restingHr) / (maxHr - restingHr);
   var w = 0.0;
@@ -259,13 +272,15 @@ double? whoopStrainLoadPerMin(double hr, double? restingHr, double? maxHr) {
 /// pure pipeline and the engine's calendar-day pass): v112 wired only the
 /// first, and the second kept writing the old score into the stored scalar.
 double? whoopStrainLoad(
-    Iterable<double> hrPerMin, double? restingHr, double? maxHr) {
+    Iterable<double> hrPerMin, double? restingHr, double? maxHr,
+    {double sampleDurationMin = 1}) {
   if (hrPerMin.isEmpty) return null;
+  if (!sampleDurationMin.isFinite || sampleDurationMin <= 0) return null;
   var load = 0.0;
   for (final hr in hrPerMin) {
     final w = whoopStrainLoadPerMin(hr, restingHr, maxHr);
     if (w == null) return null;
-    load += w;
+    load += w * sampleDurationMin;
   }
   return load;
 }
@@ -275,16 +290,23 @@ double? whoopStrainLoad(
 /// accruing evenly across the minutes so the last point IS the headline.
 /// Empty when the anchors cannot define a reserve.
 List<Map<String, num>> whoopStrainCurve(List<int> tsSec, List<double> hrPerMin,
-    double? restingHr, double? maxHr, double wornMin) {
+    double? restingHr, double? maxHr, double wornMin,
+    {double sampleDurationMin = 1}) {
   final n = math.min(tsSec.length, hrPerMin.length);
   final out = <Map<String, num>>[];
   var load = 0.0;
   for (var i = 0; i < n; i++) {
     final w = whoopStrainLoadPerMin(hrPerMin[i], restingHr, maxHr);
     if (w == null) return const [];
-    load += w;
+    load += w * sampleDurationMin;
     final v = whoopDayStrain(load: load, wornMin: wornMin * (i + 1) / n);
-    out.add({'t': tsSec[i], 'v': (v * 100).round() / 100});
+    final point = {'t': tsSec[i], 'v': (v * 100).round() / 100};
+    // Keep one end-of-minute point without averaging HR before zone scoring.
+    if (out.isNotEmpty && out.last['t']!.toInt() ~/ 60 == tsSec[i] ~/ 60) {
+      out[out.length - 1] = point;
+    } else {
+      out.add(point);
+    }
   }
   return out;
 }

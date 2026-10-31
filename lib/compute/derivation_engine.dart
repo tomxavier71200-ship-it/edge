@@ -1858,7 +1858,15 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // the strain) and `cycle_strain` (WHOOP's day, which runs until the next
 // sleep: a day with no night of its own scored with the day before it).
 // kAnalyticsPin UNCHANGED.
-const int kAlgoVersion = 113;
+// 113 → 114: allow a shorter corrected sleep candidate when the previous
+// window is still recorded; retain the longer candidate only after data loss.
+// Workout gait trimming now sums bounded per-record step deltas, so a counter
+// reset cannot turn a non-walking minute into thousands of steps.
+// All strain producers integrate zone load over observed seconds before
+// rounding, preserving intervals and preventing sparse minutes earning 60 s.
+// Interior walking recoveries no longer truncate a later training block.
+// kAnalyticsPin/kProtocolPin UNCHANGED: orchestration fixes only.
+const int kAlgoVersion = 114;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -3410,7 +3418,8 @@ class DerivationEngine {
     final candidate = SleepSessionCandidate.fromJson(
         (jsonDecode(candidateJson) as Map).cast<String, dynamic>());
     if (override == null) {
-      // NEVER RE-STAGE A NIGHT SHORTER THAN THE ONE ALREADY BANKED (#242).
+      // Protect a banked night from recording loss (#242), while allowing
+      // a fully recorded night to be corrected downward.
       //
       // A day re-stages on every pass for its first 48 h, and the substrate it
       // stages over does not only grow: `pruneDecodedBeforeRecTs` runs once the
@@ -3419,6 +3428,8 @@ class DerivationEngine {
       // good candidate, and the day rebuilt from it. That is the reported "it
       // got fixed, then a few syncs later it went back", and it is a write-path
       // defect, not a staging one (a mid-night wake bridges and sums correctly).
+      // TST alone cannot establish that data was lost: with the previous
+      // window still recorded, a shorter result may be a legitimate correction.
       //
       // The guard belongs HERE rather than on the day result: the candidate is
       // upstream of the sleep block, the hypnogram AND every sleep scalar, so
@@ -3435,7 +3446,13 @@ class DerivationEngine {
         try {
           final prev = SleepSessionCandidate.fromJson(
               (jsonDecode(storedJson) as Map).cast<String, dynamic>());
-          if (isRicherSleep(prev, candidate)) {
+          if (isRicherSleep(
+            prev,
+            candidate,
+            previousWindowRecordedSec: searchSub
+                .slice(prev.sleepOnsetSec, prev.sleepOffsetSec)
+                .length,
+          )) {
             _log('derive $dayId: kept the banked night '
                 '(${_tstSec(prev)} s) over this pass\'s '
                 '${_tstSec(candidate)} s — less substrate, not a shorter night');
@@ -5259,26 +5276,25 @@ class DerivationEngine {
   static num? _tstSec(SleepSessionCandidate c) =>
       c.sleepJson['tst_sec'] as num?;
 
-  /// Whether the already-banked [prev] night is RICHER than the freshly staged
-  /// [next] one, measured by total sleep time (#242).
-  ///
-  /// TST, not confidence and not the window: it is the quantity the user sees
-  /// change, and the failure mode this guards is a re-stage over a pruned
-  /// substrate seeing less of the same night. A night that grows is a night the
-  /// band handed over more of, and it wins.
-  ///
-  /// A candidate with no night at all is never richer than one that has one, and
-  /// EQUAL is not richer — a pass that reproduces the same night writes, so an
-  /// otherwise-identical candidate still refreshes.
+  /// Protect a longer banked night only when its recording is no longer
+  /// available. TST alone is not evidence of data loss: a better-observed
+  /// re-stage can correctly identify more wake time or reject a false night.
+  /// Without this coverage check an early overestimate can only grow.
   @visibleForTesting
   static bool isRicherSleep(
     SleepSessionCandidate prev,
-    SleepSessionCandidate next,
-  ) {
+    SleepSessionCandidate next, {
+    required int previousWindowRecordedSec,
+  }) {
     final p = _tstSec(prev);
     if (p == null) return false;
     final n = _tstSec(next);
-    return n == null || p > n;
+    return (n == null || p > n) &&
+        !nightStillRecorded(
+          onsetSec: prev.sleepOnsetSec,
+          offsetSec: prev.sleepOffsetSec,
+          recordedSec: previousWindowRecordedSec,
+        );
   }
 
   /// How a day should be filed after its second half failed and the previous
@@ -7055,7 +7071,14 @@ class DerivationEngine {
           // The same WHOOP-matched score the pipeline puts on the bundle
           // (whoop_calibration.dart), so the stored scalar and the clinical
           // envelope are one number. Gated on Koop's scorer the same way.
-          final load = whoopStrainLoad(perMin, rhrForTrimp, hrMax);
+          final ceiling = hrCeilingForAge(profile.ageYears);
+          final strainSeconds = [for (var i = 0; i < daySub.length; i++)
+            if (daySub.hr[i] >= kHrFloorBpm && daySub.hr[i] <= ceiling &&
+                !(daySub.tsSec[i] >= sleepOnsetSec &&
+                  daySub.tsSec[i] < sleepOffsetSec)) i];
+          final strainHr = [for (final i in strainSeconds) daySub.hr[i].toDouble()];
+          final load = whoopStrainLoad(strainHr, rhrForTrimp, hrMax,
+              sampleDurationMin: 1 / 60);
           final worn = (wear['worn_min'] as num?)?.toDouble();
           if (score.present) {
             strain = load == null || worn == null
@@ -7064,11 +7087,11 @@ class DerivationEngine {
             if (load != null && worn != null) {
               strainLoad = load;
               strainCurve = whoopStrainCurve(
-                  [for (final k in wakeSeries.keys) k * 60],
-                  perMin,
+                  [for (final i in strainSeconds) daySub.tsSec[i]],
+                  strainHr,
                   rhrForTrimp,
                   hrMax,
-                  worn);
+                  worn, sampleDurationMin: 1 / 60);
             }
           }
         }
@@ -8577,24 +8600,48 @@ class DerivationEngine {
   /// [b] with walking-pace minutes trimmed off its edges, avg/peak HR and
   /// duration recomputed over what is left — or [b] itself when the band has
   /// no step counter, the bout is a walk or run, or nothing needs trimming.
-  static ana.DetectedWorkout _trimGaitEdges(Substrate s, ana.DetectedWorkout b) {
+  @visibleForTesting
+  static ana.DetectedWorkout trimWorkoutGaitEdges(
+    Substrate s,
+    ana.DetectedWorkout b,
+  ) => _trimGaitEdges(s, b);
+
+  static ana.DetectedWorkout _trimGaitEdges(
+    Substrate s,
+    ana.DetectedWorkout b,
+  ) {
     final minutes = ((b.endSec - b.startSec) / 60).ceil();
     if (minutes <= 0) return b;
-    final first = List<int?>.filled(minutes, null);
-    final last = List<int?>.filled(minutes, null);
+    final spm = List<int?>.filled(minutes, null);
+    final invalid = List<bool>.filled(minutes, false);
+    int? prevCounter, prevTs;
+    var prevMinute = -1;
     for (var i = 0; i < s.length; i++) {
       final t = s.tsSec[i];
       if (t < b.startSec || t >= b.endSec) continue;
       final c = s.stepCounterAt(i);
       if (c == null) continue;
       final m = (t - b.startSec) ~/ 60;
-      first[m] ??= c;
-      last[m] = c;
+      if (m == prevMinute && prevCounter != null && prevTs != null) {
+        final delta = boundedStepCounterDelta(
+          previous: prevCounter,
+          current: c,
+          gapSec: t - prevTs,
+          modulus: 65536,
+        );
+        if (delta == null) {
+          invalid[m] = true;
+        } else {
+          spm[m] = (spm[m] ?? 0) + delta;
+        }
+      }
+      prevCounter = c;
+      prevTs = t;
+      prevMinute = m;
     }
-    final spm = [
-      for (var m = 0; m < minutes; m++)
-        first[m] == null ? null : (last[m]! - first[m]!) % 65536,
-    ];
+    for (var m = 0; m < minutes; m++) {
+      if (invalid[m]) spm[m] = null;
+    }
     final cut = trimGaitEdges(spm);
     if (cut == null) return b;
     final start = b.startSec + cut.first * 60;
