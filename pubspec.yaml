@@ -258,7 +258,7 @@ dependencies:
       ref: bc7d8d0df706e40a2546ffde4545263f09d0fecb
   openstrap_analytics:
     git:
-      url: https://github.com/OpenStrap/analytics.git
+      url: https://github.com/tomxavier71200-ship-it/analytics.git
       # analytics main @ #34 merge. Two hops in one: #32 (the HR-onset bypass
       # for low-limb-swing cardio) had already merged and this pin was still
       # sitting on its PR-branch head, and #34 lands the sleep-stager rewrite.
@@ -494,7 +494,14 @@ dependencies:
       # window, so kAlgoVersion bumped (96 -> 97). Verified:
       #   `git show 0441ef9:lib/src/onehz/wellness/temp_circadian.dart |
       #      grep -n 'varTot == 0\|diffN == 0'`
-      ref: 0441ef9e6fc6d5681c309ce6341911285e829f20
+      #
+      # Koop analytics @ 610e56f: automatic workout detection still requires
+      # the conservative 45% HRR core, but its final session boundaries now
+      # include contiguous 30% HRR warm-up/cool-down evidence. Expansion is
+      # capped, gap-aware and compared against saved sessions after refinement.
+      # This corrects systematically late starts/early finishes without
+      # lowering the false-positive detection gate.
+      ref: 610e56f0e5e9edf3306e29428e0f556d295c73f2
 
   # BLE — flutter_blue_plus is the maintained cross-platform GATT client.
   flutter_blue_plus: ^1.36.8

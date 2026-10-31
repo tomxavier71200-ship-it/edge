@@ -9,7 +9,7 @@ workout counter-reset trimming, nap imports, and dashboard metric reads.
 `da45dbac` keeps saved workouts on the selected past day's Home timeline even
 when daily analysis is absent. Both were pushed to `whoop-ui`.
 
-## Current implementation (algorithm 115)
+## Current implementation (algorithm 116)
 
 - HRV timeline requires a new five-minute window after recording gaps and
   sufficient observed coverage; rolling sums replace repeated window scans.
@@ -18,6 +18,9 @@ when daily analysis is absent. Both were pushed to `whoop-ui`.
   already used by Recovery; secondary HRV cannot replace a refused headline.
 - Saved and live workout energy count recorded seconds, without billing gaps.
   Duplicate samples cannot inflate saved workout duration or stress coverage.
+- Automatic workout suggestions retain their conservative high-HR detection
+  core but recover contiguous lower-HR warm-up/cool-down boundaries. Expansion
+  is capped, stops at recording gaps and is deduplicated after refinement.
 - Daily active energy also integrates recorded seconds, in both the early and
   persisted calculations. Basal energy remains separate from active energy.
 - Invalid profile/HR anchors abstain rather than emitting non-finite results.
@@ -42,13 +45,14 @@ This is an incremental correction, not completion of the requested all-screen
 redesign or an empirical audit of every physiological algorithm. Device BLE,
 background execution, battery and frame profiling remain hardware-dependent.
 Historical rows whose source recordings were pruned cannot all be recomputed.
+Algorithm 116 and its analytics pin are local and have not been pushed.
 
 ## Dashboard and calculation documentation
 
 The web dashboard's mobile date row now centers the selected date independently
 of the optional past-day `Today` shortcut. It was visually checked at 390 px and
 320 px widths without horizontal overflow, and the dashboard regression suite
-passes 8/8. `docs/CALCULATION_GUIDE.md` records the current algorithm-115 data
+passes 8/8. `docs/CALCULATION_GUIDE.md` records the current algorithm-116 data
 flow, formulas, quality gates and validation limits. The dashboard is published
 through the Pages workflow when `whoop-ui` is pushed.
 

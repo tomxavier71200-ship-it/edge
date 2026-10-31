@@ -1876,7 +1876,12 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // Non-finite/nonpositive profile anchors cannot produce energy or HR estimates.
 // Daily active energy uses observed seconds too, preserving basal + active = total.
 // Underlying formulas and analytics pin unchanged.
-const int kAlgoVersion = 115;
+// 115 → 116: automatic workout candidates still require the conservative
+// high-HR core, but their saved boundaries now recover contiguous lower-HR
+// warm-up/cool-down evidence. Expansion is capped at ten minutes per side,
+// stops at real recording gaps and is deduplicated against saved sessions only
+// after refinement. kAnalyticsPin moves with the output change.
+const int kAlgoVersion = 116;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2050,13 +2055,9 @@ const int kStrainRhrCarryDays = 7;
 // branch's own pin) IS an ancestor of `fe1464d` — the wearfit protocol
 // commit is already folded in, nothing is lost by moving to the tip.
 //
-// REPIN (main) @ 0441ef9 — analytics main, one commit past #75 above. Fixes
-// temp_circadian.dart's zero-variance division producing fabricated
-// interdailyStability/intradailyVariability=0.0 instead of null on a flat
-// skin-temp window (see pubspec.yaml's comment beside the `ref:` for the
-// verification command). kAlgoVersion bumped 96 -> 97, see the changelog
-// entry above.
-const String kAnalyticsPin = '0441ef9e6fc6d5681c309ce6341911285e829f20';
+// Koop analytics @ 610e56f — workout boundary refinement described in the
+// v116 changelog above. Must match pubspec.yaml exactly.
+const String kAnalyticsPin = '610e56f0e5e9edf3306e29428e0f556d295c73f2';
 // Repinned to analytics main's tip, which carries BOTH PR #72 (hrv_freq
 // Welch gap guard) and PR #73 (overreachingConjunction rhr quantum guard) —
 // the two independent kAlgoVersion bumps above (93 and 94). Verified both

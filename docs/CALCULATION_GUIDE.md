@@ -1,6 +1,6 @@
 # Koop calculation guide
 
-Current implementation: algorithm version 115, reviewed 2026-10-31.
+Current implementation: algorithm version 116, reviewed 2026-10-31.
 
 This document describes what Koop calculates now. It distinguishes calculation
 logic from measurement accuracy: correct software cannot repair a poor sensor
@@ -24,8 +24,13 @@ WHOOP.
 Automatic detection proposes sessions from sustained heart-rate and movement
 evidence. Low-arm-motion activities can use a strong heart-rate-onset signal.
 Walking/recovery inside an otherwise sustained workout does not automatically
-truncate the later workout core. Sessions are still estimates: start and end
-times require real-recording validation.
+truncate the later workout core. Detection still requires a conservative core
+at 45% heart-rate reserve. Once that core qualifies, its proposed boundaries
+may expand through contiguous warm-up/cool-down at 30% heart-rate reserve,
+capped at ten minutes per side. A recording gap or sustained recovery stops the
+expansion, and the refined window is checked against saved sessions to prevent
+duplicates. Sessions remain estimates: start and end times require real-recording
+validation.
 
 For a saved or live session, Koop keeps only valid, unique recorded seconds:
 
