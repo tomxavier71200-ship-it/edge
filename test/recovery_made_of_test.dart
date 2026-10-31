@@ -22,6 +22,26 @@ Map<String, dynamic> _method({double score = 70.0}) => {
     };
 
 void main() {
+  testWidgets('bounded scores explain the difference between parts and total', (t) async {
+    final method = _method(score: 99);
+    (((method['parts'] as Map)['parts'] as List).first as Map)['points'] = 80.0;
+    final made = recoveryPartRows(method, 99);
+    expect(made, isNotNull);
+    await t.pumpWidget(MaterialApp(theme: buildTheme(Brightness.dark),
+        home: Scaffold(body: RecoveryMadeOf(made!))));
+    expect(find.text('Score limit'), findsOneWidget);
+    expect(find.text('99%'), findsOneWidget);
+  });
+
+  test('corrupt contributions and non-finite scores cannot explain the dial', () {
+    final method = _method();
+    final parts = method['parts'] as Map;
+    ((parts['parts'] as List).first as Map)['points'] = 90.0;
+    expect(recoveryPartRows(method, 70), isNull);
+    expect(recoveryPartRows(_method(score: double.nan), 70), isNull);
+    expect(recoveryPartRows(_method(), double.infinity), isNull);
+  });
+
   test('rows name each weighted input, how it compared, and its points', () {
     final made = recoveryPartRows(_method(), 70)!;
     expect(made.intercept, 64.4);

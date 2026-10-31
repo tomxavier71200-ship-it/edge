@@ -1866,7 +1866,17 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // rounding, preserving intervals and preventing sparse minutes earning 60 s.
 // Interior walking recoveries no longer truncate a later training block.
 // kAnalyticsPin/kProtocolPin UNCHANGED: orchestration fixes only.
-const int kAlgoVersion = 114;
+// 114 → 115: HRV timeline restarts full-window coverage after recording
+// gaps and excludes invalid observations. Rolling sums avoid per-beat rescans.
+// HR stress rejects invalid reserve inputs and duplicate-second coverage.
+// Saved workout calories count unique recorded seconds, not recording gaps.
+// Headline HRV respects the session refusal already used by Recovery.
+// Weighted sleep HRV excludes explicit unknown stages and awake beats inside
+// accepted windows instead of only rejecting mostly-awake windows.
+// Non-finite/nonpositive profile anchors cannot produce energy or HR estimates.
+// Daily active energy uses observed seconds too, preserving basal + active = total.
+// Underlying formulas and analytics pin unchanged.
+const int kAlgoVersion = 115;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -6270,10 +6280,14 @@ class DerivationEngine {
     required Profile profile,
     required double? restingHr,
     int? dayMinutes,
+    double sampleDurationMin = 1,
     String? deviceFamily,
     List<double?>? cadenceSpmPerMin,
   }) {
-    if (!profile.hasCalorieAnchors) return null;
+    if (!profile.hasCalorieAnchors || !sampleDurationMin.isFinite ||
+        sampleDurationMin <= 0) {
+      return null;
+    }
     // The active gate is a %HRR flex point, so it needs BOTH ends of the
     // reserve. No resting HR, no gate — and no gate means every wake minute
     // bills as active. Abstain, same as an absent ceiling below.
@@ -6322,10 +6336,10 @@ class DerivationEngine {
     // day, which is what every other caller of this method already expects.
     if (e == null) return null;
     return (
-      active: e.active,
+      active: e.active * sampleDurationMin,
       basal: e.basal,
-      total: e.total,
-      walking: e.walking,
+      total: e.basal + e.active * sampleDurationMin,
+      walking: e.walking * sampleDurationMin,
     );
   }
 
@@ -6941,6 +6955,12 @@ class DerivationEngine {
     final wakeSeries =
         _perMinuteMeanWake(daySub, sleepOnsetSec, sleepOffsetSec,
             age: profile.ageYears?.round());
+    final ceiling = hrCeilingForAge(profile.ageYears);
+    final strainSeconds = [for (var i = 0; i < daySub.length; i++)
+      if (daySub.hr[i] >= kHrFloorBpm && daySub.hr[i] <= ceiling &&
+          !(daySub.tsSec[i] >= sleepOnsetSec &&
+            daySub.tsSec[i] < sleepOffsetSec)) i];
+    final strainHr = [for (final i in strainSeconds) daySub.hr[i].toDouble()];
     final perMin = wakeSeries.hr;
     // The day's MEASURED walking cadence, minute-aligned to the same wake
     // buckets — from the resolved `live_coverage` spans, so band/phone overlap
@@ -7071,12 +7091,6 @@ class DerivationEngine {
           // The same WHOOP-matched score the pipeline puts on the bundle
           // (whoop_calibration.dart), so the stored scalar and the clinical
           // envelope are one number. Gated on Koop's scorer the same way.
-          final ceiling = hrCeilingForAge(profile.ageYears);
-          final strainSeconds = [for (var i = 0; i < daySub.length; i++)
-            if (daySub.hr[i] >= kHrFloorBpm && daySub.hr[i] <= ceiling &&
-                !(daySub.tsSec[i] >= sleepOnsetSec &&
-                  daySub.tsSec[i] < sleepOffsetSec)) i];
-          final strainHr = [for (final i in strainSeconds) daySub.hr[i].toDouble()];
           final load = whoopStrainLoad(strainHr, rhrForTrimp, hrMax,
               sampleDurationMin: 1 / 60);
           final worn = (wear['worn_min'] as num?)?.toDouble();
@@ -7141,15 +7155,18 @@ class DerivationEngine {
       // 79.5 bpm at age 70, so an older sleeper spends the night above it.
       // `dayMinutes` pro-rates the basal floor over the span actually covered,
       // so a partial day is not billed a full 24 h BMR.
+      final cadenceByMinute = <int, double?>{
+        if (wakeCadence != null)
+          for (var i = 0; i < wakeSeries.keys.length; i++)
+            wakeSeries.keys[i]: wakeCadence[i],
+      };
       final energy = wakeDayEnergy(
-        perMin,
-        profile: profile,
-        // The same anchor the TRIMP above is scored against — a nocturnal RHR
-        // or the one the user entered, never a daytime fallback.
-        restingHr: rhrForTrimp,
-        dayMinutes: motion.length,
-        deviceFamily: daySub.deviceFamily,
-        cadenceSpmPerMin: wakeCadence,
+        strainHr, profile: profile, restingHr: rhrForTrimp,
+        dayMinutes: motion.length, deviceFamily: daySub.deviceFamily,
+        sampleDurationMin: 1 / 60,
+        cadenceSpmPerMin: wakeCadence == null ? null : [
+          for (final i in strainSeconds) cadenceByMinute[daySub.tsSec[i] ~/ 60],
+        ],
       );
       if (energy != null) {
         calories = energy.active;

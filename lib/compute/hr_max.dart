@@ -63,8 +63,9 @@ import 'package:openstrap_analytics/onehz.dart' as ana;
 /// the band actually MEASURED — is `observedCeilingBpm`, and that one still
 /// refuses for an unknown family, in analytics' `observed_max_hr.dart`.
 double? estimatedMaxHr(num? age, String? deviceFamily) {
-  if (age == null || age <= 0) return null;
-  return 208.0 - 0.7 * age.toDouble();
+  if (age == null || !age.isFinite || age <= 0) return null;
+  final estimate = 208.0 - 0.7 * age.toDouble();
+  return estimate > 0 ? estimate : null;
 }
 
 /// THE zone set every surface bands on — day zones, the day zone timeline and a

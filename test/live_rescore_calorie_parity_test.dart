@@ -21,19 +21,9 @@
 // that lands mid-session correct the whole bout instead of only the seconds
 // after it arrived.
 //
-// The retained series is per-SAMPLE seconds-at-each-bpm, not per-minute means.
-// The first version of this fix used per-minute means and stayed wrong in three
-// ways none of the original cases here could see, because they all ran a 1 Hz
-// stream whose single transition landed exactly on a minute boundary:
-//
-//   * the gate is per sample in the re-score and was per minute-MEAN here, so a
-//     minute straddling the gate went wholly to one rate;
-//   * a completed minute billed a flat 60 s regardless of how many samples
-//     backed it, and the minute in progress billed its SAMPLE COUNT as seconds;
-//   * a contact-loss gap billed 0 s live while the re-score bills the pre-gap
-//     sample for the gap, capped at 150 s.
-//
-// The last four cases in this file are each one of those.
+// v115: both paths count unique observed seconds. Off-wrist gaps and a sparse
+// stream no longer earn calories for time that was never recorded. These are
+// recorded-time estimates, not an extrapolation to the whole workout.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_analytics/onehz.dart' as ana;
@@ -251,12 +241,7 @@ void main() {
     );
   });
 
-  test('a contact-loss gap is billed the same way on both sides', () {
-    // Two minutes of contact, a minute of nothing, two more minutes. The band
-    // reports 0 for off-skin, which is not a heart rate, so it is dropped — but
-    // the TIME is not. `estimateBoutCalories` sees the filtered stream and bills
-    // the pre-gap sample for the gap (capped at 150 s), and the live tick has to
-    // do the same or the gauge loses a minute the re-score keeps.
+  test('contact-loss seconds are not billed on either side', () {
     final withGap = <int>[
       for (var i = 0; i < 120; i++) 140,
       for (var i = 0; i < 60; i++) 0,
@@ -266,20 +251,11 @@ void main() {
     final live = _run(withGap);
 
     expect(live.calories, closeTo(_rescore(withGap), 0.25));
-    // 300 billed seconds at 140 bpm: 239 one-second steps, the 61 s the pre-gap
-    // sample carries across the outage, and one representative second for the
-    // final sample. 300 * 0.1808333 = 54.25 kcal.
-    expect(live.calories, closeTo(54.25, 0.25));
+    // 240 recorded seconds * 0.1808333 kcal/s.
+    expect(live.calories, closeTo(43.40, 0.25));
   });
 
-  test('an outage longer than the cap stops billing at the cap', () {
-    // The case above leaves the 150 s cap itself untested: a 61 s gap bills the
-    // same whether the bound is there or not, so it pins gap HANDLING and not
-    // the bound. A strap off the wrist for three and a half minutes is what
-    // separates them — the pre-gap sample is evidence about the next 150 s at
-    // most, and past that the athlete may simply have stopped. Both sides have
-    // to give up at the same point, or the gauge and its own re-score part
-    // company by whatever the outage ran over.
+  test('long outages do not invent up to 150 seconds of exercise', () {
     final longGap = <int>[
       for (var i = 0; i < 120; i++) 140,
       for (var i = 0; i < 200; i++) 0,
@@ -289,18 +265,10 @@ void main() {
     final live = _run(longGap);
 
     expect(live.calories, closeTo(_rescore(longGap), 0.25));
-    // 389 billed seconds at 140 bpm, NOT the 439 seconds of wall clock: 119
-    // one-second steps before the outage, 150 (not 200) carried across it, 119
-    // after, and one representative second for the final sample.
-    // 389 * 0.1808333 = 70.34 kcal.
-    expect(live.calories, closeTo(70.34, 0.25));
+    expect(live.calories, closeTo(43.40, 0.25));
   });
 
-  test('a non-1 Hz stream bills real seconds, not sample counts', () {
-    // A 5 s notify rate. The per-minute scoring billed a completed minute a flat
-    // 60 s however few samples backed it, and billed the minute in progress
-    // `_minuteCount` — a SAMPLE count — as if it were seconds, so the trailing
-    // minute was worth 12 s.
+  test('sparse streams count observed seconds without extrapolation', () {
     final sparse = <int>[
       for (var i = 0; i < 60; i++) 140,
       for (var i = 0; i < 60; i++) 70,
@@ -309,10 +277,8 @@ void main() {
     final live = _run(sparse, stepSec: 5);
 
     expect(live.calories, closeTo(_rescore(sparse, stepSec: 5), 0.25));
-    // 300 s at 140 (60 samples x 5 s) + 296 s at 70 (59 x 5 s + the final
-    // sample's one representative second) = 54.25 + 5.87 = 60.12 kcal. 70 bpm
-    // is under the resting floor, so those 296 s bill the resting rate.
-    expect(live.calories, closeTo(60.12, 0.25));
+    // 60 observed seconds at 140 + 60 at 70 bpm.
+    expect(live.calories, closeTo(12.04, 0.25));
   });
 
   test('time before the first sample is not billed', () {

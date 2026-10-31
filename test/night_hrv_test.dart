@@ -22,6 +22,24 @@ const int _t0 = 1786700000;
 }
 
 void main() {
+  test('explicit unobserved and unknown stage labels never count as sleep', () {
+    final b = _beats([(7200, 40)]);
+    for (final stage in ['unobserved', 'unknown', 'invalid']) {
+      final m = weightedNightRmssd(b.rr, b.ts, startSec: _t0,
+          endSec: _t0 + 7200, stages: List.filled(7200, stage));
+      expect(m.present, isFalse, reason: stage);
+    }
+  });
+
+  test('short awake intervals inside accepted windows do not raise sleep HRV', () {
+    final b = _beats(List.generate(24, (i) => i.isEven ? (240, 40.0) : (60, 120.0)));
+    final stages = List.generate(3600, (i) => i % 300 < 240 ? 'light' : 'wake');
+    final m = weightedNightRmssd(b.rr, b.ts, startSec: _t0,
+        endSec: _t0 + 3600, stages: stages);
+    expect(m.present, isTrue);
+    expect(m.value!, closeTo(40, 1));
+  });
+
   test('wake windows are left out', () {
     final b = _beats([(3600, 40), (1800, 120)]);
     final stages = [

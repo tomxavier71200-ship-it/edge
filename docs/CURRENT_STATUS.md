@@ -1,0 +1,44 @@
+# Koop development status
+
+Updated 2026-10-31. Read this with `AGENTS.md`, then only the files relevant to the task.
+
+## Previously delivered
+
+`8f39f03c` corrected observed-duration strain integration, sleep result reuse,
+workout counter-reset trimming, nap imports, and dashboard metric reads.
+`da45dbac` keeps saved workouts on the selected past day's Home timeline even
+when daily analysis is absent. Both were pushed to `whoop-ui`.
+
+## Current implementation (algorithm 115)
+
+- HRV timeline requires a new five-minute window after recording gaps and
+  sufficient observed coverage; rolling sums replace repeated window scans.
+- Weighted sleep HRV excludes unknown/unobserved stages and awake beats within
+  accepted windows. The displayed headline respects the session quality gate
+  already used by Recovery; secondary HRV cannot replace a refused headline.
+- Saved and live workout energy count recorded seconds, without billing gaps.
+  Duplicate samples cannot inflate saved workout duration or stress coverage.
+- Daily active energy also integrates recorded seconds, in both the early and
+  persisted calculations. Basal energy remains separate from active energy.
+- Invalid profile/HR anchors abstain rather than emitting non-finite results.
+- Shared detail dials transition between values, respect reduced motion and
+  avoid duplicate screen-reader announcements. Revisit state is bounded.
+- Recovery explanations validate their arithmetic and explain score limits and
+  the limitations of the existing fitted model.
+
+See `TEST_RESULTS.md` for verification and `PERFORMANCE_BASELINE.md` for the
+limited desktop benchmark. Do not infer device performance or clinical validity.
+The full run passed 4,510 tests with 662 skips; its one outdated timing fixture
+was corrected and all 40 related tests then passed. Static analysis is clean.
+
+## Remaining work
+
+The reported sleep-onset discrepancy still needs the corresponding raw recording
+and an independent reference. Sleep stages, inferred respiration, energy,
+VO2max and personal Recovery scores are not independently validated by these
+software tests. Existing fitted coefficients were not retuned in this change.
+
+This is an incremental correction, not completion of the requested all-screen
+redesign or an empirical audit of every physiological algorithm. Device BLE,
+background execution, battery and frame profiling remain hardware-dependent.
+Historical rows whose source recordings were pruned cannot all be recomputed.

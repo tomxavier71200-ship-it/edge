@@ -7567,21 +7567,10 @@ class LiveWorkoutState {
   /// length, while retaining raw 1 Hz samples is not.
   final Map<int, double> _secondsByBpm = {};
 
-  /// The most recent accepted sample, still unbilled: its duration is the time
-  /// until the NEXT sample, which has not arrived. Also what makes a gap in the
-  /// stream bill correctly — the sample before a contact-loss gap is charged
-  /// for the gap, capped, exactly as the re-score charges it.
+  /// The latest recorded second is billed once in the live display and folded
+  /// into the histogram on the next sample. Missing seconds are never filled.
   int? _lastSampleHr;
   double? _lastSampleSec;
-
-  /// A stream that stops for longer than this stopped being one bout; billing
-  /// the pre-gap heart rate across an hour of no data would invent the hour.
-  ///
-  /// Taken from the analytics constant rather than restated, because the whole
-  /// point of this scoring path is that it gives up at the same instant the
-  /// re-score of the same stream does. A second literal 150.0 here would agree
-  /// today and diverge silently the day the published cap moved.
-  static const double _gapCapS = ana.Calories.defaultMergeGapCapS;
 
   LiveWorkoutState({
     required this.startTime,
@@ -7607,26 +7596,19 @@ class LiveWorkoutState {
   /// per-minute accumulator behind strain, the per-bpm second counts behind
   /// calories, and both derived figures.
   ///
-  /// A non-positive reading is off-skin, not a heart rate, so it is dropped —
-  /// but the time it covers is NOT thrown away. It is billed to the last real
-  /// sample when the next one arrives, capped at [_gapCapS], which is what
-  /// `estimateBoutCalories` does with the same gap once the zeros have been
-  /// filtered out of the stream it re-scores.
+  /// Off-skin, duplicate-second and out-of-order arrivals do not add observed
+  /// time. Like the saved 1 Hz ledger, each accepted second contributes once.
   void accrueHr(int hr) {
     if (hr <= 0) return;
+    final nowSec = elapsed.inSeconds.toDouble();
+    final prevSec = _lastSampleSec;
+    if (prevSec != null && nowSec <= prevSec) return;
     _hrPeak.add(hr);
     if (_hrPeak.max > maxHrSeen) maxHrSeen = _hrPeak.max;
 
-    // Close out the previous sample: its duration is the time until this one.
-    // Sub-second and out-of-order arrivals fall back to one second, matching
-    // `estimateBoutCalories`'s handling of a non-positive gap.
-    final nowSec = elapsed.inMicroseconds / Duration.microsecondsPerSecond;
     final prevHr = _lastSampleHr;
-    final prevSec = _lastSampleSec;
-    if (prevHr != null && prevSec != null) {
-      final gap = nowSec - prevSec;
-      final dur = gap > 0 ? math.min(gap, _gapCapS) : 1.0;
-      _secondsByBpm[prevHr] = (_secondsByBpm[prevHr] ?? 0) + dur;
+    if (prevHr != null) {
+      _secondsByBpm[prevHr] = (_secondsByBpm[prevHr] ?? 0) + 1;
     }
     _lastSampleHr = hr;
     _lastSampleSec = nowSec;

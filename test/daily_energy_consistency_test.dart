@@ -49,6 +49,36 @@ final _dayHr = <double>[
 ];
 
 void main() {
+  test('partial recorded minutes earn only observed active energy in both passes', () {
+    const start = 1767225600;
+    final ts = List.generate(60, (i) => start + i);
+    final hr = List.generate(60, (i) => i < 10 ? 140 : 0);
+    final sub = Substrate(tsSec: ts, hr: hr,
+      rrTsMs: const [], rrMs: const [],
+      ax: List.generate(60, (i) => .01 * (i % 5)),
+      ay: List.filled(60, 0), az: List.filled(60, 1),
+      spo2Red: List.filled(60, 0), spo2Ir: List.filled(60, 0),
+      skinTemp: List.filled(60, 0), skinContact: List.filled(60, 0),
+      deviceFamily: 'gen4');
+    final scalars = <String, dynamic>{};
+    DerivationEngine.applyDayActivity(bundle: {}, scalars: scalars,
+      daySub: sub, profile: _profile, restingHr: 55,
+      sleepOnsetSec: 0, sleepOffsetSec: 0, dayStartSec: start,
+      dayCalendarEndSec: start + 86400, dataNowSec: start + 60);
+    final early = deriveDayBundle(DayBundleInput(date: '2026-01-01',
+      dayTsSec: ts, dayHr: hr, sleepTsSec: const [], sleepHr: const [],
+      sleepRrTsMs: const [], sleepRrMs: const [], sleepSkinTemp: const [],
+      sleepJson: const {}, hypnoStages: const [],
+      sleepOnsetSec: 0, sleepOffsetSec: 0,
+      profile: {..._profile.toMap(), 'resting_hr': 55}, deviceFamily: 'gen4',
+    ).toJson());
+    final expected = (_keytelKcalMinAt140 - _basalPerMin) * 10 / 60;
+    expect(scalars['calories'], closeTo(expected, .01));
+    expect((early['scalars'] as Map)['calories'], closeTo(expected, .051));
+    expect((scalars['calories_total'] as num) - (scalars['calories'] as num),
+        closeTo(_basalPerMin, .01));
+  });
+
   group('DerivationEngine.wakeDayEnergy', () {
     test('active calories net out the basal minute, not double-count it', () {
       final e = DerivationEngine.wakeDayEnergy(_dayHr, profile: _profile, restingHr: 55, deviceFamily: 'gen4');

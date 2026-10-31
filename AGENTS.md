@@ -1,5 +1,26 @@
 # AGENTS.md — OpenStrap `edge`
 
+## Active workflow
+
+Read `docs/CURRENT_STATUS.md` next, then inspect only the source and supporting
+docs relevant to the requested change. Protect existing uncommitted work. Use
+focused searches/diffs, reuse existing components, and run targeted regressions
+during iteration followed by comprehensive checks before release. Do not edit
+source while a final test run is compiling it; rerun affected tests after edits.
+
+Available installed skill names: `flutter-ui-ux` for visual work,
+`flutter-animation` for motion, `flutter-performance` for evidence-based profiling,
+and `flutter-testing` for regression strategy. Load only the relevant skill;
+project constraints and the installed Flutter SDK take precedence over generic
+examples. These skills are installed in the developer's Codex environment, not
+vendored into this repository.
+`koop-improvement` carries the owner's full advanced improvement workflow and
+acceptance checklist; use it for comprehensive Koop improvement requests.
+
+Keep status concise: objective, files changed, implementation, actual test results,
+remaining issues. Update the relevant docs after meaningful changes; do not load
+all docs by default. Never equate synthetic tests with physiological validation.
+
 Reviewer context. This doc drifts from code between edits — check
 `kAlgoVersion` (`lib/compute/derivation_engine.dart`), `schemaVersion`
 (`lib/data/db.dart`), and the `version:` line in `pubspec.yaml` directly

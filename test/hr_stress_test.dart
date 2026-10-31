@@ -14,6 +14,25 @@ List<Map<String, dynamic>> _bin(int hr, {int act = 0, int secs = 300}) =>
     );
 
 void main() {
+  test('duplicate samples cannot turn thin wear into sufficient coverage', () {
+    final bins = hrStressPerWindow(
+      tsSec: List.generate(300, (i) => 9000 + i ~/ 3),
+      hr: List.filled(300, 80), restingHr: 60, maxHr: 190,
+    );
+    expect(bins.single['score'], isNull);
+  });
+
+  test('invalid reserve anchors and bin lengths abstain without throwing', () {
+    for (final rest in [double.nan, double.infinity, -1.0]) {
+      expect(hrStressPerWindow(tsSec: [1], hr: [80],
+          restingHr: rest, maxHr: 190), isEmpty);
+    }
+    expect(hrStressPerWindow(tsSec: [1], hr: [80],
+        restingHr: 60, maxHr: double.infinity), isEmpty);
+    expect(hrStressPerWindow(tsSec: [1], hr: [80],
+        restingHr: 60, maxHr: 190, binSec: 0), isEmpty);
+  });
+
   test('at rest reads low, sitting raised reads medium', () {
     expect(_bin(60).single['score'], 0);
     // 95 bpm: 35 of a 130 bpm reserve = 27% → 54 of 100.

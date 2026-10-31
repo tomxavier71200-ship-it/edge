@@ -170,11 +170,14 @@ class ReadinessData {
 ({double intercept, double score, List<(String, String, double?)> rows})?
     recoveryPartRows(Map<String, dynamic>? method, double? shown) {
   final parts = method?['parts'];
-  if (parts is! Map || shown == null) return null;
+  if (parts is! Map || shown == null || !shown.isFinite) return null;
   final score = (parts['score'] as num?)?.toDouble();
   final intercept = (parts['intercept'] as num?)?.toDouble();
   final list = parts['parts'];
-  if (score == null || intercept == null || list is! List) return null;
+  if (score == null || !score.isFinite || intercept == null ||
+      !intercept.isFinite || list is! List) {
+    return null;
+  }
   if ((score - shown).abs() > 1.0) return null;
   const labels = {
     'hrv': ('HRV', 'higher', 'lower'),
@@ -183,13 +186,22 @@ class ReadinessData {
     'resp': ('Breathing rate', 'higher', 'lower'),
   };
   final rows = <(String, String, double?)>[];
+  var total = intercept;
   for (final p in list) {
-    if (p is! Map) continue;
+    if (p is! Map) return null;
     final key = p['key']?.toString();
     final l = labels[key];
-    if (l == null || key == 'resp') continue; // weighted 0
     final z = (p['z'] as num?)?.toDouble();
-    final points = (p['points'] as num?)?.toDouble() ?? 0;
+    final points = (p['points'] as num?)?.toDouble();
+    if (l == null || points == null || !points.isFinite ||
+        (z != null && !z.isFinite) || (z == null && points != 0)) {
+      return null;
+    }
+    total += points;
+    if (key == 'resp') {
+      if (points != 0) return null; // this version cannot explain another model
+      continue;
+    }
     final how = z == null
         ? 'not measured, adds nothing'
         : z.abs() < 0.5
@@ -197,6 +209,7 @@ class ReadinessData {
             : '${z > 0 ? l.$2 : l.$3} than your usual';
     rows.add((l.$1, how, z == null ? null : points));
   }
+  if ((total.clamp(1.0, 99.0) - score).abs() > 1.0) return null;
   return (intercept: intercept, score: score, rows: rows);
 }
 
@@ -209,7 +222,7 @@ class RecoveryMadeOf extends StatelessWidget {
 
   /// Inputs measured but given no weight by the current formula.
   static const zeroWeighted =
-      'Breathing rate is measured but carries no weight: in your WHOOP export '
+      'Breathing rate carries no weight in this model: in your WHOOP export '
       'it did not help predict Recovery.';
 
   @override
@@ -233,10 +246,11 @@ class RecoveryMadeOf extends StatelessWidget {
           ]),
         );
     String pts(double v) => '${v >= 0 ? '+' : '−'}${v.abs().toStringAsFixed(1)}';
+    final raw = made.rows.fold(made.intercept, (sum, row) => sum + (row.$3 ?? 0));
     return Surface(
       pad: const EdgeInsets.symmetric(horizontal: S.x4),
       child: Column(children: [
-        line('Your starting point', 'a typical night for you',
+        line('Your starting point', 'starting value of the fitted model',
             made.intercept.toStringAsFixed(1)),
         for (final (label, how, points) in made.rows) ...[
           Divider(color: p.line, height: 1),
@@ -245,11 +259,17 @@ class RecoveryMadeOf extends StatelessWidget {
                   ? p.ink3
                   : p.on(points >= 0 ? C.green : C.orange)),
         ],
+        if (raw < 1 || raw > 99) ...[
+          Divider(color: p.line, height: 1),
+          line('Score limit', 'Recovery is limited to 1–99', pts(made.score - raw)),
+        ],
         Divider(color: p.line, height: 1),
         line('Recovery', null, '${made.score.round()}%'),
         Padding(
           padding: const EdgeInsets.only(bottom: S.x3),
-          child: Text(zeroWeighted, style: F.cap.copyWith(color: p.ink3)),
+          child: Text('$zeroWeighted This is a personal estimate fitted to '
+              'previous scores, not an independently validated measurement '
+              'of recovery.', style: F.cap.copyWith(color: p.ink3)),
         ),
       ]),
     );

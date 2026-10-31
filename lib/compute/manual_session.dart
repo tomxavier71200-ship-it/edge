@@ -28,7 +28,6 @@
 // renders "—". A duration alone NEVER becomes a strain or a calorie figure.
 
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:openstrap_analytics/onehz.dart' as ana;
 
@@ -344,11 +343,10 @@ ManualSessionStats computeManualSessionStats({
   // that: forwarding the raw list to the calorie estimator billed each dropped
   // second at the resting rate, so a window with lost contact scored kcal that
   // avgHr, strain and the zone bands had all correctly ignored.
-  final wornTs = <int>[];
   final worn = <int>[];
+  final seenSeconds = <int>{};
   for (var i = 0; i < hrBpm.length; i++) {
-    if (hrBpm[i] > 0) {
-      wornTs.add(hrTs[i]);
+    if (hrBpm[i] > 0 && seenSeconds.add(hrTs[i])) {
       worn.add(hrBpm[i]);
     }
   }
@@ -383,8 +381,9 @@ ManualSessionStats computeManualSessionStats({
       sex != null) {
     // Real anchors only: no gate, no figure — never one built on a
     // fabricated 220/60. WHOOP's line per second (whoop_calibration.dart),
-    // floored at the resting rate, integrated the way the analytics bout
-    // estimator integrates: each sample carries the gap to the next, capped.
+    // floored at the resting rate. This ledger is 1 Hz: each unique recorded
+    // second contributes once, exactly as strain and zones do. Do not bill
+    // unobserved time between samples as exercise.
     if (restingHr != null &&
         ana.Calories.activeGateHr(hrMax, restingHr) != null) {
       final restingRate = ana.Calories.restingKcalPerS(
@@ -394,11 +393,7 @@ ManualSessionStats computeManualSessionStats({
           age);
       var kcal = 0.0;
       for (var i = 0; i < worn.length; i++) {
-        final gap = i < worn.length - 1 ? wornTs[i + 1] - wornTs[i] : 1;
-        final dur = gap > 0
-            ? math.min(gap.toDouble(), ana.Calories.defaultMergeGapCapS)
-            : 1.0;
-        kcal += whoopWorkoutKcalPerS(worn[i].toDouble(), restingRate) * dur;
+        kcal += whoopWorkoutKcalPerS(worn[i].toDouble(), restingRate);
       }
       if (kcal > 0) calories = kcal;
     }

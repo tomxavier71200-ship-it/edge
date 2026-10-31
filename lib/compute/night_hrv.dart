@@ -20,7 +20,8 @@
 // out; too few windows and the whole night abstains (the caller then keeps the
 // previous estimator's answer, which measures the same quantity).
 
-import 'package:openstrap_analytics/onehz.dart' show Metric, Tier, sleepSessionWindowedRmssd;
+import 'package:openstrap_analytics/onehz.dart'
+    show Metric, Tier, sleepSessionWindowedRmssd;
 
 const int kHrvWindowSec = 300;
 const int kHrvStepSec = 30;
@@ -79,15 +80,17 @@ Metric<double> weightedNightRmssd(
   var sumW = 0.0, sumWv = 0.0;
   var n = 0;
   final span = (endSec - startSec).toDouble();
+  bool sleeping(String? label) =>
+      label == 'light' || label == 'deep' || label == 'rem' || label == 'nrem';
   for (var w = startSec; w + kHrvWindowSec <= endSec; w += kHrvStepSec) {
     var wake = 0, deep = 0, unstaged = 0;
     for (var s = w; s < w + kHrvWindowSec; s++) {
       final i = s - startSec;
       final lbl = i >= 0 && i < stages.length ? stages[i] : null;
-      if (lbl == null || lbl.isEmpty) {
-        unstaged++;
-      } else if (lbl == 'wake') {
+      if (lbl == 'wake') {
         wake++;
+      } else if (!sleeping(lbl)) {
+        unstaged++;
       } else if (lbl == 'deep') {
         deep++;
       }
@@ -95,11 +98,22 @@ Metric<double> weightedNightRmssd(
     // Mostly awake or mostly unknown: WHOOP removes wake, and an unstaged
     // stretch cannot be shown not to be wake.
     if (wake + unstaged > kHrvWindowSec ~/ 2) continue;
-    final a = lowerBound(w * 1000.0), b = lowerBound((w + kHrvWindowSec) * 1000.0);
+    final a = lowerBound(w * 1000.0),
+        b = lowerBound((w + kHrvWindowSec) * 1000.0);
     if (b - a < 2) continue;
+    // A mostly-asleep window can still contain awake or unobserved intervals.
+    // Remove those beats as well; accepting the window must not admit them.
+    final windowRr = <double>[], windowTs = <double>[];
+    for (var j = a; j < b; j++) {
+      final second = (ts[j] / 1000).floor() - startSec;
+      if (second >= 0 && second < stages.length && sleeping(stages[second])) {
+        windowRr.add(rr[j]);
+        windowTs.add(ts[j]);
+      }
+    }
     final m = sleepSessionWindowedRmssd(
-      rr.sublist(a, b),
-      ts.sublist(a, b),
+      windowRr,
+      windowTs,
       startSec: w,
       endSec: w + kHrvWindowSec,
       windowSec: kHrvWindowSec,
@@ -107,7 +121,8 @@ Metric<double> weightedNightRmssd(
     final v = m.value;
     if (!m.present || v == null || v <= 0) continue;
     final late = (w + kHrvWindowSec / 2 - startSec) / span;
-    final weight = (deep > kHrvWindowSec ~/ 2 ? kHrvDeepWeight : 1.0) *
+    final weight =
+        (deep > kHrvWindowSec ~/ 2 ? kHrvDeepWeight : 1.0) *
         (1 + kHrvLateWeight * late.clamp(0.0, 1.0));
     sumW += weight;
     sumWv += weight * v;
@@ -125,7 +140,8 @@ Metric<double> weightedNightRmssd(
     confidence: (n / 240.0).clamp(0.3, 0.95),
     tier: Tier.high,
     inputs_used: inputs,
-    note: 'sleep HRV: weighted mean RMSSD of overlapping 5-min windows '
+    note:
+        'sleep HRV: weighted mean RMSSD of overlapping 5-min windows '
         '(30 s step), wake removed, deep sleep and later night weighted up.',
   );
 }

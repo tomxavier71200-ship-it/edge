@@ -68,7 +68,8 @@ class Profile {
   /// 30-year-old 70 kg male, so an unfinished profile produced a confident
   /// kcal number that was simply somebody else's.
   bool get hasCalorieAnchors =>
-      ageYears != null && weightKg != null && sex != null;
+      ageYears != null && ageYears! > 0 && weightKg != null &&
+      weightKg!.isFinite && weightKg! > 0 && sex != null && sex!.trim().isNotEmpty;
 }
 
 /// Normalise every sex spelling the app can persist onto the three names the

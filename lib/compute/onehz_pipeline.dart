@@ -891,6 +891,11 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   final heightCm = (prof['height_cm'] as num?)?.toDouble();
   // Wake-span per-minute mean HR = the day minus the sleep window (shared by
   // TRIMP, HR zones, and calories so all three see the same wake series).
+  final strainCeiling = hrCeilingForAge((d.profile['age'] as num?)?.round());
+  final strainSeconds = [for (var i = 0; i < d.dayHr.length; i++)
+    if (d.dayHr[i] >= kHrFloorBpm && d.dayHr[i] <= strainCeiling &&
+        !(d.dayTsSec[i] >= d.sleepOnsetSec && d.dayTsSec[i] < d.sleepOffsetSec)) i];
+  final strainHr = [for (final i in strainSeconds) d.dayHr[i].toDouble()];
   final wakeHr = _perMinuteWakeSeries(d);
   final perMin = [for (final p in wakeHr) p.hr];
   // The cost of being awake that strain subtracts: THIS person's quiet-waking
@@ -995,30 +1000,25 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
         weightKg != null &&
         heightCm != null &&
         rhrForTrimp != null) {
-      caloriesKcal = Calories.dailyEnergy(
-        perMin,
-        profile: WorkoutUserProfile(
-          weightKg: weightKg,
-          heightCm: heightCm,
-          age: age,
-          sex: workoutSex(sex),
-        ),
-        hrmax: hrMax,
-        restingHr: rhrForTrimp,
-        // The SAME minute-aligned cadence the canonical pass uses — one
-        // mapping (`cadenceSpmForMinutes`) fed by the same credited spans, so
-        // this early read and the derived day bill a walk identically instead
-        // of the number growing when the coordinator's pass lands.
-        cadenceSpmPerMin: d.stepSpans.isEmpty
-            ? null
-            : cadenceSpmForMinutes(
-                [for (final p in wakeHr) p.tsSec ~/ 60],
-                d.stepSpans,
-              ),
-        // `?.` — `dailyEnergy` abstains outright when the anchors cannot
-        // define a gate, rather than billing every waking minute as active.
-        // Absent stays absent here, same as every other input on this seam.
-      )?.active; // active-energy component (Keytel surplus + walking term)
+      final cadence = d.stepSpans.isEmpty ? null : cadenceSpmForMinutes(
+          [for (final p in wakeHr) p.tsSec ~/ 60], d.stepSpans);
+      final cadenceByMinute = <int, double?>{
+        if (cadence != null)
+          for (var i = 0; i < wakeHr.length; i++) wakeHr[i].tsSec ~/ 60: cadence[i],
+      };
+      final energy = Calories.dailyEnergy(
+        strainHr,
+        profile: WorkoutUserProfile(weightKg: weightKg, heightCm: heightCm,
+            age: age, sex: workoutSex(sex)),
+        hrmax: hrMax, restingHr: rhrForTrimp,
+        cadenceSpmPerMin: cadence == null ? null : [
+          for (final i in strainSeconds) cadenceByMinute[d.dayTsSec[i] ~/ 60],
+        ],
+      );
+      // The library prices each supplied observation as one minute. This is
+      // the 1 Hz ledger: convert its active-energy sum to recorded seconds.
+      caloriesKcal = energy == null ? null : energy.active / 60;
+
     }
   }
 
@@ -1047,11 +1047,6 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   // the owner's export. It takes the score only where Koop's own scorer was
   // allowed to score — same anchors, same gates — so an absent strain stays
   // absent. The Banister TRIMP stays as the detail (`trimp`).
-  final strainCeiling = hrCeilingForAge((d.profile['age'] as num?)?.round());
-  final strainSeconds = [for (var i = 0; i < d.dayHr.length; i++)
-    if (d.dayHr[i] >= kHrFloorBpm && d.dayHr[i] <= strainCeiling &&
-        !(d.dayTsSec[i] >= d.sleepOnsetSec && d.dayTsSec[i] < d.sleepOffsetSec)) i];
-  final strainHr = [for (final i in strainSeconds) d.dayHr[i].toDouble()];
   final whoopLoad = whoopStrainLoad(strainHr, rhrForTrimp, hrMax,
       sampleDurationMin: 1 / 60);
   final strainMetric = !koopStrainMetric.present || whoopLoad == null
@@ -1076,7 +1071,7 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   final hrvOriginMs = (d.sleepRrTsMs.isEmpty || d.sleepRrMs.isEmpty)
       ? null
       : d.sleepRrTsMs.first - d.sleepRrMs.first;
-  final hrvTimeline = _hrvTimeline(nn, nnTimes, hrvOriginMs);
+  final hrvTimeline = buildHrvTimeline(nn, nnTimes, hrvOriginMs);
   // CV-06 — the SHAPE of the night: per-bin RMSSD over the same cleaned NN the
   // headline uses, so the curve and the number can never disagree. Bins that
   // fall under the beat floor stay in the series as HOLES on purpose — dropping
@@ -1296,14 +1291,9 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
   };
 
   // Indexed scalars (also surfaced to metric_series by the engine).
-  // HEADLINE RMSSD = mean of 5-min cleaned-window RMSSDs across the detected
-  // sleep session. Fall back to the robust estimator, then the whole-window
-  // RMSSD only when the canonical sleep-session value is absent.
-  final rmssdFallback = robustRmssd.present
-      ? robustRmssd.value
-      : ((hrvT.present && hrvT.value!.rmssd != null) ? hrvT.value!.rmssd : null);
-  final rmssdScalar = sleepSessionRmssd ??
-      (rmssdFallback != null && rmssdFallback >= kMinRmssdMs ? rmssdFallback : null);
+  // The headline and Recovery must share one quality gate. Secondary
+  // estimators remain in clinical detail, never replace a refused headline.
+  final rmssdScalar = sleepSessionRmssd;
   // Whole-window RMSSD kept available as a secondary detail (NOT the headline).
   final rmssdWholeScalar = (hrvT.present && hrvT.value!.rmssd != null)
       ? hrvT.value!.rmssd
@@ -2045,38 +2035,69 @@ List<Map<String, num>> _downsampleHr(List<int> tsSec, List<int> hr) {
 /// `t` is EPOCH SECONDS. [originMs] is the wall clock at `nnTimes == 0` (see
 /// the call site); with no origin there is no honest x-axis, so nothing is
 /// emitted rather than a curve stamped in 1970.
-List<Map<String, num>> _hrvTimeline(
+List<Map<String, num>> buildHrvTimeline(
   List<double> nn,
   List<double> nnTimes,
   double? originMs,
 ) {
-  if (nn.length < 10 || nnTimes.length != nn.length || originMs == null) {
+  if (nn.length < 10 || nnTimes.length != nn.length ||
+      originMs == null || !originMs.isFinite) {
     return const [];
   }
-  const winMs = 300000.0; // 5 min
+  const winMs = 300000.0;
+  // Same recording-gap boundary as the clinical stress/respiration pipeline.
+  const maxGapMs = 30000.0;
   final out = <Map<String, num>>[];
   var lo = 0;
+  var segmentStart = 0;
+  var ssd = 0.0;
+  var observedMs = 0.0;
+  var pairs = 0;
+  // Same adjacency rule as analytics hrvTime: after a dropped beat, the
+  // surviving observations are no longer successive NN intervals.
+  bool adjacent(int i) => nnTimes[i] - nnTimes[i - 1] <= nn[i] + .5;
   for (var i = 0; i < nn.length; i++) {
-    while (nnTimes[i] - nnTimes[lo] > winMs) {
+    if (!nn[i].isFinite || nn[i] <= 0 || !nnTimes[i].isFinite) {
+      lo = segmentStart = i + 1;
+      ssd = observedMs = 0;
+      pairs = 0;
+      continue;
+    }
+    if (i > segmentStart) {
+      final gap = nnTimes[i] - nnTimes[i - 1];
+      if (gap <= 0 || gap > maxGapMs) {
+        lo = segmentStart = i;
+        ssd = observedMs = 0;
+        pairs = 0;
+      } else {
+        if (adjacent(i)) {
+          final diff = nn[i] - nn[i - 1];
+          ssd += diff * diff;
+          pairs++;
+        }
+        observedMs += math.min(gap, nn[i]);
+      }
+    }
+    while (lo < i && nnTimes[i] - nnTimes[lo] > winMs) {
+      if (adjacent(lo + 1)) {
+        final diff = nn[lo + 1] - nn[lo];
+        ssd -= diff * diff;
+        pairs--;
+      }
+      observedMs -= math.min(nnTimes[lo + 1] - nnTimes[lo], nn[lo + 1]);
       lo++;
     }
-    // A FULL window, or nothing. `lo` cannot move until 5 min have elapsed, so
-    // before that `[lo..i]` is a partial window — the first point used to be an
-    // RMSSD over 10 beats (~8 s) drawn on a line documented as rolling 5-min
-    // windows, with nothing marking it as the outlier-prone sample it is.
-    if (nnTimes[i] - nnTimes[0] < winMs) continue;
-    if (i - lo >= 10) {
-      var ssd = 0.0;
-      for (var k = lo + 1; k <= i; k++) {
-        final diff = nn[k] - nn[k - 1];
-        ssd += diff * diff;
-      }
-      final rmssd = math.sqrt(ssd / (i - lo));
-      final tSec = ((originMs + nnTimes[i]) / 1000).round();
-      if (out.isEmpty || tSec - out.last['t']! > 60) {
-        out.add({'t': tSec, 'v': _round(rmssd, 1)});
-      }
+    // Restart the five-minute warm-up after a recording break. Retaining a
+    // few beats after a long gap is not a full window. Smaller gaps must still
+    // leave at least 80% observed time; never interpolate missing intervals.
+    if (nnTimes[i] - nnTimes[segmentStart] < winMs ||
+        observedMs < winMs * .8 || pairs < 10) {
+      continue;
     }
+    final tSec = ((originMs + nnTimes[i]) / 1000).round();
+    if (out.isNotEmpty && tSec - out.last['t']! <= 60) continue;
+    final rmssd = math.sqrt(math.max(0, ssd) / pairs);
+    out.add({'t': tSec, 'v': _round(rmssd, 1)});
   }
   return out;
 }
@@ -2216,14 +2237,17 @@ List<Map<String, dynamic>> hrStressPerWindow({
   required double? maxHr,
   int binSec = 300,
 }) {
-  if (restingHr == null || maxHr == null || maxHr <= restingHr + 20) {
+  if (restingHr == null || maxHr == null || !restingHr.isFinite ||
+      !maxHr.isFinite || restingHr <= 0 || maxHr <= restingHr + 20 ||
+      binSec <= 0) {
     return const [];
   }
   if (tsSec.length != hr.length) return const [];
   final hasActivity = activityClass.length == hr.length;
   final sum = <int, double>{}, worn = <int, int>{}, moving = <int, int>{};
+  final seenSeconds = <int>{};
   for (var i = 0; i < hr.length; i++) {
-    if (hr[i] <= 0) continue;
+    if (hr[i] <= 0 || !seenSeconds.add(tsSec[i])) continue;
     final k = tsSec[i] ~/ binSec;
     sum[k] = (sum[k] ?? 0) + hr[i];
     worn[k] = (worn[k] ?? 0) + 1;

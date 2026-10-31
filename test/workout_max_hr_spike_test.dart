@@ -160,6 +160,7 @@ void main() {
       final w = LiveWorkoutState(
           startTime: DateTime.now(), targetKcal: 300, age: 30);
       for (var i = 0; i < 40; i++) {
+        w.elapsed = Duration(seconds: i);
         w.accrueHr((i == 18 || i == 19) ? 200 : 142);
       }
       expect(w.maxHrSeen, 142);
