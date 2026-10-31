@@ -68,3 +68,7 @@ test('the actual database reader attributes consistency to its stamped day', () 
   assert.equal(context.sri,75);
   assert.equal(context.sriDay,'2026-10-30');
 });
+test('mobile date navigation centers the primary date independently of Today shortcut', () => {
+  assert.match(source, /\.datenav\{width:100%;display:grid;grid-template-columns:28px minmax\(0,max-content\) 28px;justify-content:center;position:relative\}/);
+  assert.match(source, /\.datenav \.today\{position:absolute;right:0;width:auto/);
+});

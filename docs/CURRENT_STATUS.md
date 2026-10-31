@@ -43,6 +43,15 @@ redesign or an empirical audit of every physiological algorithm. Device BLE,
 background execution, battery and frame profiling remain hardware-dependent.
 Historical rows whose source recordings were pruned cannot all be recomputed.
 
+## Dashboard and calculation documentation
+
+The web dashboard's mobile date row now centers the selected date independently
+of the optional past-day `Today` shortcut. It was visually checked at 390 px and
+320 px widths without horizontal overflow, and the dashboard regression suite
+passes 8/8. `docs/CALCULATION_GUIDE.md` records the current algorithm-115 data
+flow, formulas, quality gates and validation limits. The dashboard is published
+through the Pages workflow when `whoop-ui` is pushed.
+
 ## Apple interaction follow-up
 
 Day swipe cancellation, presentation continuity, release velocity and boundary
