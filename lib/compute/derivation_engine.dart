@@ -1889,7 +1889,13 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // plus a 05:06 main sleep. kAnalyticsPin moves with the sleep output change.
 // v117 was installed locally while the fragmented-onset change was incomplete;
 // v118 forces those immutable local rows to recompute with the final pin.
-const int kAlgoVersion = 118;
+// 118 → 119: re-derived workout bouts now retime existing sessions whose
+// source is auto-detection (`detected` or the legacy `auto`). Manual sessions
+// remain detector exclusions and are never rewritten. The retime is optimistic
+// against the old window, preserves the athlete's type/private/RPE fields, and
+// clears window-derived scores so the existing substrate rescore rebuilds them.
+// kAnalyticsPin/kProtocolPin UNCHANGED: edge-side persistence repair only.
+const int kAlgoVersion = 119;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -4876,11 +4882,38 @@ class DerivationEngine {
       for (final w in blocks.sessionHrrWrites) {
         await LocalDb.setSessionHrr(w.$1, w.$2);
       }
+      // Algorithm upgrades can improve a detector's boundaries after an
+      // auto-added session has already been saved. Manual/live sessions remain
+      // detector exclusions; only rows explicitly attributed to auto-detection
+      // reach this optimistic update. Scores are cleared by the DB seam and the
+      // ordinary post-drain `rescoreRecentSessions` pass rebuilds them from the
+      // same retained substrate. A stale row loses the compare-and-swap and is
+      // left alone rather than overwriting an athlete's concurrent edit.
+      for (final r in blocks.sessionWindowRevisions) {
+        if (r['changed'] == true) {
+          await LocalDb.retimeDetectedSession(
+            r['id'] as String,
+            expectedStartTs: r['old_start_ts'] as int,
+            expectedEndTs: r['old_end_ts'] as int,
+            startTs: r['start_ts'] as int,
+            endTs: r['end_ts'] as int,
+            hrrBpm: (r['hrr_bpm'] as num?)?.toDouble(),
+          );
+        }
+      }
       for (final sug in blocks.suggestionsToPersist) {
         await LocalDb.putWorkoutSuggestion({
           ...sug,
           'created_at': DateTime.now().millisecondsSinceEpoch,
         });
+      }
+      // A detector match is already represented by a saved auto-workout. Keep
+      // reanalysis from showing the same effort again as a review suggestion,
+      // including when its stored window was already exact before this pass.
+      for (final r in blocks.sessionWindowRevisions) {
+        await LocalDb.dismissWorkoutSuggestion(
+          '${day.date}:${r['start_ts'] as int}',
+        );
       }
       final nb = blocks.notifBout;
       // Only for a bout that is STILL waiting on an answer. The detector is
@@ -8620,6 +8653,7 @@ class DerivationEngine {
       suggestionsToPersist: wc.suggestionsToPersist,
       sessionHrrWrites: wc.sessionHrrWrites,
       notifBout: wc.notifBout,
+      sessionWindowRevisions: wc.sessionWindowRevisions,
     );
   }
 
@@ -8750,7 +8784,10 @@ class DerivationEngine {
       // minutes get mistaken for an undiscovered bout.
       final savedSpans = <ana.SavedWorkoutSpan>[
         for (final r in saved)
-          if (r['start_ts'] is int)
+          // Manual/live/imported windows are the athlete's record and remain
+          // hard exclusions. Auto-added rows are deliberately re-detected so
+          // a newer algorithm can repair their saved boundaries.
+          if (!_isDetectedSession(r) && r['start_ts'] is int)
             ana.SavedWorkoutSpan(
               r['start_ts'] as int,
               r['end_ts'] is int ? r['end_ts'] as int : dataNowSec,
@@ -8779,11 +8816,15 @@ class DerivationEngine {
       // HRR per bout from the per-second HR tail bracketing each bout end.
       final drops = <double>[];
       final taus = <double>[];
+      final hrrByEnd = <int, double>{};
       final boutJson = <Map<String, dynamic>>[];
       for (final b in bouts) {
         final r = _hrrForBout(s, b.endSec);
         final m = r.hrrBpm;
-        if (m != null) drops.add(m);
+        if (m != null) {
+          drops.add(m);
+          hrrByEnd[b.endSec] = double.parse(m.toStringAsFixed(1));
+        }
         if (r.tauSec != null) taus.add(r.tauSec!);
         boutJson.add({
           'start': b.startSec,
@@ -8824,6 +8865,15 @@ class DerivationEngine {
           : double.parse(
               (taus.reduce((a, c) => a + c) / taus.length).toStringAsFixed(1));
 
+      final revisions = detectedSessionWindowRevisions(
+        saved: saved,
+        detected: bouts,
+      );
+      for (final r in revisions) {
+        final hrr = hrrByEnd[r['end_ts']];
+        if (hrr != null) r['hrr_bpm'] = hrr;
+      }
+
       // Persist + notify only for RECENT days (≤ ~36 h old) so imports/re-analyze
       // don't resurface 90 days of prompts.
       final recent = (dataNowSec - dayEndSec) < 36 * 3600;
@@ -8833,8 +8883,14 @@ class DerivationEngine {
       // and opens the screen on it, so a second copy of the format here would
       // drift into a prompt that silently never fires again.
       String sugId(int startSec) => '$date:$startSec';
-      if (recent && bouts.isNotEmpty) {
-        for (final b in bouts) {
+      final matchedBoutStarts = revisions
+          .map((r) => r['start_ts'] as int)
+          .toSet();
+      final unmatchedBouts = bouts
+          .where((b) => !matchedBoutStarts.contains(b.startSec))
+          .toList(growable: false);
+      if (recent && unmatchedBouts.isNotEmpty) {
+        for (final b in unmatchedBouts) {
           toPersist.add({
             'id': sugId(b.startSec),
             'date': date,
@@ -8852,7 +8908,9 @@ class DerivationEngine {
         // day at once; without this every hours-old bout would fire a "did you work
         // out?" prompt → a wall of notifications. Suggestions are still persisted
         // above so they surface in the Workouts screen; we just don't ping for them.
-        final newest = bouts.reduce((a, b) => a.endSec >= b.endSec ? a : b);
+        final newest = unmatchedBouts.reduce(
+          (a, b) => a.endSec >= b.endSec ? a : b,
+        );
         if ((dataNowSec - newest.endSec) < 2 * 3600) {
           notif = (
             id: sugId(newest.startSec),
@@ -8867,11 +8925,80 @@ class DerivationEngine {
         sessionHrrWrites: sessionHrr,
         suggestionsToPersist: toPersist,
         notifBout: notif,
+        sessionWindowRevisions: revisions,
       );
     } catch (e) {
       if (kDebugMode) debugPrint('[derive] auto-workout/HRR FAILED/skipped: $e');
       return const _WorkoutCompute.empty();
     }
+  }
+
+  /// Match newly derived bouts to saved auto-detected sessions, one-to-one.
+  ///
+  /// Manual/live/imported rows never enter the candidate set. A match needs a
+  /// nearby start plus substantial overlap, preventing a second workout later
+  /// that day from stealing the row. The DB layer repeats the provenance and
+  /// old-window checks before writing. Exact matches are returned too so their
+  /// duplicate review suggestions can be retired without rewriting the row.
+  @visibleForTesting
+  static List<Map<String, dynamic>> detectedSessionWindowRevisions({
+    required List<Map<String, dynamic>> saved,
+    required List<ana.DetectedWorkout> detected,
+  }) {
+    final revisions = <Map<String, dynamic>>[];
+    final used = <int>{};
+    for (final row in saved) {
+      if (!_isDetectedSession(row) || row['status'] != 'done') continue;
+      final id = row['id'];
+      final oldStart = row['start_ts'];
+      final oldEnd = row['end_ts'];
+      if (id is! String ||
+          oldStart is! int ||
+          oldEnd is! int ||
+          oldEnd <= oldStart) {
+        continue;
+      }
+      var best = -1;
+      var bestOverlap = -1;
+      var bestDelta = 1 << 62;
+      for (var i = 0; i < detected.length; i++) {
+        if (used.contains(i)) continue;
+        final b = detected[i];
+        final overlap = math.max(
+          0,
+          math.min(oldEnd, b.endSec) - math.max(oldStart, b.startSec),
+        ).toInt();
+        final shorter =
+            math.min(oldEnd - oldStart, b.endSec - b.startSec).toInt();
+        final enoughOverlap = overlap >= math.min(5 * 60, shorter ~/ 2);
+        final startDelta = (oldStart - b.startSec).abs();
+        if (!enoughOverlap || startDelta > 30 * 60) continue;
+        final delta = startDelta + (oldEnd - b.endSec).abs();
+        if (overlap > bestOverlap ||
+            (overlap == bestOverlap && delta < bestDelta)) {
+          best = i;
+          bestOverlap = overlap;
+          bestDelta = delta;
+        }
+      }
+      if (best < 0) continue;
+      used.add(best);
+      final b = detected[best];
+      revisions.add({
+        'id': id,
+        'old_start_ts': oldStart,
+        'old_end_ts': oldEnd,
+        'start_ts': b.startSec,
+        'end_ts': b.endSec,
+        'changed': oldStart != b.startSec || oldEnd != b.endSec,
+      });
+    }
+    return revisions;
+  }
+
+  static bool _isDetectedSession(Map<String, dynamic> row) {
+    final source = row['source'];
+    return source == 'detected' || source == 'auto';
   }
 
   /// TS-03 — the day's OBSERVED heart-rate ceiling: the highest bpm any of this
@@ -9373,6 +9500,7 @@ class _DayBlocksOutput {
   final List<Map<String, dynamic>> suggestionsToPersist;
   final List<(String, double)> sessionHrrWrites;
   final ({String id, int durationMin})? notifBout;
+  final List<Map<String, dynamic>> sessionWindowRevisions;
   const _DayBlocksOutput({
     required this.bundlePatch,
     required this.seriesPatch,
@@ -9381,6 +9509,7 @@ class _DayBlocksOutput {
     required this.suggestionsToPersist,
     required this.sessionHrrWrites,
     required this.notifBout,
+    required this.sessionWindowRevisions,
   });
 }
 
@@ -9392,6 +9521,7 @@ class _WorkoutCompute {
   final List<(String, double)> sessionHrrWrites;
   final List<Map<String, dynamic>> suggestionsToPersist;
   final ({String id, int durationMin})? notifBout;
+  final List<Map<String, dynamic>> sessionWindowRevisions;
   const _WorkoutCompute({
     required this.boutJson,
     required this.hrrBpm,
@@ -9399,6 +9529,7 @@ class _WorkoutCompute {
     required this.sessionHrrWrites,
     required this.suggestionsToPersist,
     required this.notifBout,
+    required this.sessionWindowRevisions,
   });
   const _WorkoutCompute.empty()
       : boutJson = const [],
@@ -9406,7 +9537,8 @@ class _WorkoutCompute {
       hrrTauS = null,
         sessionHrrWrites = const [],
         suggestionsToPersist = const [],
-        notifBout = null;
+        notifBout = null,
+        sessionWindowRevisions = const [];
 }
 
 double? _median(List<double> xs) {

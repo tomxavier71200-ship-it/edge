@@ -1,6 +1,6 @@
 # Koop development status
 
-Updated 2026-10-31. Read this with `AGENTS.md`, then only the files relevant to the task.
+Updated 2026-11-02. Read this with `AGENTS.md`, then only the files relevant to the task.
 
 ## Previously delivered
 
@@ -9,7 +9,15 @@ workout counter-reset trimming, nap imports, and dashboard metric reads.
 `da45dbac` keeps saved workouts on the selected past day's Home timeline even
 when daily analysis is absent. Both were pushed to `whoop-ui`.
 
-## Current implementation (algorithm 118)
+## Current implementation (algorithm 119)
+
+- Reanalysis now repairs the stored windows of existing auto-detected workouts,
+  not only future detections. It matches bouts one-to-one, updates only
+  `detected`/legacy `auto` sessions, preserves the athlete's workout type and
+  private/RPE fields, and rebuilds window-derived scores from retained raw data.
+  Manual, live and imported workouts remain untouched.
+  Detector bouts already represented by those saved sessions no longer reappear
+  as duplicate review suggestions; reanalysis also dismisses existing duplicates.
 
 - Real-recording workout validation now uses the band step counter plus
   sustained HR evidence: the reported 05:39 cycling bout ends near the observed
@@ -54,7 +62,8 @@ This is an incremental correction, not completion of the requested all-screen
 redesign or an empirical audit of every physiological algorithm. Device BLE,
 background execution, battery and frame profiling remain hardware-dependent.
 Historical rows whose source recordings were pruned cannot all be recomputed.
-Algorithm 118 and its analytics pin are local and have not been pushed.
+Algorithm 119 is local and has not been pushed. Its analytics pin was already
+published with algorithm 118; this migration does not move either sibling pin.
 
 ## Dashboard and calculation documentation
 

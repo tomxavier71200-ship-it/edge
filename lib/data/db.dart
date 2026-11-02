@@ -10617,6 +10617,46 @@ class LocalDb {
     );
   }
 
+  /// Retimes one saved auto-detected workout if it still has the window the
+  /// derivation pass read. Manual rows, live rows and concurrent edits lose the
+  /// compare-and-swap and remain untouched.
+  ///
+  /// Every cleared column describes the old window. The ordinary recent-
+  /// session rescore rebuilds score/trace fields from retained 1 Hz data; null
+  /// is the honest result when that substrate is no longer available.
+  static Future<int> retimeDetectedSession(
+    String id, {
+    required int expectedStartTs,
+    required int expectedEndTs,
+    required int startTs,
+    required int endTs,
+    double? hrrBpm,
+  }) async {
+    if (endTs <= startTs) return 0;
+    final db = await instance;
+    return db.update(
+      'sessions',
+      {
+        'start_ts': startTs,
+        'end_ts': endTs,
+        'duration_min': (endTs - startTs) ~/ 60,
+        'calories': null,
+        'strain': null,
+        'max_hr': null,
+        'avg_hr': null,
+        'zone_min_json': null,
+        'steps': null,
+        'cadence_spm': null,
+        'hrr_bpm': hrrBpm,
+        'trace_json': null,
+        'trace_samples': null,
+      },
+      where: "id = ? AND start_ts = ? AND end_ts = ? AND status = 'done' "
+          "AND source IN ('detected', 'auto')",
+      whereArgs: [id, expectedStartTs, expectedEndTs],
+    );
+  }
+
   /// Update ONLY a session's derived score columns.
   ///
   /// Deliberately not `putSession`: that is INSERT-OR-REPLACE over the whole
