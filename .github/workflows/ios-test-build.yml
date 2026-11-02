@@ -45,6 +45,12 @@ jobs:
 
       - run: flutter pub get
 
+      # The sideloaded IPA cannot keep a Watch companion: a free Apple ID
+      # cannot re-sign it. Remove the target before Xcode validates signing,
+      # instead of deleting its output only after the build.
+      - name: Exclude Watch companion from sideload build
+        run: ruby .github/scripts/remove_watch_target.rb
+
       - name: Build unsigned iOS app
         # A version that rises on every run (0.10.<run>), so SideStore sees each
         # push as an update; the pubspec version stays the release line.
@@ -52,11 +58,6 @@ jobs:
           flutter build ios --release --no-codesign --dart-define-from-file=.env
           --build-name=0.10.${{ github.run_number }}
           --build-number=${{ github.run_number }}
-
-      # Same reason as build.yml: a Watch companion cannot survive a per-user
-      # free-account resign, so the .ipa would not install with it inside.
-      - name: Strip Watch companion
-        run: rm -rf "build/ios/iphoneos/Runner.app/Watch"
 
       # The home-screen widget ships. It used to be stripped: --no-codesign
       # leaves the .appex with no signature at all, SideStore failed with

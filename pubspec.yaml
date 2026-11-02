@@ -534,10 +534,13 @@ dependencies:
   # honest caveat in lib/compute/background_derivation.dart — app-killed heavy
   # compute is opportunistic via BGTaskScheduler, never guaranteed.
   workmanager: 0.9.2+1
-  # 0.9.6 added BGContinuedProcessingTask, which requires the iOS 26 SDK.
-  # Keep the endorsed Apple implementation buildable on GitHub's reliable
-  # macos-15-intel/Xcode 16 runner; Koop does not use the iOS 26-only API.
+  # Pin the full mutually-compatible 0.9.2 generation. A loose resolution
+  # combines Apple 0.9.5 with platform-interface 0.9.4, whose new Android-only
+  # foregroundServiceConfig parameter makes the Apple overrides fail to compile.
+  # Apple 0.9.6 also requires the iOS 26 SDK, unavailable on macos-15-intel.
+  workmanager_android: 0.9.2
   workmanager_apple: 0.9.5
+  workmanager_platform_interface: 0.9.3
 
   # HTTP — retained ONLY for the OTA self-update pointer (see lib/sync/update_service.dart)
   # and the AI Coach's direct LLM (BYOK) calls. No backend / auth traffic anymore.

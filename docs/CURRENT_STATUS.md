@@ -78,6 +78,13 @@ The iOS workflows use GitHub's `macos-15-intel` pool because the ARM64 pool was
 not acquiring jobs. That runner provides an Xcode 16 SDK, so Workmanager is
 pinned to `0.9.2+1` with `workmanager_apple 0.9.5`. Apple implementation 0.9.6
 unconditionally compiles the iOS 26-only `BGContinuedProcessingTask` types and
-fails under Xcode 16 even though Koop does not use that API. The clean-lock
-dependency resolution and three background-sync regression files pass; the
-next macOS workflow run must still prove the IPA build and SideStore publish.
+fails under Xcode 16 even though Koop does not use that API. The matching
+`workmanager_android 0.9.2` and `workmanager_platform_interface 0.9.3` are also
+pinned: resolving their next patch releases mixes an Android-only interface
+parameter into Apple 0.9.5 and fails the simulator build. The clean-lock
+dependency resolution and background-sync regression files pass; the
+next macOS workflow run passed the Workmanager compilation stage, then exposed
+the next blocker: Xcode validated signing for the Watch companion even though
+the sideload workflow deleted that companion afterward. The sideload and
+simulator workflows now remove the Watch target before building. The next
+GitHub run must still prove the IPA build and SideStore publish.
