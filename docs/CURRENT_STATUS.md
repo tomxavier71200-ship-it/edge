@@ -71,3 +71,13 @@ Day swipe cancellation, presentation continuity, release velocity and boundary
 re-grabbing are corrected. All UI2 modal sheets now pass the reduced-motion
 policy; the tab bar grows with accessibility text. 207 focused checks and static
 analysis passed. See `APPLE_DESIGN_AUDIT.md` for remaining device-review gaps.
+
+## SideStore build compatibility
+
+The iOS workflows use GitHub's `macos-15-intel` pool because the ARM64 pool was
+not acquiring jobs. That runner provides an Xcode 16 SDK, so Workmanager is
+pinned to `0.9.2+1` with `workmanager_apple 0.9.5`. Apple implementation 0.9.6
+unconditionally compiles the iOS 26-only `BGContinuedProcessingTask` types and
+fails under Xcode 16 even though Koop does not use that API. The clean-lock
+dependency resolution and three background-sync regression files pass; the
+next macOS workflow run must still prove the IPA build and SideStore publish.
