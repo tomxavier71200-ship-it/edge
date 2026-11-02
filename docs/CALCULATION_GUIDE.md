@@ -1,6 +1,6 @@
 # Koop calculation guide
 
-Current implementation: algorithm version 116, reviewed 2026-10-31.
+Current implementation: algorithm version 118, reviewed 2026-11-02.
 
 This document describes what Koop calculates now. It distinguishes calculation
 logic from measurement accuracy: correct software cannot repair a poor sensor

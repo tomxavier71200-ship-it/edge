@@ -25,8 +25,12 @@ const int kTrimMinMinutes = 10;
 /// The trimmed minute range `[first, end)` of a bout whose per-minute step
 /// cadence is [spm] (null = no counter that minute), or null for "keep the
 /// bout as detected".
-({int first, int end})? trimGaitEdges(List<int?> spm) {
+({int first, int end})? trimGaitEdges(
+  List<int?> spm, {
+  List<bool?>? training,
+}) {
   if (spm.isEmpty || spm.any((c) => c == null)) return null;
+  final hasTraining = training != null && training.length == spm.length;
   bool gait(int i) => spm[i]! >= kGaitCadenceSpm;
   final gaitMin = [for (var i = 0; i < spm.length; i++) if (gait(i)) i].length;
   if (gaitMin >= kGaitBoutShare * spm.length) return null;
@@ -44,7 +48,12 @@ const int kTrimMinMinutes = 10;
       var resumed = 0;
       var hasLaterCore = false;
       for (var j = i + kGaitRunMin; j < spm.length; j++) {
-        resumed = gait(j) ? 0 : resumed + 1;
+        // Cadence alone cannot distinguish a resumed ride/lifting block from
+        // standing after arrival. Require continued elevated-HR evidence when
+        // the caller has it; without such evidence, do not invent a resumed
+        // training block merely because the step counter became quiet.
+        final trainingMinute = hasTraining && training[j] == true;
+        resumed = !gait(j) && trainingMinute ? resumed + 1 : 0;
         if (resumed >= kTrimMinMinutes) {
           hasLaterCore = true;
           break;

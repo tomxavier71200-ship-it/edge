@@ -12,7 +12,17 @@ void main() {
       ...List<int>.filled(3, 90),
       ...List<int>.filled(20, 0),
     ];
-    expect(trimGaitEdges(spm), isNull);
+    expect(
+      trimGaitEdges(
+        spm,
+        training: <bool?>[
+          ...List<bool>.filled(20, true),
+          ...List<bool>.filled(3, false),
+          ...List<bool>.filled(20, true),
+        ],
+      ),
+      isNull,
+    );
   });
 
   test('a walk home is trimmed after an interior walking recovery', () {
@@ -22,7 +32,18 @@ void main() {
       ...List<int>.filled(20, 0),
       ...List<int>.filled(3, 90),
     ];
-    expect(trimGaitEdges(spm), (first: 0, end: 43));
+    expect(
+      trimGaitEdges(
+        spm,
+        training: <bool?>[
+          ...List<bool>.filled(20, true),
+          ...List<bool>.filled(3, false),
+          ...List<bool>.filled(20, true),
+          ...List<bool>.filled(3, false),
+        ],
+      ),
+      (first: 0, end: 43),
+    );
   });
   test('a ride with a walk before and after keeps only the ride', () {
     // Minute cadence from 13:30: 5 walking minutes, ~14 riding, then a walk.
@@ -35,6 +56,28 @@ void main() {
     final cut = trimGaitEdges(spm)!;
     expect(cut.first, 5, reason: 'starts at 13:35');
     expect(cut.end, 19, reason: 'ends at 13:49, the first sustained walk');
+  });
+
+  test('real morning ride stops when three-minute walk begins', () {
+    // Anonymized per-minute counter deltas from the reported 05:39–06:14
+    // overrun. The rider arrived around 05:57; HR stayed elevated, but the
+    // hardware counter shows a sustained walk from minute 18 onward.
+    final spm = <int?>[
+      12, 0, 6, 10, 0, 0, 30, 6, 11, 7, 0, 0, 29, 31, 6, 6, 8,
+      46, 100, 90, 54, 59, 103, 26, 13, 9, 3, 0, 0, 0, 25, 28, 6, 18, 19,
+    ];
+    final minuteHr = <double>[
+      93.5, 99.8, 108.1, 105.1, 121.2, 118.2, 111.0, 118.1, 115.9,
+      124.6, 137.2, 136.7, 133.3, 116.4, 114.8, 112.8, 118.9, 125.5,
+      117.8, 127.5, 130.8, 122.7, 125.0, 120.6, 112.2, 103.8, 103.6,
+      97.4, 96.9, 96.5, 98.2, 98.0, 96.8, 99.2, 99.2,
+    ];
+    final cut = trimGaitEdges(
+      spm,
+      training: [for (final hr in minuteHr) hr >= 113 * 0.9],
+    )!;
+    expect(cut.first, 0);
+    expect(cut.end, 17, reason: 'the ride ends before the sustained walk');
   });
 
   test('a walk or a run is never trimmed', () {

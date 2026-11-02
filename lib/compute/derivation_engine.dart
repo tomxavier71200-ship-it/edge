@@ -1881,7 +1881,15 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // warm-up/cool-down evidence. Expansion is capped at ten minutes per side,
 // stops at real recording gaps and is deduplicated against saved sessions only
 // after refinement. kAnalyticsPin moves with the output change.
-const int kAlgoVersion = 116;
+// 116 → 118: a sustained walk after a detected non-gait workout now ends the
+// bout unless a later block has its own sustained elevated-HR evidence. Quiet
+// standing/chores after arrival no longer masquerade as resumed training.
+// Sleep detection also retains a substantial overnight fragment immediately
+// before the main block, fixing a real 03:15 onset that was split into a nap
+// plus a 05:06 main sleep. kAnalyticsPin moves with the sleep output change.
+// v117 was installed locally while the fragmented-onset change was incomplete;
+// v118 forces those immutable local rows to recompute with the final pin.
+const int kAlgoVersion = 118;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2057,7 +2065,7 @@ const int kStrainRhrCarryDays = 7;
 //
 // Koop analytics @ 610e56f — workout boundary refinement described in the
 // v116 changelog above. Must match pubspec.yaml exactly.
-const String kAnalyticsPin = '610e56f0e5e9edf3306e29428e0f556d295c73f2';
+const String kAnalyticsPin = '04d92d0b0c580619ab9bca832755df368603e18b';
 // Repinned to analytics main's tip, which carries BOTH PR #72 (hrv_freq
 // Welch gap guard) and PR #73 (overreachingConjunction rhr quantum guard) —
 // the two independent kAlgoVersion bumps above (93 and 94). Verified both
@@ -8631,6 +8639,8 @@ class DerivationEngine {
     final minutes = ((b.endSec - b.startSec) / 60).ceil();
     if (minutes <= 0) return b;
     final spm = List<int?>.filled(minutes, null);
+    final hrSum = List<int>.filled(minutes, 0);
+    final hrCount = List<int>.filled(minutes, 0);
     final invalid = List<bool>.filled(minutes, false);
     int? prevCounter, prevTs;
     var prevMinute = -1;
@@ -8640,6 +8650,10 @@ class DerivationEngine {
       final c = s.stepCounterAt(i);
       if (c == null) continue;
       final m = (t - b.startSec) ~/ 60;
+      if (s.hr[i] > 0) {
+        hrSum[m] += s.hr[i];
+        hrCount[m]++;
+      }
       if (m == prevMinute && prevCounter != null && prevTs != null) {
         final delta = boundedStepCounterDelta(
           previous: prevCounter,
@@ -8660,7 +8674,12 @@ class DerivationEngine {
     for (var m = 0; m < minutes; m++) {
       if (invalid[m]) spm[m] = null;
     }
-    final cut = trimGaitEdges(spm);
+    final trainingFloor = b.avgBpm * 0.9;
+    final training = <bool?>[
+      for (var m = 0; m < minutes; m++)
+        hrCount[m] == 0 ? null : (hrSum[m] / hrCount[m]) >= trainingFloor,
+    ];
+    final cut = trimGaitEdges(spm, training: training);
     if (cut == null) return b;
     final start = b.startSec + cut.first * 60;
     final end = math.min(b.endSec, b.startSec + cut.end * 60);

@@ -9,7 +9,16 @@ workout counter-reset trimming, nap imports, and dashboard metric reads.
 `da45dbac` keeps saved workouts on the selected past day's Home timeline even
 when daily analysis is absent. Both were pushed to `whoop-ui`.
 
-## Current implementation (algorithm 116)
+## Current implementation (algorithm 118)
+
+- Real-recording workout validation now uses the band step counter plus
+  sustained HR evidence: the reported 05:39 cycling bout ends near the observed
+  05:56–05:57 arrival/walk transition instead of following elevated HR to 06:14.
+- Fragmented overnight sleep handling is symmetric. A substantial low-HR sleep
+  block immediately before a less-than-60-minute awakening is retained when a
+  qualifying main block follows. On the 31 October recording this addresses the
+  split that labelled the earlier ~03:15 block as a nap and published 05:06 as
+  main-sleep onset.
 
 - HRV timeline requires a new five-minute window after recording gaps and
   sufficient observed coverage; rolling sums replace repeated window scans.
@@ -45,14 +54,14 @@ This is an incremental correction, not completion of the requested all-screen
 redesign or an empirical audit of every physiological algorithm. Device BLE,
 background execution, battery and frame profiling remain hardware-dependent.
 Historical rows whose source recordings were pruned cannot all be recomputed.
-Algorithm 116 and its analytics pin are local and have not been pushed.
+Algorithm 118 and its analytics pin are local and have not been pushed.
 
 ## Dashboard and calculation documentation
 
 The web dashboard's mobile date row now centers the selected date independently
 of the optional past-day `Today` shortcut. It was visually checked at 390 px and
 320 px widths without horizontal overflow, and the dashboard regression suite
-passes 8/8. `docs/CALCULATION_GUIDE.md` records the current algorithm-116 data
+passes 8/8. `docs/CALCULATION_GUIDE.md` records the current algorithm-118 data
 flow, formulas, quality gates and validation limits. The dashboard is published
 through the Pages workflow when `whoop-ui` is pushed.
 
