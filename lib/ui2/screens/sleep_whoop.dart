@@ -347,8 +347,8 @@ class HoursNeededCard extends StatelessWidget {
   /// What the coach reports it added or removed; null when it did not say.
   final double? strainMin, debtMin, napMin;
 
-  /// The person's usual hours-vs-needed %, from stored sleep performance;
-  /// null when there are too few nights.
+  /// The person's usual sleep sufficiency, paired from each earlier night's
+  /// sleep and the need assigned to it; null when there are too few nights.
   final double? usualPct;
 
   const HoursNeededCard({

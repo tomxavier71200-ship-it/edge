@@ -4,13 +4,10 @@
 // what stood out → the signals underneath → the one thing to do tonight. Same
 // screen, layered by scroll depth; there is no advanced mode to switch into.
 //
-// There is no sleep score. No composite exists in the pipeline, and inventing
-// one here would mean choosing weights in a UI file. What replaces it is the
-// comparison every "86" is a lossy summary of: last night against the middle
-// half of the user's OWN recent nights, per measure, with the night count
-// attached. A quartile band needs no thresholds, no population norms and no
-// constants — it is the user's own distribution, so it cannot be wrong about
-// somebody it was never fitted to.
+// The headline Sleep Performance is computed upstream. This screen keeps its
+// separate contributors honest: hours-vs-needed is sufficiency, while the
+// composite also includes consistency. Personal comparisons below use the
+// middle half of the user's own recent nights.
 
 import 'dart:math' as math;
 
@@ -19,6 +16,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:openstrap_analytics/onehz.dart' as ana;
 import 'package:provider/provider.dart';
 
+import '../../compute/whoop_calibration.dart' show sleepSufficiencyPct;
 import '../../data/day_label.dart';
 import '../../data/local_repository.dart';
 import '../../l10n/app_localizations.dart';
@@ -154,6 +152,10 @@ class SleepData {
 
   final Map<String, dynamic> night;
   final Map<String, dynamic> timeline;
+  /// Need assigned to the night on screen (stored on its preceding day).
+  final Metric nightNeed;
+
+  /// Current Sleep Coach advice for tonight. Never used to score a past night.
   final Metric need, debt, bedtime;
 
   /// The user's own recent nights, LAST NIGHT EXCLUDED, oldest→newest. Minutes
@@ -213,6 +215,7 @@ class SleepData {
     this.days = const [],
     this.night = const {},
     this.timeline = const {},
+    this.nightNeed = Metric.empty,
     this.need = Metric.empty,
     this.debt = Metric.empty,
     this.bedtime = Metric.empty,
@@ -274,10 +277,23 @@ class SleepData {
   /// than a nearest-point search.
   static double? _on(Object? chart, int? noon) {
     if (noon == null) return null;
-    for (final p in pointsOf(chart)) {
+    final points = chart is List<ChartPoint> ? chart : pointsOf(chart);
+    for (final p in points) {
       if (p.t == noon) return p.v;
     }
     return null;
+  }
+
+  /// Sleep need stored on the calendar day before [nightDay]. A need written
+  /// on day D is the target for the sleep that begins after day D, so using
+  /// the selected day's value is one night too late.
+  @visibleForTesting
+  static double? needForNight(String? nightDay, List<ChartPoint> needs) {
+    final d = DateTime.tryParse(nightDay ?? '');
+    if (d == null) return null;
+    final previous = dayLabelOf(DateTime(d.year, d.month, d.day - 1));
+    final value = _on(needs, _noonOf(previous));
+    return value != null && value.isFinite && value > 0 ? value : null;
   }
 
   static Future<SleepData> load(LocalRepository repo, {String? want}) async {
@@ -297,6 +313,10 @@ class SleepData {
 
     final night = await repo.getDaySleepV2(day);
     final timeline = await repo.getDayTimeline(day);
+    final trends = await loadTrendSeries(repo, const [
+      'sleep_perf', 'sleep', 'efficiency', 'deep', 'rem', 'light',
+      'sleep_need_min', 'sleep_consistency',
+    ]);
     final cd = await repo.getInsights();
     final coach = cd['sleep_coach'];
     final needEnv = coach is Map ? coach['need'] : null;
@@ -356,18 +376,17 @@ class SleepData {
       days: days,
       night: night,
       timeline: timeline,
+      nightNeed: Metric(
+        value: needForNight(day, trends['sleep_need_min'] ?? const []),
+        unit: 'min',
+      ),
       need: envMetric(needEnv, needSec == null ? null : needSec / 60, unit: 'min'),
       debt: envMetric(debtEnv, debtH == null ? null : debtH * 60, unit: 'min'),
       bedtime:
           envMetric(bedEnv, envValue(bedEnv)?['bedtime_min_of_day'] as num?),
       week: denseDays(pointsOf(sleepChart), 7),
-      sri: (envValue((await repo.getInsights())['regularity'])?['sri'] as num?)
-          ?.toDouble(),
-      trends: await loadTrendSeries(
-          repo, const [
-        'sleep_perf', 'sleep', 'efficiency', 'deep', 'rem', 'light', //
-        'sleep_need_min', 'sleep_consistency',
-      ]),
+      sri: _on(trends['sleep_consistency'], cut),
+      trends: trends,
       windows: () {
         final out = <NightWindow>[];
         for (final w in wins) {
@@ -642,7 +661,8 @@ class _SleepDetailState extends State<SleepDetail> {
             _overnight(c, p, d)),
 
         // ── 7 · ONE TAKEAWAY ──
-        Section(l?.sleepDetailTonightSection ?? 'Tonight', _tonight(c, p, d)),
+        if (d.days.isEmpty || d.day == d.days.first)
+          Section(l?.sleepDetailTonightSection ?? 'Tonight', _tonight(c, p, d)),
 
         const SizedBox(height: S.x5),
         // The night this screen is steered to, not the newest one. Dropping it
@@ -669,6 +689,8 @@ class _SleepDetailState extends State<SleepDetail> {
     final effRaw = (n['efficiency'] as num?)?.toDouble();
     final eff = effRaw == null ? null : effRaw * 100;
     final stress = _highStressPct(d);
+    final sufficiency = sleepSufficiencyPct(
+      n['duration_min'] as num?, d.nightNeed.value);
     Band3 band(double v, double poor, double optimal) => v < poor
         ? Band3.poor
         : (v < optimal ? Band3.sufficient : Band3.optimal);
@@ -676,9 +698,9 @@ class _SleepDetailState extends State<SleepDetail> {
     // WHOOP's four: hours vs needed, consistency, efficiency, high sleep
     // stress (lower is better, so its bands run the other way).
     final rows = <Widget>[
-      if (perf != null)
-        BandRow(LucideIcons.clock, 'Hours vs. needed', '${perf.round()}%',
-            band(perf, 70, 85)),
+      if (sufficiency != null)
+        BandRow(LucideIcons.clock, 'Hours vs. needed',
+            '${sufficiency.round()}%', band(sufficiency, 70, 85)),
       if (sri != null && sri >= 0 && sri <= 100)
         BandRow(LucideIcons.repeat, 'Sleep consistency', '${sri.round()}%',
             band(sri, 70, 80)),
@@ -735,11 +757,9 @@ class _SleepDetailState extends State<SleepDetail> {
       if (pt.t == noon) return pt.v;
     }
     final tst = (n['duration_min'] as num?)?.toDouble();
-    final need = d.need.value?.toDouble();
+    final need = d.nightNeed.value?.toDouble();
     final newest = d.days.isEmpty || d.day == d.days.first;
-    if (newest) {
-      return tst != null && need != null && need > 0 ? tst / need * 100 : null;
-    }
+    if (newest) return sleepSufficiencyPct(tst, need);
     return null;
   }
 
@@ -935,7 +955,12 @@ class _SleepDetailState extends State<SleepDetail> {
     // WHOOP mode: WHOOP's own week, in its order. Each day's need and
     // consistency are the stored cross-day series; hours vs. needed (%) is
     // that day's sleep over that day's need, absent when either is.
-    final slept = week('sleep'), need = week('sleep_need_min');
+    final slept = week('sleep');
+    final needSeries = d.trends['sleep_need_min'] ?? const <ChartPoint>[];
+    final need = [
+      for (final day in days)
+        SleepData.needForNight(dayLabelOf(day), needSeries),
+    ];
     final needCol = p.on(C.green);
     if (Look.whoop) {
       final cards = <Widget>[
@@ -956,9 +981,7 @@ class _SleepDetailState extends State<SleepDetail> {
           days: days,
           values: [
             for (var i = 0; i < days.length; i++)
-              slept[i] == null || need[i] == null || need[i]! <= 0
-                  ? null
-                  : slept[i]! / need[i]! * 100,
+              sleepSufficiencyPct(slept[i], need[i]),
           ],
           format: (v) => '${v.round()}%',
           colorOf: (_) => sleepCol,
@@ -1074,7 +1097,7 @@ class _SleepDetailState extends State<SleepDetail> {
       BuildContext c, SleepData d, Map<String, dynamic> n) {
     final tst = (n['duration_min'] as num?)?.toDouble();
     final awake = (n['awake_min'] as num?)?.toDouble();
-    final need = d.need.value?.toDouble();
+    final need = d.nightNeed.value?.toDouble();
     final eff = (n['efficiency'] as num?)?.toDouble();
     final day = DateTime.tryParse(d.day ?? '');
     final noon = _noonOf(d.day);
@@ -1083,48 +1106,38 @@ class _SleepDetailState extends State<SleepDetail> {
       return l.length < kBaselineMin ? null : l.reduce((a, b) => a + b) / l.length;
     }
 
-    // The usual hours-vs-needed: stored performance of the 30 nights before.
+    // The usual hours-vs-needed is sufficiency, not the composite performance.
     final perfUsual = mean([
-      for (final pt in d.trends['sleep_perf'] ?? const <ChartPoint>[])
-        if (noon == null || (pt.t < noon && pt.t >= noon - 30 * 86400)) pt.v,
+      for (final pt in d.trends['sleep'] ?? const <ChartPoint>[])
+        if (noon == null || (pt.t < noon && pt.t >= noon - 30 * 86400))
+          ?sleepSufficiencyPct(
+            pt.v,
+            SleepData.needForNight(
+              dayLabelOf(DateTime.fromMillisecondsSinceEpoch(pt.t * 1000)),
+              d.trends['sleep_need_min'] ?? const <ChartPoint>[],
+            ),
+          ),
     ]);
     // Optimal bed/wake: the coach's bedtime, and that plus today's need. Only
     // for the newest night — both are tonight's advice, not an older night's.
     final newest = d.days.isEmpty || d.day == d.days.first;
     final bed = d.bedtime.value?.toDouble();
-    final perf = _perfOf(d, n);
+    final adviceNeed = d.need.value?.toDouble();
     final cards = <Widget>[
-      if (tst != null && need != null && need > 0 && newest)
+      if (tst != null && need != null && need > 0)
         HoursNeededCard(
           sleptMin: tst,
           needMin: need,
-          strainMin: d.strainBonusMin,
-          debtMin: d.debt.value?.toDouble(),
-          napMin: d.napCreditMin,
           usualPct: perfUsual,
-        ),
-      if (perf != null && !newest)
-        Surface(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('HOURS VS. NEEDED',
-                style: F.over.copyWith(
-                    color: P.of(c).ink,
-                    letterSpacing: 1.6,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: S.x2),
-            TrendHeadline('${perf.round()}%',
-                usual: perfUsual == null ? null : '${perfUsual.round()}%',
-                dir: trendDir(perf, perfUsual),
-                higherBetter: true),
-          ]),
         ),
       if (d.windows.length >= 2)
         ConsistencyChart(
           nights: d.windows,
           sri: d.sri,
-          optimalBedMin: newest && bed != null && need != null ? bed : null,
-          optimalWakeMin: newest && bed != null && need != null
-              ? (bed + need) % 1440
+          optimalBedMin:
+              newest && bed != null && adviceNeed != null ? bed : null,
+          optimalWakeMin: newest && bed != null && adviceNeed != null
+              ? (bed + adviceNeed) % 1440
               : null,
         ),
       if (tst != null && awake != null)
@@ -1189,19 +1202,14 @@ class _SleepDetailState extends State<SleepDetail> {
     final watched = (inBed == null || unobserved == null || unobserved <= 0)
         ? null
         : math.max(0, inBed - unobserved);
-    // Sleep performance — time asleep over the coach's need — only for the
-    // newest night. The need is TODAY's figure (debt and strain move it), so
-    // dividing an older night by it would score that night against a need it
-    // never had.
-    final need = d.need.value;
-    final newest = d.days.isNotEmpty && d.day == d.days.first;
-    final perf = (!dial || tst == null || need == null || need <= 0 || !newest)
-        ? null
-        : (tst / need * 100).clamp(0, 999).round();
+    // The stored composite and the need assigned to THIS night. Never divide
+    // a historical night by the latest Sleep Coach recommendation.
+    final need = d.nightNeed.value;
+    final perf = dial ? _perfOf(d, n)?.round() : null;
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (perf != null) ...[
-          // One dial: how much of the night's need was slept.
+          // One dial: the stored Sleep Performance composite.
           Center(
             child: HeroDial(
               value: perf / 100,

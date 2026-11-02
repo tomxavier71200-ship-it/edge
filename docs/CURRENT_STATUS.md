@@ -56,6 +56,15 @@ passes 8/8. `docs/CALCULATION_GUIDE.md` records the current algorithm-116 data
 flow, formulas, quality gates and validation limits. The dashboard is published
 through the Pages workflow when `whoop-ui` is pushed.
 
+The Sleep detail screen now keeps Sleep Performance and sleep sufficiency
+separate. For example, the owner's 15 October export records 77% performance,
+while 348 of 573 needed minutes is 61% sufficiency; "Hours vs. needed" now
+shows the latter. Every selected historical night reads the need stored on its
+preceding calendar day, matching the dashboard and derivation engine, instead
+of reusing the latest Sleep Coach value. Weekly need and sufficiency follow the
+same mapping. The percentage is canonical in the compute layer. This display-
+only correction does not change stored output or require an algorithm bump.
+
 ## Apple interaction follow-up
 
 Day swipe cancellation, presentation continuity, release velocity and boundary

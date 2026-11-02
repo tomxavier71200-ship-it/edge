@@ -8,7 +8,8 @@ const kInfoHome =
     'Your three scores for the day. Recovery is read from last night: your '
     'heart-rate variability, resting heart rate and sleep, each compared with '
     'your own recent nights, not with other people. Strain is how hard the day '
-    'has been, from 0 to 21. Sleep is how much of the sleep you needed you got.';
+    'has been, from 0 to 21. Sleep Performance combines the share of your '
+    'sleep need you met with your sleep consistency.';
 
 const kInfoHealth =
     'Overview puts last night\'s vitals against your own usual range, the '
@@ -31,8 +32,8 @@ const kInfoStrain =
 
 const kInfoSleep =
     'How long you slept, when, and how the night was split into stages. Sleep '
-    'performance is the time you slept against the sleep you needed, which '
-    'grows with the day\'s strain and any sleep you owe from earlier nights. '
+    'sufficiency is the time you slept against the need set for that specific '
+    'night. Sleep Performance combines sufficiency with sleep consistency. '
     'Stages are estimated from heart rate and movement, not measured.';
 
 const kInfoWorkout =

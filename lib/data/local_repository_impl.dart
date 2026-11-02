@@ -1663,8 +1663,8 @@ class LocalRepositoryImpl extends LocalRepository {
         if (all[k] case final double v) k: v,
     };
     if (b == null && whoop.isEmpty) return const {};
-    // The day's sleep performance as stored on the day itself (the coach's
-    // share of need slept; only days derived since `sleep_perf` exists).
+    // The day's fitted sleep performance as stored on the day itself
+    // (sufficiency plus consistency; only days derived since it exists).
     final sleepPerf = await LocalDb.metricValueOn(date, 'sleep_perf');
     return {
       'sleep_perf': ?sleepPerf,

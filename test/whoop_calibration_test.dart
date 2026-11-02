@@ -8,6 +8,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/compute/whoop_calibration.dart';
 
 void main() {
+  test('hours vs needed is sufficiency, not the composite sleep score', () {
+    // Owner's 2026-10-15 WHOOP export: Sleep Performance was 77%, but
+    // 348 minutes asleep against 573 needed is only 60.7% sufficiency.
+    expect(sleepSufficiencyPct(348, 573), closeTo(60.73, .01));
+    expect(sleepSufficiencyPct(600, 480), 100);
+    expect(sleepSufficiencyPct(null, 480), isNull);
+    expect(sleepSufficiencyPct(400, 0), isNull);
+    expect(sleepSufficiencyPct(double.nan, 480), isNull);
+    expect(sleepSufficiencyPct(400, double.infinity), isNull);
+  });
+
   test('sleep performance reproduces WHOOP nights from the export', () {
     // (asleep min, need min, consistency %, WHOOP's sleep performance)
     const nights = [

@@ -83,16 +83,30 @@ const int kPerfBaselineMin = 7;
 /// `kReadinessZCap` (onehz_pipeline.dart) puts on the composite.
 const double kCalZCap = 5.0;
 
+/// Percentage of sleep need actually met, independent of the fitted Sleep
+/// Performance composite. This is the one canonical implementation used by
+/// scoring, details and trends.
+double? sleepSufficiencyPct(num? asleepMin, num? needMin) {
+  final asleep = asleepMin?.toDouble();
+  final need = needMin?.toDouble();
+  if (asleep == null ||
+      need == null ||
+      !asleep.isFinite ||
+      !need.isFinite ||
+      asleep < 0 ||
+      need <= 0) {
+    return null;
+  }
+  return (100 * asleep / need).clamp(0.0, 100.0).toDouble();
+}
+
 /// WHOOP-matched sleep performance (0–100) from asleep and needed minutes and
 /// sleep consistency (0–100). Null without asleep or need; asleep ÷ need alone
 /// — the previous formula — when consistency is unknown.
 double? calibratedSleepPerformance(
     double? asleepMin, double? needMin, double? consistency) {
-  if (asleepMin == null || needMin == null || !asleepMin.isFinite ||
-      !needMin.isFinite || needMin <= 0 || asleepMin < 0) {
-    return null;
-  }
-  final ratio = (asleepMin / needMin).clamp(0.0, 1.0) * 100;
+  final ratio = sleepSufficiencyPct(asleepMin, needMin);
+  if (ratio == null) return null;
   if (consistency == null || !consistency.isFinite) return ratio;
   final v = kPerfIntercept +
       kPerfRatio * ratio +

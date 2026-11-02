@@ -137,10 +137,22 @@ raw recording.
 total sleep = light + deep + REM observed seconds
 time in bed = sleep offset - sleep onset
 sleep efficiency = total sleep / observed time in bed x 100
-sleep performance = clamp(total sleep / sleep need x 100, 0, 100)
+sleep sufficiency = clamp(total sleep / sleep need x 100, 0, 100)
+sleep performance = clamp(-11.34 + 0.804 x sleep sufficiency
+                          + 0.459 x sleep consistency,
+                          0, 100)
 ```
 
-Unobserved gaps are excluded rather than counted as sleep.
+The performance equation is a personal fit to the owner's WHOOP export, not
+WHOOP's proprietary formula. Current WHOOP documentation also names efficiency
+and high sleep stress as inputs. Adding efficiency to this 19-night export made
+held-out error worse, and the export has no sleep-stress field, so Koop keeps
+those as separate contributors instead of inventing unsupported weights.
+Unobserved gaps are excluded rather than counted as sleep. The UI's "Hours vs.
+needed" row shows sufficiency, not the composite performance score.
+For any night dated D, the app reads the need stored on D-1; that is the target
+set before the night began. The same rule is used for current, historical and
+weekly views.
 
 Current sleep need is:
 

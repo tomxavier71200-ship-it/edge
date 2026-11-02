@@ -61,6 +61,39 @@ Future<void> _pump(WidgetTester t, SleepData d, {double scale = 1}) async {
 }
 
 void main() {
+  testWidgets('sleep screen does not repeat performance as hours vs needed',
+      (t) async {
+    final noon = DateTime(2026, 10, 15, 12).millisecondsSinceEpoch ~/ 1000;
+    await _pump(
+      t,
+      SleepData(
+        day: '2026-10-15',
+        days: const ['2026-10-16', '2026-10-15'],
+        night: _night(tst: 348),
+        nightNeed: const Metric(value: 573),
+        need: const Metric(value: 480),
+        trends: {
+          'sleep_perf': [(t: noon, v: 77.0)],
+        },
+      ),
+    );
+    expect(find.text('77%'), findsOneWidget);
+    expect(find.text('61%'), findsWidgets);
+  });
+
+  test('every night uses the need stored on its preceding calendar day', () {
+    int noon(String day) =>
+        DateTime.parse('$day 12:00:00').millisecondsSinceEpoch ~/ 1000;
+    final needs = [
+      (t: noon('2026-10-14'), v: 573.0),
+      (t: noon('2026-10-15'), v: 480.0),
+    ];
+    expect(SleepData.needForNight('2026-10-15', needs), 573,
+        reason: 'the 15 October night must not use the need set on the 15th');
+    expect(SleepData.needForNight('2026-10-16', needs), 480);
+    expect(SleepData.needForNight('2026-10-14', needs), isNull);
+  });
+
   testWidgets('a measure inside the middle half of your nights is typical',
       (t) async {
     await _pump(
