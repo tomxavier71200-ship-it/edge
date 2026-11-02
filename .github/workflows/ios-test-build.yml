@@ -21,7 +21,9 @@ permissions:
 
 jobs:
   ios:
-    runs-on: macos-latest
+    # macos-latest is ARM64 and has repeatedly failed to acquire a hosted
+    # runner. GitHub documents macos-15-intel as the supported Intel pool.
+    runs-on: macos-15-intel
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
