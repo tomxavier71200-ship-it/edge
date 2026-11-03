@@ -1900,7 +1900,12 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // fragments are merged. A rapid one-minute ≥12 bpm onset can confirm low-wrist-
 // motion cardio such as cycling; slow HR drift remains rejected. kAnalyticsPin
 // moves with the output change.
-const int kAlgoVersion = 120;
+// 120 → 121: detected cycling boundaries now use the band step counter,
+// per-minute wrist motion and the already-qualified high-HR core together.
+// Walking before/after a short ride is removed even when HR stays elevated;
+// three recovered-HR or non-cycling minutes close the ride. The ten-minute
+// detection minimum is unchanged. Sibling pins are unchanged.
+const int kAlgoVersion = 121;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -8669,14 +8674,140 @@ class DerivationEngine {
   static ana.DetectedWorkout trimWorkoutGaitEdges(
     Substrate s,
     ana.DetectedWorkout b,
-  ) => _trimGaitEdges(s, b);
+    {int? restingBpm, int? maxBpm}
+  ) => _trimGaitEdges(s, b, restingBpm: restingBpm, maxBpm: maxBpm);
 
   static ana.DetectedWorkout _trimGaitEdges(
     Substrate s,
     ana.DetectedWorkout b,
+    {int? restingBpm, int? maxBpm}
+  ) {
+    // Anchor feature buckets to real clock minutes. Detector boundaries land
+    // at arbitrary seconds; bout-relative buckets made the same ride shift by
+    // up to 59 seconds and could change whether a ten-minute seed qualified.
+    final bucketStart = (b.startSec ~/ 60) * 60;
+    final bucketEnd = ((b.endSec + 59) ~/ 60) * 60;
+    final minutes = (bucketEnd - bucketStart) ~/ 60;
+    if (minutes <= 0) return b;
+    final spm = List<int?>.filled(minutes, null);
+    final hrSum = List<int>.filled(minutes, 0);
+    final hrCount = List<int>.filled(minutes, 0);
+    final invalid = List<bool>.filled(minutes, false);
+    final motionSum = List<double>.filled(minutes, 0);
+    final motionCount = List<int>.filled(minutes, 0);
+    int? prevCounter, prevTs;
+    double? prevAx, prevAy, prevAz;
+    int? prevAccelTs;
+    var prevMinute = -1;
+    for (var i = 0; i < s.length; i++) {
+      final t = s.tsSec[i];
+      if (t < b.startSec || t >= b.endSec) continue;
+      final m = (t - bucketStart) ~/ 60;
+      if (s.accelPresentAt(i)) {
+        if (prevAx != null && prevAccelTs != null && t - prevAccelTs <= 2) {
+          final dx = s.ax[i] - prevAx;
+          final dy = s.ay[i] - prevAy!;
+          final dz = s.az[i] - prevAz!;
+          motionSum[m] += math.sqrt(dx * dx + dy * dy + dz * dz);
+          motionCount[m]++;
+        }
+        prevAx = s.ax[i];
+        prevAy = s.ay[i];
+        prevAz = s.az[i];
+        prevAccelTs = t;
+      }
+      final c = s.stepCounterAt(i);
+      if (c == null) continue;
+      if (s.hr[i] > 0) {
+        hrSum[m] += s.hr[i];
+        hrCount[m]++;
+      }
+      if (m == prevMinute && prevCounter != null && prevTs != null) {
+        final delta = boundedStepCounterDelta(
+          previous: prevCounter,
+          current: c,
+          gapSec: t - prevTs,
+          modulus: 65536,
+        );
+        if (delta == null) {
+          invalid[m] = true;
+        } else {
+          spm[m] = (spm[m] ?? 0) + delta;
+        }
+      }
+      prevCounter = c;
+      prevTs = t;
+      prevMinute = m;
+    }
+    for (var m = 0; m < minutes; m++) {
+      if (invalid[m]) spm[m] = null;
+    }
+    final trainingFloor = b.avgBpm * 0.9;
+    final training = <bool?>[
+      for (var m = 0; m < minutes; m++)
+        hrCount[m] == 0 ? null : (hrSum[m] / hrCount[m]) >= trainingFloor,
+    ];
+    final highFloor = restingBpm == null
+        ? null
+        : math.max(
+            restingBpm + ana.AutoWorkoutDetector.elevatedMarginBPM,
+            (restingBpm +
+                    ana.AutoWorkoutDetector.hrrFloorFraction *
+                        ((maxBpm ?? ana.AutoWorkoutDetector.defaultMaxHR) - restingBpm))
+                .round(),
+          );
+    final highHr = <bool?>[
+      for (var m = 0; m < minutes; m++)
+        highFloor == null || hrCount[m] == 0
+            ? null
+            : (hrSum[m] / hrCount[m]) >= highFloor,
+    ];
+    final motion = <double?>[
+      for (var m = 0; m < minutes; m++)
+        motionCount[m] == 0 ? null : motionSum[m] / motionCount[m],
+    ];
+    var cut = trimGaitEdges(
+      spm,
+      motion: motion,
+      training: training,
+      highHr: highHr,
+      cyclingOnly: true,
+    );
+    var cutOrigin = bucketStart;
+    if (cut == null) {
+      // Cadence-only trimming stays bout-relative. A partial wall-clock minute
+      // can contain only 20–40 seconds of steps and must not be mistaken for a
+      // low-cadence edge.
+      cut = _gaitOnlyCut(s, b);
+      cutOrigin = b.startSec;
+    }
+    if (cut == null) return b;
+    final start = math.max(b.startSec, cutOrigin + cut.first * 60);
+    final end = math.min(b.endSec, cutOrigin + cut.end * 60);
+    var sum = 0, n = 0, peak = 0;
+    for (var i = 0; i < s.length; i++) {
+      final t = s.tsSec[i];
+      if (t < start || t >= end || s.hr[i] <= 0) continue;
+      sum += s.hr[i];
+      n++;
+      if (s.hr[i] > peak) peak = s.hr[i];
+    }
+    if (n == 0) return b;
+    return ana.DetectedWorkout(
+      startSec: start,
+      endSec: end,
+      avgBpm: (sum / n).round(),
+      peakBpm: peak,
+      durationMin: (end - start) ~/ 60,
+      sport: b.sport,
+    );
+  }
+
+  static ({int first, int end})? _gaitOnlyCut(
+    Substrate s,
+    ana.DetectedWorkout b,
   ) {
     final minutes = ((b.endSec - b.startSec) / 60).ceil();
-    if (minutes <= 0) return b;
     final spm = List<int?>.filled(minutes, null);
     final hrSum = List<int>.filled(minutes, 0);
     final hrCount = List<int>.filled(minutes, 0);
@@ -8714,30 +8845,12 @@ class DerivationEngine {
       if (invalid[m]) spm[m] = null;
     }
     final trainingFloor = b.avgBpm * 0.9;
-    final training = <bool?>[
-      for (var m = 0; m < minutes; m++)
-        hrCount[m] == 0 ? null : (hrSum[m] / hrCount[m]) >= trainingFloor,
-    ];
-    final cut = trimGaitEdges(spm, training: training);
-    if (cut == null) return b;
-    final start = b.startSec + cut.first * 60;
-    final end = math.min(b.endSec, b.startSec + cut.end * 60);
-    var sum = 0, n = 0, peak = 0;
-    for (var i = 0; i < s.length; i++) {
-      final t = s.tsSec[i];
-      if (t < start || t >= end || s.hr[i] <= 0) continue;
-      sum += s.hr[i];
-      n++;
-      if (s.hr[i] > peak) peak = s.hr[i];
-    }
-    if (n == 0) return b;
-    return ana.DetectedWorkout(
-      startSec: start,
-      endSec: end,
-      avgBpm: (sum / n).round(),
-      peakBpm: peak,
-      durationMin: (end - start) ~/ 60,
-      sport: b.sport,
+    return trimGaitEdges(
+      spm,
+      training: <bool?>[
+        for (var m = 0; m < minutes; m++)
+          hrCount[m] == 0 ? null : (hrSum[m] / hrCount[m]) >= trainingFloor,
+      ],
     );
   }
 
@@ -8816,7 +8929,10 @@ class DerivationEngine {
               const <ana.DetectedWorkout>[]);
       // Walking minutes at a bout's edges are not the bout (bout_trim.dart):
       // the detector follows heart rate, which stays up on the walk home.
-      final bouts = [for (final b in detected) _trimGaitEdges(s, b)];
+      final bouts = [
+        for (final b in detected)
+          _trimGaitEdges(s, b, restingBpm: rhr, maxBpm: maxHr),
+      ];
 
       // HRR per bout from the per-second HR tail bracketing each bout end.
       final drops = <double>[];

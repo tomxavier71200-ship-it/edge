@@ -22,18 +22,115 @@ const double kGaitBoutShare = .6;
 /// The shortest bout a trim may leave; shorter, and the bout is kept as is.
 const int kTrimMinMinutes = 10;
 
+/// Cycling keeps the wrist comparatively still and does not accumulate real
+/// foot steps. Walking to/from the bicycle is normally above one or both of
+/// these limits.
+const double kCyclingMotionMax = .20;
+const int kCyclingStepMax = 39;
+
+/// A ten-minute seed may contain a few potholes, wrist gestures, or false
+/// on-wrist step increments. Requiring every minute would cut real rides.
+const int kCyclingSeedMinutes = 10;
+const int kCyclingSeedEvidenceMinutes = 7;
+const int kCyclingSeedHighHrMinutes = 5;
+const int kCyclingSeedStepObservedMinutes = 3;
+const int kEdgeStopMinutes = 3;
+
 /// The trimmed minute range `[first, end)` of a bout whose per-minute step
 /// cadence is [spm] (null = no counter that minute), or null for "keep the
 /// bout as detected".
 ({int first, int end})? trimGaitEdges(
   List<int?> spm, {
+  List<double?>? motion,
   List<bool?>? training,
+  List<bool?>? highHr,
+  bool cyclingOnly = false,
 }) {
-  if (spm.isEmpty || spm.any((c) => c == null)) return null;
+  if (spm.isEmpty) return null;
   final hasTraining = training != null && training.length == spm.length;
-  bool gait(int i) => spm[i]! >= kGaitCadenceSpm;
-  final gaitMin = [for (var i = 0; i < spm.length; i++) if (gait(i)) i].length;
-  if (gaitMin >= kGaitBoutShare * spm.length) return null;
+  bool gait(int i) => spm[i] != null && spm[i]! >= kGaitCadenceSpm;
+  final observedStepMin = spm.whereType<int>().length;
+  final gaitMin = [
+    for (var i = 0; i < spm.length; i++)
+      if (gait(i)) i,
+  ].length;
+  if (observedStepMin > 0 && gaitMin >= kGaitBoutShare * observedStepMin) {
+    return null;
+  }
+
+  // Prefer the actual low-motion/no-footstep cycling block when the recording
+  // contains enough evidence to identify one. HR alone cannot do this: it rises
+  // during the walk in and stays high during the walk out. A short rolling seed
+  // tolerates handlebar bumps and false wrist-counter increments, then three
+  // consecutive non-cycling or recovered-HR minutes define the edge.
+  final hasMotion = motion != null && motion.length == spm.length;
+  final hasHighHr = highHr != null && highHr.length == spm.length;
+  if (hasMotion && hasHighHr) {
+    bool cycling(int i) =>
+        motion[i] != null &&
+        motion[i]! <= kCyclingMotionMax &&
+        (spm[i] == null || spm[i]! <= kCyclingStepMax);
+
+    int? seedStart;
+    for (var i = 0; i + kCyclingSeedMinutes <= spm.length; i++) {
+      var evidence = 0, elevated = 0, stepsObserved = 0;
+      for (var j = i; j < i + kCyclingSeedMinutes; j++) {
+        if (cycling(j)) evidence++;
+        if (highHr[j] == true) elevated++;
+        if (spm[j] != null) stepsObserved++;
+      }
+      if (evidence >= kCyclingSeedEvidenceMinutes &&
+          elevated >= kCyclingSeedHighHrMinutes &&
+          stepsObserved >= kCyclingSeedStepObservedMinutes) {
+        seedStart = i;
+        break;
+      }
+    }
+    if (seedStart != null) {
+      var seedFirst = seedStart;
+      var seedLast = seedStart + kCyclingSeedMinutes - 1;
+      while (seedFirst <= seedLast && !cycling(seedFirst)) {
+        seedFirst++;
+      }
+      while (seedLast >= seedFirst && !cycling(seedLast)) {
+        seedLast--;
+      }
+
+      var first = seedFirst;
+      var bad = 0;
+      for (var i = seedFirst - 1; i >= 0; i--) {
+        bad = cycling(i) ? 0 : bad + 1;
+        if (bad >= kEdgeStopMinutes) {
+          first = i + kEdgeStopMinutes;
+          break;
+        }
+        first = i;
+      }
+
+      var end = seedLast + 1;
+      var nonCycling = 0;
+      var recovered = 0;
+      for (var i = end; i < spm.length; i++) {
+        nonCycling = cycling(i) ? 0 : nonCycling + 1;
+        recovered = highHr[i] == true ? 0 : recovered + 1;
+        if (nonCycling >= kEdgeStopMinutes || recovered >= kEdgeStopMinutes) {
+          final run = nonCycling >= kEdgeStopMinutes ? nonCycling : recovered;
+          end = i - run + 1;
+          break;
+        }
+        end = i + 1;
+      }
+      if (end - first >= kTrimMinMinutes && (first > 0 || end < spm.length)) {
+        return (first: first, end: end);
+      }
+    }
+  }
+
+  if (cyclingOnly) return null;
+
+  // The cadence-only fallback needs an observation for every minute. Missing
+  // counter rows are absence, not zero steps, so do not infer a gait edge.
+  if (spm.any((c) => c == null)) return null;
 
   var first = 0;
   while (first < spm.length && gait(first)) {

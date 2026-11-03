@@ -1,6 +1,6 @@
 # Koop development status
 
-Updated 2026-11-02. Read this with `AGENTS.md`, then only the files relevant to the task.
+Updated 2026-11-03. Read this with `AGENTS.md`, then only the files relevant to the task.
 
 ## Previously delivered
 
@@ -9,7 +9,7 @@ workout counter-reset trimming, nap imports, and dashboard metric reads.
 `da45dbac` keeps saved workouts on the selected past day's Home timeline even
 when daily analysis is absent. Both were pushed to `whoop-ui`.
 
-## Current implementation (algorithm 120)
+## Current implementation (algorithm 121)
 
 - Automatic workout detection now uses a ten-minute minimum. Nearby elevated-HR
   fragments merge before the duration gate, so a brief HR dip does not erase a
@@ -26,8 +26,10 @@ when daily analysis is absent. Both were pushed to `whoop-ui`.
   as duplicate review suggestions; reanalysis also dismisses existing duplicates.
 
 - Real-recording workout validation now uses the band step counter plus
-  sustained HR evidence: the reported 05:39 cycling bout ends near the observed
-  05:56–05:57 arrival/walk transition instead of following elevated HR to 06:14.
+  sustained HR and wrist-motion evidence. On the 3 November recording, walking
+  is excluded from both edges: the morning cycling core resolves to 05:42–05:54
+  and the afternoon core to about 14:03–14:17 instead of 05:34–05:58 and
+  13:54–14:21. The ten-minute detection minimum remains unchanged.
 - Fragmented overnight sleep handling is symmetric. A substantial low-HR sleep
   block immediately before a less-than-60-minute awakening is retained when a
   qualifying main block follows. On the 31 October recording this addresses the

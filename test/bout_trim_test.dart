@@ -80,6 +80,56 @@ void main() {
     expect(cut.end, 17, reason: 'the ride ends before the sustained walk');
   });
 
+  test('real short morning ride excludes the walk in and walk out', () {
+    // 05:34 onward. Cycling begins at 05:42; HR recovery begins at 05:54.
+    final spm = <int?>[
+      0, 12, 75, 2, 32, 63, 24, 26, 0, 0, 11, 1, 14,
+      0, 0, 10, 0, 1, 17, 0, 0, 0, 1, 0, 33, 106,
+    ];
+    final motion = <double?>[
+      .249, .291, .255, .320, .370, .295, .314, .251, .043, .067,
+      .132, .125, .059, .083, .082, .099, .090, .160, .330, .227,
+      .035, .071, .069, .122, .309, .236,
+    ];
+    final hr = <double>[
+      100.9, 97.3, 102.5, 108.0, 106.8, 106.3, 109.3, 112.2,
+      113.5, 107.8, 123.0, 132.6, 123.3, 125.8, 120.7, 130.3,
+      133.4, 134.5, 133.7, 120.5, 113.9, 117.1, 114.3, 120.6,
+      119.8, 122.8,
+    ];
+    final cut = trimGaitEdges(
+      spm,
+      motion: motion,
+      highHr: [for (final bpm in hr) bpm >= 120],
+    )!;
+    expect(cut, (first: 8, end: 20));
+  });
+
+  test('real short afternoon ride excludes walking on both edges', () {
+    // 13:54 onward. Cycling begins around 14:03; the walk begins at 14:17.
+    final spm = <int?>[
+      5, 30, 27, 37, 42, 32, 69, 88, 53, 0, 0, 0, 0, 5,
+      15, 0, 1, 65, 4, 0, 15, 0, 2, 8, 13, 53, 43,
+    ];
+    final motion = <double?>[
+      .375, .247, .287, .359, .407, .252, .381, .420, .399, .195,
+      .074, .104, .093, .070, .265, .084, .125, .053, .056, .036,
+      .047, .078, .056, .285, .349, .386, .381,
+    ];
+    final hr = <double>[
+      99.8, 107.3, 98.0, 100.7, 108.7, 108.7, 106.8, 108.5, 112.2,
+      108.7, 131.6, 121.5, 111.8, 124.4, 130.7, 115.0, 123.8,
+      126.1, 125.8, 132.7, 135.4, 136.1, 132.2, 123.8, 123.3,
+      121.1, 115.1,
+    ];
+    final cut = trimGaitEdges(
+      spm,
+      motion: motion,
+      highHr: [for (final bpm in hr) bpm >= 120],
+    )!;
+    expect(cut, (first: 9, end: 23));
+  });
+
   test('a walk or a run is never trimmed', () {
     expect(trimGaitEdges(List<int?>.filled(30, 110)), isNull);
   });
