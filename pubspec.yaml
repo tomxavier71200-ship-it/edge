@@ -501,7 +501,12 @@ dependencies:
       # capped, gap-aware and compared against saved sessions after refinement.
       # This corrects systematically late starts/early finishes without
       # lowering the false-positive detection gate.
-      ref: 04d92d0b0c580619ab9bca832755df368603e18b
+      #
+      # Koop analytics @ caa1e20: ten-minute elevated windows now qualify after
+      # nearby HR fragments are merged, so brief HR dips do not erase short
+      # workouts. Low-wrist-motion cycling uses a rapid one-minute 12 bpm onset
+      # while the slow-drift rejection remains in place.
+      ref: caa1e205cdb3142eaa722cd5f6c5f5243939fa5b
 
   # BLE — flutter_blue_plus is the maintained cross-platform GATT client.
   flutter_blue_plus: ^1.36.8

@@ -1895,7 +1895,12 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // against the old window, preserves the athlete's type/private/RPE fields, and
 // clears window-derived scores so the existing substrate rescore rebuilds them.
 // kAnalyticsPin/kProtocolPin UNCHANGED: edge-side persistence repair only.
-const int kAlgoVersion = 119;
+// 119 → 120: automatic workout detection accepts a ten-minute merged elevated
+// window instead of requiring twelve uninterrupted minutes before nearby
+// fragments are merged. A rapid one-minute ≥12 bpm onset can confirm low-wrist-
+// motion cardio such as cycling; slow HR drift remains rejected. kAnalyticsPin
+// moves with the output change.
+const int kAlgoVersion = 120;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2071,7 +2076,7 @@ const int kStrainRhrCarryDays = 7;
 //
 // Koop analytics @ 610e56f — workout boundary refinement described in the
 // v116 changelog above. Must match pubspec.yaml exactly.
-const String kAnalyticsPin = '04d92d0b0c580619ab9bca832755df368603e18b';
+const String kAnalyticsPin = 'caa1e205cdb3142eaa722cd5f6c5f5243939fa5b';
 // Repinned to analytics main's tip, which carries BOTH PR #72 (hrv_freq
 // Welch gap guard) and PR #73 (overreachingConjunction rhr quantum guard) —
 // the two independent kAlgoVersion bumps above (93 and 94). Verified both

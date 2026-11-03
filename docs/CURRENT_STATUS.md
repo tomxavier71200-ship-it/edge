@@ -9,7 +9,13 @@ workout counter-reset trimming, nap imports, and dashboard metric reads.
 `da45dbac` keeps saved workouts on the selected past day's Home timeline even
 when daily analysis is absent. Both were pushed to `whoop-ui`.
 
-## Current implementation (algorithm 119)
+## Current implementation (algorithm 120)
+
+- Automatic workout detection now uses a ten-minute minimum. Nearby elevated-HR
+  fragments merge before the duration gate, so a brief HR dip does not erase a
+  short ride. Low-wrist-motion cycling can qualify on a rapid one-minute 12 bpm
+  onset; slow HR drift remains rejected. On the 3 November recording this finds
+  both owner-confirmed cycling windows before gait-edge trimming.
 
 - Reanalysis now repairs the stored windows of existing auto-detected workouts,
   not only future detections. It matches bouts one-to-one, updates only
