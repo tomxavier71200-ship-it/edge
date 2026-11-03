@@ -727,9 +727,19 @@ document.getElementById("glog").addEventListener("click",async()=>{
     let box=document.getElementById("logbox");
     if(!box){box=document.createElement("div");box.id="logbox";
       box.style.cssText="position:fixed;inset:5% 5%;z-index:50;background:var(--card,#fff);color:inherit;border:1px solid #ccc;border-radius:12px;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.25)";
-      box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #ddd"><b>Phone log</b><button type="button" id="logclose">Close</button></div><pre id="logtext" style="margin:0;padding:12px 14px;overflow:auto;flex:1;font-size:12px;white-space:pre-wrap"></pre>';
+      box.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #ddd"><b>Phone log</b><div><button type="button" id="logdownload">Download log</button> <button type="button" id="logclose">Close</button></div></div><pre id="logtext" style="margin:0;padding:12px 14px;overflow:auto;flex:1;font-size:12px;white-space:pre-wrap"></pre>';
       document.body.appendChild(box);document.getElementById("logclose").onclick=()=>box.remove();}
     document.getElementById("logtext").textContent=text;
+    document.getElementById("logdownload").onclick=()=>{
+      const url=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="koop-diagnostics.txt";
+      box.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+    };
     status(`Phone log saved ${new Date(f.modifiedTime).toLocaleString()}. Decrypted in this browser; nothing was sent anywhere.`);}
   catch(err){status(err.message||String(err));}});
 document.getElementById("gsign").addEventListener("click",async()=>{
