@@ -49,4 +49,18 @@ void main() {
     expect(find.text('HEALTH MONITOR'), findsOneWidget);
     expect(find.text('HEALTH'), findsOneWidget);
   });
+
+  testWidgets('WHOOP navigation title stays geometrically centered', (t) async {
+    P.skin = Skin.whoop;
+    await t.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: NavBar(
+          'Today',
+          trailing: Icon(Icons.info_outline),
+        ),
+      ),
+    ));
+    final screenCenter = t.getSize(find.byType(Scaffold)).width / 2;
+    expect(t.getCenter(find.text('TODAY')).dx, closeTo(screenCenter, .1));
+  });
 }

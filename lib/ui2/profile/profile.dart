@@ -317,6 +317,8 @@ class ProfileHomeView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x10),
               children: [
                 const SizedBox(height: S.x4),
+                _ProfileHero(stats: s, onEdit: onEdit),
+                const SizedBox(height: S.x5),
                 settingsGroup(c, l?.profileQuickAccessGroup ?? 'Quick access', [
                   SetRow(LucideIcons.watch, C.blue,
                       l?.profileMyDevices ?? 'My devices',
@@ -415,4 +417,73 @@ class ProfileHomeView extends StatelessWidget {
     );
   }
 
+}
+
+/// Identity and measurement status in one calm header. The old screen opened
+/// directly into a wall of settings rows, so Profile had no visual hierarchy
+/// and the user's own name was loaded but never shown.
+class _ProfileHero extends StatelessWidget {
+  final ProfileStats? stats;
+  final VoidCallback? onEdit;
+
+  const _ProfileHero({required this.stats, this.onEdit});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final s = stats;
+    final name = s?.name?.trim();
+    final shownName = name == null || name.isEmpty ? 'Your Koop' : name;
+    final initial = name == null || name.isEmpty
+        ? null
+        : name.characters.first.toUpperCase();
+    final sources = s?.sources;
+    final status = sources == null
+        ? 'Reading your profile…'
+        : sources == 0
+            ? 'No measurement source connected'
+            : '$sources measurement source${sources == 1 ? '' : 's'} connected';
+    return Surface(
+      onTap: onEdit,
+      semanticLabel: '$shownName. $status. Edit profile',
+      pad: const EdgeInsets.all(S.x5),
+      child: Row(children: [
+        Container(
+          width: 64,
+          height: 64,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: p.wash(C.blue),
+          ),
+          child: initial == null
+              ? Icon(LucideIcons.user, size: 26, color: p.on(C.blue))
+              : Text(initial,
+                  style: F.n34.copyWith(
+                      color: p.on(C.blue), fontWeight: FontWeight.w700)),
+        ),
+        const SizedBox(width: S.x4),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(shownName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: F.t2.copyWith(color: p.ink)),
+              const SizedBox(height: S.x1),
+              Text(status, style: F.cap.copyWith(color: p.ink3)),
+              if (s?.storageBytes != null) ...[
+                const SizedBox(height: S.x2),
+                Text('${formatBytes(s!.storageBytes!)} stored on this phone',
+                    style: F.over.copyWith(color: p.ink2)),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: S.x2),
+        Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+      ]),
+    );
+  }
 }

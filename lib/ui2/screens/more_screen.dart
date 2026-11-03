@@ -39,21 +39,13 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext c) {
     void open(ShellDomain d) => ShellScope.maybeOf(c)?.select(d);
     final p = P.of(c);
+    // One aligned list, not alternating two-column tiles. The old grid made
+    // every section jump between unequal card heights and became especially
+    // cramped on iPhone widths and at large text sizes.
     Widget grid(List<Widget> tiles) => Column(children: [
-          for (var i = 0; i < tiles.length; i += 2) ...[
+          for (var i = 0; i < tiles.length; i++) ...[
             if (i > 0) const SizedBox(height: S.x3),
-            IntrinsicHeight(
-              child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: tiles[i]),
-                    const SizedBox(width: S.x3),
-                    Expanded(
-                        child: i + 1 < tiles.length
-                            ? tiles[i + 1]
-                            : const SizedBox.shrink()),
-                  ]),
-            ),
+            tiles[i],
           ],
         ]);
     Widget head(String t) => Padding(
@@ -155,8 +147,7 @@ class MoreScreen extends StatelessWidget {
   }
 }
 
-/// A door as a tile: the icon in a soft wash of its colour, a title and one
-/// short line. Two to a row.
+/// A consistently aligned More door: icon, copy and one trailing affordance.
 class DoorTile extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -171,7 +162,7 @@ class DoorTile extends StatelessWidget {
     return Surface(
       onTap: onTap,
       semanticLabel: '$title. $sub',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Row(children: [
         Container(
           width: 44,
           height: 44,
@@ -185,11 +176,21 @@ class DoorTile extends StatelessWidget {
           ),
           child: Icon(icon, size: 22, color: p.on(color)),
         ),
-        const SizedBox(height: S.x4),
-        Text(title,
-            style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 2),
-        Text(sub, style: F.cap.copyWith(color: p.ink3)),
+        const SizedBox(width: S.x3),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: F.body.copyWith(
+                      color: p.ink, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(sub, style: F.cap.copyWith(color: p.ink3)),
+            ],
+          ),
+        ),
+        const SizedBox(width: S.x2),
+        Icon(LucideIcons.chevronRight, size: 17, color: p.ink3),
       ]),
     );
   }

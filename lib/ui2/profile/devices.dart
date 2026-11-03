@@ -109,7 +109,8 @@ import '../../ble/withings_steel_hr_link.dart'
 import '../../ble/xwatch_link.dart' show XWatchLink;
 import '../../ble/zetime_link.dart' show ZeTimeLink, pairZeTime;
 import '../../ble/band_status_l10n.dart' show localizedBandStatus;
-import '../../ble/ble_state.dart' show BandStatus, kMaxConcurrentSecondaryLinks;
+import '../../ble/ble_state.dart'
+    show BandCondition, BandStatus, kMaxConcurrentSecondaryLinks;
 import '../../data/db.dart' show LocalDb;
 import '../../l10n/app_localizations.dart';
 import '../../notify/battery_forecast.dart';
@@ -1522,7 +1523,6 @@ class MyDevicesView extends StatelessWidget {
     final p = P.of(c);
     final localizedStatus =
         status == null ? null : localizedBandStatus(c, status!);
-    final fault = localizedStatus?.isFault == true ? localizedStatus : null;
     // A BAND, not "a source". The phone is a source and it is not a substitute
     // for one: gating this on `sources.isEmpty` meant a phone counting steps
     // hid the only route back to pairing, and forgetting a band left the user
@@ -1573,6 +1573,10 @@ class MyDevicesView extends StatelessWidget {
                   ),
                   if (sources.isNotEmpty) const SizedBox(height: S.x3),
                 ],
+                if (hasBand && localizedStatus != null) ...[
+                  _BandConnectionCard(localizedStatus),
+                  const SizedBox(height: S.x5),
+                ],
                 // LIVE — the first of the two buckets. Only drawn when there is
                 // something in it: a heading over nothing is the empty rung
                 // problem again, one level up.
@@ -1582,12 +1586,6 @@ class MyDevicesView extends StatelessWidget {
                 ],
                 for (final s in sources) ...[
                   SourceRow(s, onTap: () => goto(c, DeviceDetail(s))),
-                  if (s.isBand && fault != null) ...[
-                    const SizedBox(height: S.x2),
-                    StatusCard(fault.title, fault.reason,
-                        fix: fault.fix ?? '',
-                        icon: LucideIcons.bluetoothOff),
-                  ],
                   const SizedBox(height: S.x3),
                 ],
                 // At the foot of LIVE, because that is what it adds to. Not
@@ -1640,6 +1638,66 @@ class MyDevicesView extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+class _BandConnectionCard extends StatelessWidget {
+  final BandStatus status;
+  const _BandConnectionCard(this.status);
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final healthy = status.condition == BandCondition.connected;
+    final active = status.condition == BandCondition.connecting ||
+        status.condition == BandCondition.scanning;
+    final color = status.isFault
+        ? C.red
+        : healthy
+            ? C.green
+            : active
+                ? C.blue
+                : C.orange;
+    final icon = status.isFault
+        ? LucideIcons.triangleAlert
+        : healthy
+            ? LucideIcons.bluetooth
+            : active
+                ? LucideIcons.loaderCircle
+                : LucideIcons.bluetoothOff;
+    return Surface(
+      semanticLabel: '${status.title}. ${status.reason}',
+      pad: const EdgeInsets.all(S.x4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: p.wash(color),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 21, color: p.on(color)),
+        ),
+        const SizedBox(width: S.x3),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(status.title,
+                style: F.body.copyWith(
+                    color: p.ink, fontWeight: FontWeight.w600)),
+            const SizedBox(height: S.x1),
+            Text(status.reason,
+                style: F.cap.copyWith(color: p.ink3, height: 1.4)),
+            if (status.fix case final fix?) ...[
+              const SizedBox(height: S.x2),
+              Text(fix,
+                  style: F.cap.copyWith(
+                      color: p.on(color), fontWeight: FontWeight.w600)),
+            ],
+          ]),
+        ),
+      ]),
     );
   }
 }

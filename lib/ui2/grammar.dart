@@ -2495,10 +2495,16 @@ class NavBar extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 52),
       child: Row(
         children: [
-          Pressable(
-            onTap: onBack ?? () => Navigator.maybePop(c),
-            semanticLabel: 'Back',
-            child: Icon(LucideIcons.chevronLeft, size: 24, color: p.ink),
+          SizedBox(
+            width: trailingWidth,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Pressable(
+                onTap: onBack ?? () => Navigator.maybePop(c),
+                semanticLabel: 'Back',
+                child: Icon(LucideIcons.chevronLeft, size: 24, color: p.ink),
+              ),
+            ),
           ),
           Expanded(
             child: center ?? Column(

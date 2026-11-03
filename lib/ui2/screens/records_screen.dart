@@ -149,42 +149,56 @@ class RecordTile extends StatelessWidget {
       semanticLabel: v == null
           ? '$name: needs $kRecordMinDays days'
           : '$name: $v $unit on ${prettyDayLabel(date)}',
-      child: Row(children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(color: p.wash(color), borderRadius: R.rMd),
-          child: Icon(icon, size: 20, color: p.on(color)),
-        ),
-        const SizedBox(width: S.x3),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name.toUpperCase(),
-                style: F.over.copyWith(
-                    color: p.ink2, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 2),
-            Text(
-                v == null
-                    ? 'Needs $kRecordMinDays days of data'
-                    : prettyDayLabel(date),
-                style: F.cap.copyWith(color: p.ink3)),
-          ]),
-        ),
-        const SizedBox(width: S.x3),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration:
+                BoxDecoration(color: p.wash(color), shape: BoxShape.circle),
+            child: Icon(icon, size: 19, color: p.on(color)),
+          ),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: F.body.copyWith(
+                        color: p.ink, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(
+                    v == null
+                        ? 'Building from your measured days'
+                        : 'Set ${prettyDayLabel(date)}',
+                    style: F.cap.copyWith(color: p.ink3)),
+              ],
+            ),
+          ),
+          Icon(LucideIcons.chevronRight, size: 17, color: p.ink3),
+        ]),
+        const SizedBox(height: S.x4),
         if (v != null)
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(v, style: F.n34.copyWith(color: p.ink)),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(v, style: F.n34.copyWith(color: p.ink)),
+                ),
+              ),
               if (unit.isNotEmpty) ...[
-                const SizedBox(width: S.x1),
+                const SizedBox(width: S.x2),
                 Text(unit, style: F.body.copyWith(color: p.ink2)),
               ],
             ],
           )
         else
-          Text('—', style: F.n34.copyWith(color: p.ink3)),
+          Text('Needs $kRecordMinDays measured days',
+              style: F.body.copyWith(color: p.ink2)),
       ]),
     );
   }

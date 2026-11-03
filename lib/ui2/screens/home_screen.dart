@@ -2651,75 +2651,82 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           // ── top bar: you · the day · the band ──
           Padding(
             padding: const EdgeInsets.only(top: S.x3),
-            child: Row(
-              children: [
-                _circle(
-                  c,
-                  LucideIcons.user,
-                  l?.homeProfileSettings ?? 'Profile and settings',
-                  () => go(c, const ProfileHome()),
-                ),
-                // The streak: days in a row with a recovery score, from two.
-                if (streak case final n when n >= 2) ...[
-                  const SizedBox(width: S.x2),
-                  // Ignites once when the streak has grown since last seen;
-                  // opens the streak screen.
-                  StreakChip(
-                    n: n,
-                    ignite: _igniteFor(n),
-                    onTap: () => go(
-                      c,
-                      StreakScreen(
-                        current: n,
-                        points: d.series['readiness'] ?? const <ChartPoint>[],
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(width: S.x3),
-                Expanded(
-                  child: _days.length < 2
-                      ? Center(
-                          // WHOOP mode: WHOOP's spaced "TODAY".
-                          child: Look.whoop && d.dayId == todayLabel()
-                              ? Text('TODAY',
-                                  style: F.label.copyWith(
-                                      color: p.ink,
-                                      letterSpacing: 2,
-                                      fontWeight: FontWeight.w700))
-                              : Text(
-                                  prettyDay(d.dayId, l),
-                                  style: F.head.copyWith(color: p.ink),
+            child: LayoutBuilder(
+              builder: (c, constraints) {
+                final hasStreak = streak >= 2;
+                // Reserve the same width on both sides. A Row centres inside
+                // the space left after its siblings, so iOS shifted TODAY left
+                // whenever its badge and leading controls had different widths.
+                final side = hasStreak ? 108.0 : 76.0;
+                final day = _days.length < 2
+                    ? Center(
+                        child: Look.whoop && d.dayId == todayLabel()
+                            ? Text('TODAY',
+                                style: F.label.copyWith(
+                                    color: p.ink,
+                                    letterSpacing: 2,
+                                    fontWeight: FontWeight.w700))
+                            : Text(prettyDay(d.dayId, l),
+                                style: F.head.copyWith(color: p.ink)),
+                      )
+                    : DayNav(
+                        day: _day ?? d.dayId,
+                        days: _days,
+                        onDay: _goDay,
+                        colors: {
+                          for (final pt in d.series['readiness'] ??
+                              const <ChartPoint>[])
+                            dayLabelOf(DateTime.fromMillisecondsSinceEpoch(
+                                pt.t * 1000)): readinessBand(pt.v, l).color,
+                        },
+                      );
+                return SizedBox(
+                  height: 44,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          _circle(
+                            c,
+                            LucideIcons.user,
+                            l?.homeProfileSettings ?? 'Profile and settings',
+                            () => go(c, const ProfileHome()),
+                          ),
+                          if (streak case final n when n >= 2) ...[
+                            const SizedBox(width: S.x2),
+                            StreakChip(
+                              n: n,
+                              ignite: _igniteFor(n),
+                              onTap: () => go(
+                                c,
+                                StreakScreen(
+                                  current: n,
+                                  points: d.series['readiness'] ??
+                                      const <ChartPoint>[],
                                 ),
-                        )
-                      : DayNav(
-                          day: _day ?? d.dayId,
-                          days: _days,
-                          onDay: _goDay,
-                          // The calendar's dots wear each day's recovery band;
-                          // a day with no score gets the neutral dot.
-                          colors: {
-                            for (final pt in d.series['readiness'] ??
-                                const <ChartPoint>[])
-                              dayLabelOf(DateTime.fromMillisecondsSinceEpoch(
-                                      pt.t * 1000)):
-                                  readinessBand(pt.v, l).color,
-                          },
-                        ),
-                ),
-                const SizedBox(width: S.x3),
-                // The battery moved into the band line below; the slot keeps
-                // the day centred. WHOOP mode puts it here, as WHOOP does.
-                if (Look.whoop)
-                  WhoopBandBadge(
-                    paired: bandNameOf(c) != null,
-                    connected: bandConnectedOf(c),
-                    battery: deviceBatteryOf(c),
-                    onTap: () => go(c, const MyDevices()),
-                  )
-                else
-                  const SizedBox(width: 40),
-              ],
+                              ),
+                            ),
+                          ],
+                        ]),
+                      ),
+                      Positioned(left: side, right: side, child: day),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Look.whoop
+                            ? WhoopBandBadge(
+                                paired: bandNameOf(c) != null,
+                                connected: bandConnectedOf(c),
+                                battery: deviceBatteryOf(c),
+                                onTap: () => go(c, const MyDevices()),
+                              )
+                            : const SizedBox(width: 40),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
           // ── the band: which one, connected, battery ──
