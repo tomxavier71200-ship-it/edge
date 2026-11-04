@@ -116,6 +116,57 @@ void main() {
     expect(await LocalDb.hasRecomputableOlderDays(kAlgoVersion), isFalse);
   });
 
+  test('startup requeues retryable upgrades and ignores terminal skips', () async {
+    const day = '2026-02-03';
+    final ts = DateTime(2026, 2, 3, 9).millisecondsSinceEpoch ~/ 1000;
+    await LocalDb.insertRecord(
+      RawRecord(counter: 999003, packetType: 47, hex: 'edge',
+          capturedAt: ts * 1000, recTs: ts),
+      Sample(tsEpoch: ts, counter: 999003, hr: 58, rrIntervalsMs: const [],
+          ax: 0, ay: 0, az: 1, spo2RedRaw: 1, spo2IrRaw: 1, skinTempRaw: 3000),
+    );
+    await seedGoodDay(day, version: kAlgoVersion - 1);
+    for (final finalized in [false, true]) {
+      await LocalDb.putDayResult(
+        dayId: day,
+        algoVersion: kAlgoVersion,
+        payloadJson: '{"skipped":true}',
+        windowJson: '{}',
+        finalized: finalized,
+        skipped: true,
+      );
+      expect(await LocalDb.hasRecomputableOlderDays(kAlgoVersion), !finalized);
+    }
+  });
+
+  test('daytime samples alone do not requeue a pruned historical night', () async {
+    const day = '2026-02-04';
+    final onset = DateTime(2026, 2, 4, 1).millisecondsSinceEpoch ~/ 1000;
+    final afternoon = onset + 12 * 3600;
+    Future<void> record(int ts) => LocalDb.insertRecord(
+      RawRecord(counter: ts, packetType: 47, hex: 'edge',
+          capturedAt: ts * 1000, recTs: ts),
+      Sample(tsEpoch: ts, counter: ts, hr: 58, rrIntervalsMs: const [],
+          ax: 0, ay: 0, az: 1, spo2RedRaw: 1, spo2IrRaw: 1, skinTempRaw: 3000),
+    );
+    await record(afternoon);
+    await LocalDb.putDayResult(
+      dayId: day,
+      algoVersion: kAlgoVersion - 1,
+      payloadJson: '{"scalars":{"rhr":52}}',
+      windowJson: '{"value":{"onset_ms":${onset * 1000},'
+          '"offset_ms":${(onset + 3600) * 1000}}}',
+      finalized: true,
+      rhr: 52,
+      series: {'rhr': 52.0},
+    );
+    expect(await LocalDb.hasRecomputableOlderDays(kAlgoVersion), isFalse);
+    expect(await LocalDb.metricValueOn(day, 'rhr'), 52.0);
+    expect((await LocalDb.dayResult(day))?['rhr'], 52);
+    await record(onset);
+    expect(await LocalDb.hasRecomputableOlderDays(kAlgoVersion), isTrue);
+  });
+
   test('re-analyzing a day whose raw is long gone keeps the existing result',
       () async {
     const oldDay = '2026-01-05';

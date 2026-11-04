@@ -3966,6 +3966,17 @@ class DerivationEngine {
       for (final day in rawDays)
         if (!finalized.contains(day)) day,
     ];
+    final prunedSleep = await LocalDb.olderDaysWithPrunedSleep(
+      pending.toSet(), kAlgoVersion,
+    );
+    if (prunedSleep.isNotEmpty) {
+      _log('derive: keeping ${prunedSleep.length} saved day(s) '
+          'whose sleep recordings were pruned');
+      pending = pending.where((day) => !prunedSleep.contains(day)).toList();
+      if (pending.isEmpty) {
+        return _scopeForDays([], reason: 'pruned-sleep', rawDays: rawDays);
+      }
+    }
 
     // decodedRecTsMaxByDay() buckets by the CURRENT device timezone, but
     // `finalized` was frozen under whatever timezone was active when each day
@@ -5266,22 +5277,14 @@ class DerivationEngine {
   /// result's [windowJson] (`onset_ms`/`offset_ms`). False when the window is
   /// missing or unreadable — then nobody can tell, and the guard protects.
   static Future<bool> _nightStillRecorded(Object? windowJson) async {
-    if (windowJson is! String || windowJson.isEmpty) return false;
-    Object? w;
-    try {
-      w = jsonDecode(windowJson);
-    } catch (_) {
-      return false;
-    }
-    if (w is! Map) return false;
-    final on = (w['onset_ms'] as num?)?.toInt();
-    final off = (w['offset_ms'] as num?)?.toInt();
+    final window = decodeSavedSleepWindow(windowJson);
+    if (window == null) return false;
+    final on = window.onsetMs ~/ 1000;
+    final off = window.offsetMs ~/ 1000;
     return nightStillRecorded(
-      onsetSec: on == null ? null : on ~/ 1000,
-      offsetSec: off == null ? null : off ~/ 1000,
-      recordedSec: on == null || off == null || off <= on
-          ? 0
-          : await LocalDb.onehzSecondsBetween(on ~/ 1000, off ~/ 1000),
+      onsetSec: on,
+      offsetSec: off,
+      recordedSec: await LocalDb.onehzSecondsBetween(on, off),
     );
   }
 

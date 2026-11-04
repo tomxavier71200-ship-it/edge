@@ -132,6 +132,31 @@ String derivableSourceSql([String col = 'source']) => kDerivableSources.isEmpty
 /// widen [derivableSourceSql] and must NOT widen this one.
 const String kPrimaryBandSourceSql = 'source IS NULL';
 
+/// Read the sleep bounds from either a Metric envelope or an older flat row.
+({int onsetMs, int offsetMs})? decodeSavedSleepWindow(Object? json) {
+  if (json is! String || json.isEmpty) return null;
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(json);
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map) return null;
+  final value = decoded['value'];
+  final window = value is Map ? value : decoded;
+  final onset = window['onset_ms'];
+  final offset = window['offset_ms'];
+  if (onset is! num ||
+      offset is! num ||
+      !onset.isFinite ||
+      !offset.isFinite ||
+      onset <= 0 ||
+      offset - onset < 1000) {
+    return null;
+  }
+  return (onsetMs: onset.toInt(), offsetMs: offset.toInt());
+}
+
 class LocalDb {
   static Database? _db;
   static String dbName = 'openstrap.db';
@@ -4519,12 +4544,12 @@ class LocalDb {
   /// Read from the band that synced most recently. A later WRIST_ON, a
   /// CHARGING_ON (taken off to charge), or any stored 1 Hz record after it
   /// (some firmware resumes without a WRIST_ON) means it is recording again.
-  /// 1 Hz seconds stored in [fromSec, toSec) — how much of a span is still
-  /// recorded (decoded_onehz holds one row per second, UNIQUE(rec_ts)).
+  /// Distinct usable 1 Hz seconds stored in [fromSec, toSec).
   static Future<int> onehzSecondsBetween(int fromSec, int toSec) async {
     final db = await instance;
     final r = await db.rawQuery(
-      'SELECT COUNT(*) AS n FROM decoded_onehz WHERE rec_ts >= ? AND rec_ts < ?',
+      'SELECT COUNT(DISTINCT rec_ts) AS n FROM decoded_onehz '
+      'WHERE rec_ts >= ? AND rec_ts < ? AND ${derivableSourceSql()}',
       [fromSec, toSec],
     );
     return (r.first['n'] as num?)?.toInt() ?? 0;
@@ -8030,6 +8055,8 @@ class LocalDb {
   }
 
   /// Whether older results still have retained input for a version upgrade.
+  /// The engine leaves finalized rows at its version alone, including
+  /// structural skip markers that deliberately stop automatic retries.
   static Future<bool> hasRecomputableOlderDays(int algoVersion) async {
     final db = await instance;
     final rows = await db.rawQuery('''
@@ -8040,12 +8067,54 @@ class LocalDb {
           SELECT 1 FROM day_result AS fresh
           WHERE fresh.day_id = older.day_id
             AND fresh.algo_version >= ?
-            AND fresh.skipped = 0 AND fresh.partial = 0
+            AND ((fresh.skipped = 0 AND fresh.partial = 0)
+                 OR (fresh.algo_version = ? AND fresh.finalized = 1))
         )
-    ''', [algoVersion, algoVersion]);
+    ''', [algoVersion, algoVersion, algoVersion]);
     if (rows.isEmpty) return false;
     final retained = await decodedRecTsMaxByDay();
-    return rows.any((row) => retained.containsKey(row['day_id']));
+    final candidates = {
+      for (final row in rows)
+        if (retained.containsKey(row['day_id'])) row['day_id'] as String,
+    };
+    final expired = await olderDaysWithPrunedSleep(candidates, algoVersion);
+    return candidates.any((day) => !expired.contains(day));
+  }
+
+  /// A finalized older result can have daytime inputs but no longer have any
+  /// recording of its sleep. Keep it until an overnight backfill makes it
+  /// eligible again. Unreadable legacy windows still go through normal analysis.
+  static Future<Set<String>> olderDaysWithPrunedSleep(
+    Set<String> days,
+    int algoVersion,
+  ) async {
+    if (days.isEmpty) return {};
+    final sorted = days.toList()..sort();
+    final db = await instance;
+    final rows = await db.rawQuery('''
+      SELECT r.day_id, r.window_json FROM day_result r
+      WHERE r.day_id BETWEEN ? AND ?
+        AND r.algo_version = (SELECT MAX(algo_version) FROM day_result
+                              WHERE day_id = r.day_id AND algo_version <= ?)
+        AND r.algo_version < ? AND r.finalized = 1 AND r.skipped = 0
+        AND (r.rhr IS NOT NULL OR r.rmssd IS NOT NULL OR r.readiness IS NOT NULL)
+    ''', [sorted.first, sorted.last, algoVersion, algoVersion]);
+    final expired = <String>{};
+    for (final row in rows) {
+      final day = row['day_id'] as String;
+      if (!days.contains(day)) continue;
+      final window = decodeSavedSleepWindow(row['window_json']);
+      if (window == null) continue;
+      final recorded = await db.rawQuery(
+        'SELECT 1 FROM decoded_onehz WHERE rec_ts >= ? AND rec_ts < ? '
+        'AND ${derivableSourceSql()} LIMIT 1',
+        [window.onsetMs ~/ 1000, window.offsetMs ~/ 1000],
+      );
+      if (recorded.isEmpty) {
+        expired.add(day);
+      }
+    }
+    return expired;
   }
 
   /// The set of day_id labels that are FINALIZED at [algoVersion] (locked).

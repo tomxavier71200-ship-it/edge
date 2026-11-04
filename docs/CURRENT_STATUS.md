@@ -19,6 +19,10 @@ when daily analysis is absent. Both were pushed to `whoop-ui`.
 - Restores keep a protected finalized result and its matching chart values
   together. A newer analysis version can replace the displayed result and
   values when the backup contains both.
+- The automatic upgrade skips finalized older days whose stored sleep window
+  has no surviving recording, while keeping their results. If backfill brings
+  overnight data back, the day becomes eligible again. This covers October 28,
+  whose daytime data remained after all 21,622 seconds of the night had expired.
 - Comparing the November 2 and 3 retained snapshots, changed SQLite pages
   compressed to essentially the same size as the full backup (49.9 MB each).
   The equivalent comparison by row key found about 16% of the newer 1 Hz rows
