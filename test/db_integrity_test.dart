@@ -281,6 +281,50 @@ void main() {
     }
   });
 
+  test('a legacy backup cannot undo a sport-only workout correction', () async {
+    const id = 'sport-only-correction';
+    final row = <String, Object?>{
+      'id': id, 'start_ts': 2100, 'end_ts': 3000, 'type': 'walk',
+      'status': 'done', 'source': 'detected', 'created_at': 1000000,
+    };
+    await LocalDb.putSession(row);
+    await LocalDb.setSessionType(id, 'cycling');
+    final editedAt = (await LocalDb.session(id))!['type_edited_at'] as int;
+    final path = p.join(await databaseFactory.getDatabasesPath(), 'legacy-sport.db');
+    await databaseFactory.deleteDatabase(path);
+    addTearDown(() => databaseFactory.deleteDatabase(path));
+    final source = await databaseFactory.openDatabase(path);
+    try {
+      await source.execute('CREATE TABLE sessions (id TEXT PRIMARY KEY, '
+          'start_ts INTEGER, end_ts INTEGER, type TEXT, status TEXT, '
+          'source TEXT, created_at INTEGER, window_edited INTEGER)');
+      await source.insert('sessions', {...row, 'start_ts': 2200, 'window_edited': 1});
+    } finally {
+      await source.close();
+    }
+    await LocalDb.importFromDbFile(path);
+    final restored = await LocalDb.session(id);
+    expect(restored?['type'], 'cycling');
+    expect(restored?['start_ts'], 2200, reason: 'import the independent time edit');
+
+    final updated = await databaseFactory.openDatabase(path);
+    try {
+      await updated.execute('ALTER TABLE sessions ADD COLUMN type_edited_at INTEGER');
+      await updated.update('sessions', {
+        'type': 'running', 'type_edited_at': editedAt + 1,
+        'start_ts': 2100, 'window_edited': 0,
+      });
+    } finally {
+      await updated.close();
+    }
+    await LocalDb.importFromDbFile(path);
+    await LocalDb.importFromDbFile(path);
+    final merged = await LocalDb.session(id);
+    expect(merged?['type'], 'running');
+    expect(merged?['type_edited_at'], editedAt + 1);
+    expect(merged?['start_ts'], 2200, reason: 'keep the independent time edit');
+  });
+
   test('a backup preserves finalized results and their matching scalars', () async {
     const v = 30;
     await LocalDb.putDayResult(

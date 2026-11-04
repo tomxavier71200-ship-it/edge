@@ -374,7 +374,7 @@ class LocalDb {
   /// pass it: sqflite throws `ArgumentError('onCreate must be null if no
   /// version is specified')` BEFORE opening anything when `onCreate` is given
   /// without `version` (sqflite_common database_mixin.dart).
-  static const int schemaVersion = 55;
+  static const int schemaVersion = 56;
 
   /// SQLite caps host parameters per statement (`SQLITE_MAX_VARIABLE_NUMBER` —
   /// only 999 on the builds shipped with older Android/iOS). Any `IN (?, ?, …)`
@@ -1101,6 +1101,11 @@ class LocalDb {
         if (oldV < 55) {
           await _addColumnIfMissing(
             db, 'sessions', 'window_edited', 'INTEGER NOT NULL DEFAULT 0',
+          );
+        }
+        if (oldV < 56) {
+          await _addColumnIfMissing(
+            db, 'sessions', 'type_edited_at', 'INTEGER NOT NULL DEFAULT 0',
           );
         }
       },
@@ -4249,6 +4254,7 @@ class LocalDb {
         hrr_bpm REAL,
         source TEXT NOT NULL DEFAULT 'manual',
         window_edited INTEGER NOT NULL DEFAULT 0,
+        type_edited_at INTEGER NOT NULL DEFAULT 0,
         private INTEGER NOT NULL DEFAULT 0,
         device_family TEXT,
         trace_json TEXT,
@@ -9041,15 +9047,21 @@ class LocalDb {
           // guards — the invariant that matters is per-row, not per-table.
           while (page.isNotEmpty) {
             await db.transaction((txn) async {
-              final editedSessionIds = t == 'sessions'
-                  ? {
-                      for (final row in await txn.query(
-                        'sessions', columns: ['id'],
-                        where: "window_edited = 1 OR status = 'duplicate'",
-                      ))
-                        row['id'],
-                    }
-                  : const <Object?>{};
+              final localSessions = <Object?, Map<String, Object?>>{};
+              if (t == 'sessions') {
+                final ids = page.map((row) => row['id']).whereType<String>().toList();
+                for (var offset = 0; offset < ids.length; offset += 500) {
+                  final batchIds = ids.skip(offset).take(500).toList();
+                  for (final row in await txn.query(
+                    'sessions',
+                    columns: ['id', 'type', 'type_edited_at', 'window_edited', 'status'],
+                    where: 'id IN (${List.filled(batchIds.length, '?').join(',')})',
+                    whereArgs: batchIds,
+                  )) {
+                    localSessions[row['id']] = row;
+                  }
+                }
+              }
               // CHUNKED, for the same reason commitSyncBatch chunks: sqflite
               // serialises a whole batch's args into ONE platform message, and
               // the orphan guard below adds an op per decoded_onehz row on top.
@@ -9076,10 +9088,27 @@ class LocalDb {
                         row['name'] == _cloudAnalysisRevision)) {
                   continue;
                 }
-                if (t == 'sessions' &&
-                    row['window_edited'] != 1 &&
-                    editedSessionIds.contains(row['id'])) {
-                  continue;
+                if (t == 'sessions') {
+                  final local = localSessions[row['id']];
+                  if (local != null) {
+                    if (row['window_edited'] != 1 &&
+                        (local['window_edited'] == 1 || local['status'] == 'duplicate')) {
+                      // A newer sport correction can still be applied without
+                      // replacing the locally corrected time or other fields.
+                      if (local['status'] != 'duplicate' &&
+                          _sportEditTime(row) > _sportEditTime(local)) {
+                        batch.update(
+                          'sessions',
+                          {'type': row['type'], 'type_edited_at': _sportEditTime(row)},
+                          where: 'id = ?',
+                          whereArgs: [row['id']],
+                        );
+                        if (++ops >= chunkOps) await flush();
+                      }
+                      continue;
+                    }
+                    _keepLatestSport(row, local);
+                  }
                 }
                 if (t == 'decoded_onehz') {
                   // A pre-v46 export still carries the retired columns as
@@ -10836,6 +10865,10 @@ class LocalDb {
   ) async {
     final db = await instance;
     await db.transaction((txn) async {
+      final current = await txn.query(
+        'sessions', columns: ['type', 'type_edited_at'],
+        where: 'id = ?', whereArgs: [original['id']], limit: 1,
+      );
       if (original['status'] == 'done' &&
           (original['source'] == 'auto' || original['source'] == 'detected') &&
           original['window_edited'] != 1) {
@@ -10846,7 +10879,9 @@ class LocalDb {
             whereArgs: [original['id'], original['start_ts'], original['end_ts'],
               original['type'], original['private'] ?? 0]);
       }
-      await txn.insert('sessions', row,
+      final updated = {...row};
+      if (current.isNotEmpty) _keepLatestSport(updated, current.single);
+      await txn.insert('sessions', updated,
           conflictAlgorithm: ConflictAlgorithm.replace);
     });
   }
@@ -11331,12 +11366,26 @@ class LocalDb {
 
   static Future<void> setSessionType(String id, String type) async {
     final db = await instance;
-    await db.update(
-      'sessions',
-      {'type': type},
-      where: 'id = ?',
-      whereArgs: [id],
+    await db.rawUpdate(
+      'UPDATE sessions SET type = ?, type_edited_at = MAX(type_edited_at + 1, ?) '
+      'WHERE id = ?',
+      [type, DateTime.now().millisecondsSinceEpoch, id],
     );
+  }
+
+  static int _sportEditTime(Map<String, Object?> row) =>
+      (row['type_edited_at'] as num?)?.toInt() ?? 0;
+
+  static void _keepLatestSport(
+    Map<String, Object?> incoming,
+    Map<String, Object?> local,
+  ) {
+    // Older backups did not record edit provenance. Prefer the stored sport
+    // on equal or absent timestamps so existing corrections also survive.
+    if (_sportEditTime(local) >= _sportEditTime(incoming)) {
+      incoming['type'] = local['type'];
+      incoming['type_edited_at'] = _sportEditTime(local);
+    }
   }
 
   /// Mark a session private (or not). Its own narrow UPDATE for the same reason

@@ -11,6 +11,9 @@ when daily analysis is absent. Both were pushed to `whoop-ui`.
 
 ## Local stability work (algorithm 122)
 
+- Workout restores preserve the existing sport when a backup has no newer
+  sport edit. Schema 56 records sport edit time so a newer correction can be
+  restored independently of a corrected workout window.
 - Home's manual sync requests fresh history over a healthy existing link and
   reconnects a stale link. Interrupted transfers offer a retry, while a
   completed transfer with no new records does not look like a failed connection.

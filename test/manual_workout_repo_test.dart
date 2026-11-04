@@ -239,12 +239,17 @@ void main() {
         'source': 'manual',
         'created_at': start * 1000,
       });
+      await LocalDb.setSessionType('w-retime', 'cycling');
+      final sportEdit = (await LocalDb.session('w-retime'))!['type_edited_at'];
       await repo.setWorkoutWindow('w-retime',
           startTs: start, endTs: start + 3600);
 
       final rows = await LocalDb.sessionsInRange(start - 60, start + 7200);
       expect(rows.where((r) => r['id'] == 'w-retime').length, 1);
       expect(rows.firstWhere((r) => r['id'] == 'w-retime')['duration_min'], 60);
+      final retimed = (await LocalDb.session('w-retime'))!;
+      expect(retimed['type'], 'cycling');
+      expect(retimed['type_edited_at'], sportEdit);
     },
   );
 

@@ -1245,7 +1245,7 @@ void main() {
     },
   );
 
-  test('v55 preserves existing workout windows and initializes edit flags', () async {
+  test('v54 to current preserves workout time and sport and adds edit metadata', () async {
     const name = 'migrate_v54_workout_window_test.db';
     created.add(name);
     await _seedOldDb(name, 54, [
@@ -1264,6 +1264,8 @@ void main() {
     expect(existing?['start_ts'], 1000);
     expect(existing?['end_ts'], 2000);
     expect(existing?['source'], 'detected');
+    expect(existing?['type'], 'cycling');
+    expect(existing?['type_edited_at'], 0);
     expect(existing?['window_edited'], 0);
     final db = await LocalDb.instance;
     await db.update('sessions', {'window_edited': 1},
