@@ -6,6 +6,16 @@ const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../web/dashboard/index.html'), 'utf8');
 const section = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 
+test('workout history hides retired and exact automatic copies, preserving manual edits', () => {
+  const base = {start_ts:100, end_ts:900, type:'cycling', status:'done', source:'detected'};
+  const rows = [
+    {...base,id:'original'}, {...base,id:'copy',source:'auto'},
+    {...base,id:'retired',status:'duplicate'},
+    {...base,id:'edited',window_edited:1},
+    {...base,id:'manual',source:'manual'},
+  ];
+  assert.deepEqual(m.visibleWorkoutRows(rows).map(row=>row.id), ['original','edited','manual']);
+});
 test('reads the bare sleep-window column written by the phone', () => {
   assert.deepEqual(m.sleepWindow({onset_ms: 100000, offset_ms: 200000}), {on:100, off:200});
   assert.deepEqual(m.sleepWindow({value:{onset_ms: 100000, offset_ms:200000}}), {on:100, off:200});

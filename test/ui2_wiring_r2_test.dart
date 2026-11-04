@@ -545,6 +545,19 @@ void main() {
       expect(find.textContaining('Need 8 more nights'), findsOneWidget);
     });
 
+    testWidgets('a refused temperature reading is explained without debug text',
+        (t) async {
+      await pump(t, const ReadinessDetail(data: ReadinessData(absentDiag: {
+        'temp': {'value': true, 'baseline_n': 14},
+        'note': 'need_inputs:have=1,need=2,weight=0.4,need_weight=0.5 — '
+            'Refused: temp: no settled fraction measured for this night',
+      })));
+      expect(find.textContaining('Not enough qualified overnight readings'),
+          findsWidgets);
+      expect(find.textContaining('Skin temperature was excluded'), findsOneWidget);
+      expect(find.textContaining('need_weight'), findsNothing);
+    });
+
     testWidgets('a scored day carries no diagnostic at all', (t) async {
       await pump(
           t,

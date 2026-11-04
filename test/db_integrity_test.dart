@@ -60,6 +60,26 @@ void main() {
     expect(health['ok'], isTrue, reason: '$health');
   });
 
+  test('paging keeps both devices with the same record timestamp and counter', () async {
+    const ts = 1793000000;
+    final db = await LocalDb.instance;
+    for (final device in ['page-a', 'page-b']) {
+      await db.insert('decoded_onehz', {
+        'device_id': device, 'ts_ms': ts * 1000, 'rec_ts': ts,
+        'counter': 24, 'hr': 70,
+      });
+    }
+    final first = (await LocalDb.decodedOneHzBatchByRecTsRange(
+      limit: 1, fromRecTs: ts, toRecTs: ts,
+    )).single;
+    final second = (await LocalDb.decodedOneHzBatchByRecTsRange(
+      limit: 1, fromRecTs: ts, toRecTs: ts,
+      afterRecTs: ts, afterCounter: 24,
+      afterRowId: first['page_rowid'] as int,
+    )).single;
+    expect({first['device_id'], second['device_id']}, {'page-a', 'page-b'});
+  });
+
   test('rec_ts collision leaves exactly the winner\'s beats', () async {
     const ts = 1780000000;
     // Two records for the SAME second, different counters (a reboot straddle).
@@ -192,6 +212,58 @@ void main() {
         reason: 'a skip-marker day must NOT count as derived - counting it '
             'is exactly the bug that let the pruning guard delete raw data '
             'for a day that never actually finished deriving');
+  });
+
+  test('workout-only edits and deletions advance the cloud change mark', () async {
+    const id = 'cloud-workout-revision';
+    final before = await LocalDb.cloudDataMark();
+    await LocalDb.putSession({
+      'id': id, 'start_ts': 1000, 'end_ts': 2000, 'type': 'cycling',
+      'status': 'done', 'source': 'manual', 'created_at': 1000000,
+    });
+    final inserted = await LocalDb.cloudDataMark();
+    expect(inserted, isNot(before));
+    await LocalDb.setSessionType(id, 'walk');
+    final edited = await LocalDb.cloudDataMark();
+    expect(edited, isNot(inserted));
+    await LocalDb.deleteSession(id);
+    expect(await LocalDb.cloudDataMark(), isNot(edited));
+  });
+
+  test('an older backup cannot replace a user-corrected workout window', () async {
+    final row = <String, Object?>{
+      'id': 'corrected-workout',
+      'start_ts': 1000,
+      'end_ts': 2200,
+      'type': 'cycling',
+      'status': 'done',
+      'source': 'detected',
+      'created_at': 1000000,
+    };
+    await LocalDb.putSession({...row, 'start_ts': 1100, 'window_edited': 1});
+    await LocalDb.putSession({...row, 'id': 'retired-copy', 'status': 'duplicate'});
+    final path = p.join(await databaseFactory.getDatabasesPath(),
+        'legacy-workout-window.db');
+    await databaseFactory.deleteDatabase(path);
+    final source = await databaseFactory.openDatabase(path);
+    try {
+      await source.execute('CREATE TABLE sessions (id TEXT PRIMARY KEY, '
+          'start_ts INTEGER, end_ts INTEGER, type TEXT, status TEXT, '
+          'source TEXT, created_at INTEGER)');
+      await source.insert('sessions', row);
+      await source.insert('sessions', {...row, 'id': 'retired-copy'});
+    } finally {
+      await source.close();
+    }
+    try {
+      await LocalDb.importFromDbFile(path);
+      expect((await LocalDb.session('corrected-workout'))?['start_ts'], 1100);
+      expect((await LocalDb.session('retired-copy'))?['status'], 'duplicate');
+      expect((await LocalDb.sessionsInRange(1000, 2200))
+          .any((r) => r['id'] == 'retired-copy'), isFalse);
+    } finally {
+      await databaseFactory.deleteDatabase(path);
+    }
   });
 
   test('importFromDbFile never overwrites a locally-FINALIZED day_result', () async {

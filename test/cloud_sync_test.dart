@@ -166,6 +166,23 @@ void main() {
       expect(up.id, 'old');
     });
 
+    test('upload reports a rejected connection before the body is read', () async {
+      final src = File('${tmp.path}/early-failure.kbak')
+        ..writeAsBytesSync(List.filled(1000, 7));
+      final failure = http.ClientException('Connection closed');
+      final api = DriveApi('t', client: MockClient.streaming((r, body) async {
+        if (r.method == 'PUT') throw failure;
+        await body.drain<void>();
+        return http.StreamedResponse(const Stream.empty(), 200,
+            headers: {'location': 'https://upload.example/session'});
+      }));
+      addTearDown(api.close);
+      await expectLater(
+        api.upload(src, 'F').timeout(const Duration(seconds: 2)),
+        throwsA(same(failure)),
+      );
+    });
+
     test('findAll lists every WHOOP export in the folder, oldest first', () async {
       final api = DriveApi('t', client: MockClient((r) async {
         expect(r.url.queryParameters['q'], contains("name = 'whoop-import.kbak'"));

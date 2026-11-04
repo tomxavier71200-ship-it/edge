@@ -112,7 +112,8 @@ const int kEdgeStopMinutes = 3;
       var recovered = 0;
       for (var i = end; i < spm.length; i++) {
         nonCycling = cycling(i) ? 0 : nonCycling + 1;
-        recovered = highHr[i] == true ? 0 : recovered + 1;
+        // Missing HR cannot establish that the rider recovered.
+        recovered = highHr[i] == false ? recovered + 1 : 0;
         if (nonCycling >= kEdgeStopMinutes || recovered >= kEdgeStopMinutes) {
           final run = nonCycling >= kEdgeStopMinutes ? nonCycling : recovered;
           end = i - run + 1;

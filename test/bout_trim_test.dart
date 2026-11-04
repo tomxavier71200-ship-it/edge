@@ -6,6 +6,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/compute/bout_trim.dart';
 
 void main() {
+  test('missing HR during sustained cycling is not recovery', () {
+    final cut = trimGaitEdges(
+      [...List<int>.filled(18, 0), ...List<int>.filled(3, 75)],
+      motion: [...List<double>.filled(18, .05), ...List<double>.filled(3, .4)],
+      highHr: [
+        ...List<bool>.filled(10, true),
+        ...List<bool?>.filled(3, null),
+        ...List<bool>.filled(8, true),
+      ],
+      cyclingOnly: true,
+    );
+    expect(cut, (first: 0, end: 18));
+  });
+
   test('walking between two training blocks does not end the workout', () {
     final spm = <int?>[
       ...List<int>.filled(20, 0),

@@ -37,6 +37,11 @@ void main() {
     }
   });
 
+  test('generated blocks preserve Windows checkout line endings', () {
+    final crlf = plist.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
+    expect(applyBlocks(crlf, kFramedBands), crlf);
+  });
+
   test('AccessorySetup.swift keeps no second copy of the UUIDs', () {
     // The Swift reads NSAccessorySetupBluetoothServices at runtime. A literal
     // back in the source is the drift this whole thing exists to prevent.

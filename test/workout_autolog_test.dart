@@ -12,6 +12,7 @@ void main() {
     List<(int?, int?)> sessions = const [],
     bool answered = false,
     int? live,
+    int? recordedThrough,
   }) =>
       autoLogDecision(
         startSec: st,
@@ -20,6 +21,7 @@ void main() {
         sessions: sessions,
         answeredOverlap: answered,
         liveStartSec: live,
+        recordedThroughSec: recordedThrough,
       );
 
   test('a settled bout with nothing covering it is added', () {
@@ -28,6 +30,11 @@ void main() {
 
   test('a bout that ended under 10 minutes ago waits', () {
     expect(d(now: en + 5 * 60), AutoLogDecision.wait);
+  });
+
+  test('an old candidate at the edge of a partial offload still waits', () {
+    expect(d(recordedThrough: en + 30), AutoLogDecision.wait);
+    expect(d(recordedThrough: en + 60), AutoLogDecision.log);
   });
 
   test('a manual session overlapping it wins: skipped, never overwritten', () {

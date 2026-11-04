@@ -98,9 +98,15 @@ AutoLogDecision autoLogDecision({
   required List<(int?, int?)> sessions,
   required bool answeredOverlap,
   int? liveStartSec,
+  int? recordedThroughSec,
 }) {
   if (endSec <= startSec) return AutoLogDecision.skip;
   if (nowSec - endSec < kAutoLogSettleMin * 60) return AutoLogDecision.wait;
+  // A late offload can make an incomplete workout look old enough to save.
+  // Wait for recordings beyond the candidate edge before committing it.
+  if (recordedThroughSec != null && recordedThroughSec - endSec < 60) {
+    return AutoLogDecision.wait;
+  }
   if (liveStartSec != null && endSec > liveStartSec) return AutoLogDecision.wait;
   for (final (a, b) in sessions) {
     if (a == null) continue;

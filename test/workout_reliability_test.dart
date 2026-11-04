@@ -263,6 +263,19 @@ void main() {
       expect(await LocalDb.takeNextComputeJob(), isNull);
     });
 
+    test('new data during a running derive queues exactly one follow-up', () async {
+      await LocalDb.enqueueDeriveJob(type: 'derive_light', reason: 'first batch');
+      final running = (await LocalDb.takeNextComputeJob())!;
+      await LocalDb.enqueueDeriveJob(type: 'derive_light', reason: 'second batch');
+      await LocalDb.enqueueDeriveJob(type: 'derive_light', reason: 'third batch');
+      await LocalDb.completeComputeJob(running['id'] as String);
+      final followup = (await LocalDb.takeNextComputeJob())!;
+      expect(followup['id'], isNot(running['id']));
+      expect(followup['reason'], 'second batch');
+      await LocalDb.completeComputeJob(followup['id'] as String);
+      expect(await LocalDb.takeNextComputeJob(), isNull);
+    });
+
     test('requeueing an unknown id is harmless', () async {
       await LocalDb.requeueComputeJob('no-such-job');
       expect(await LocalDb.takeNextComputeJob(), isNull);

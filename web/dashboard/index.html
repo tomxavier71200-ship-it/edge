@@ -358,12 +358,12 @@ function dayCurve(d){
 function sessionsOn(d){
   if(!liveDb)return exampleSessions(d);
   const [a,b]=dayBounds(d);let r;
-  try{r=liveDb.exec("SELECT * FROM sessions WHERE (CASE WHEN start_ts>1e12 THEN start_ts/1000 ELSE start_ts END)>=? AND (CASE WHEN start_ts>1e12 THEN start_ts/1000 ELSE start_ts END)<? ORDER BY start_ts",[a,b]);}catch{return [];}
+  try{r=liveDb.exec("SELECT * FROM sessions WHERE (CASE WHEN start_ts>1e12 THEN start_ts/1000 ELSE start_ts END)>=? AND (CASE WHEN start_ts>1e12 THEN start_ts/1000 ELSE start_ts END)<? ORDER BY start_ts, id",[a,b]);}catch{return [];}
   if(!r[0])return [];const c=r[0].columns;
-  return r[0].values.map(v=>{const o={};c.forEach((k,i)=>o[k]=v[i]);
+  const rows=KoopMetrics.visibleWorkoutRows(r[0].values.map(v=>Object.fromEntries(c.map((k,i)=>[k,v[i]]))));
+  return rows.map(o=>{
     let zones=[],hr=[];try{const z=JSON.parse(o.zone_min_json||"[]");if(Array.isArray(z))zones=z;}catch{}
     try{hr=decodeCurve(JSON.parse(o.trace_json||"{}")?.hr);}catch{}
-    if(o.status&&/discard|delet|reject/i.test(o.status))return null;
     // The type is free text from a WHOOP export and lands in innerHTML and a title
     // attribute below: drop HTML metacharacters here, once, for every place it is shown.
     const ty=String(o.type||"workout").replace(/_/g," ").replace(/[<>"'&`]/g,"")||"workout";

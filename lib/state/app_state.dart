@@ -1074,6 +1074,23 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Resume can arrive during cold boot. Hold full database copies and cloud
+  /// merges until startup has finished reading and initializing local data.
+  Future<void> runForegroundDataMaintenance() async {
+    await _initDone;
+    if (_disposed || !initialized || _background) return;
+    await runBackupIfDue();
+    if (_disposed || _background) return;
+    try {
+      await CloudSync.instance.runIfDue(
+        importEdgeBackup,
+        importWhoop: importWhoopCsvs,
+      );
+    } catch (e) {
+      _log('Cloud foreground check failed: $e');
+    }
+  }
+
   Future<void> _runBackupIfDue() async {
     final outcome = await backup.runBackupIfDue(
       // Re-read inside the lock, not captured here: a call that waits behind a
@@ -1709,7 +1726,10 @@ class AppState extends ChangeNotifier {
   /// else the latest pending day); [heavy]=true is the foreground finalize
   /// sweep. Best-effort + non-blocking — never throws into the BLE path.
   /// Refreshes the UI when results land so screens re-read the fresh derived rows.
+  bool _finishingHistory = false;
+
   Future<void> _afterDrain({bool heavy = false}) async {
+    _finishingHistory = false;
     final mode = heavy ? 'heavy' : 'light';
     try {
       // Context for whatever crash/ANR report comes next — the derivation
@@ -1725,6 +1745,12 @@ class AppState extends ChangeNotifier {
         _profile,
         heavy: heavy,
         onDayDone: (day, index, total) async {
+          if (day == LocalDb.localDayLabelNow()) {
+            _finishingHistory = index < total;
+            // Home reloads its stored bundle on insightsRevision, not on
+            // ChangeNotifier updates for sync status. Publish Today now.
+            bumpInsights();
+          }
           if (index == total || index == 1 || index % 3 == 0) {
             notifyListeners();
           }
@@ -2497,6 +2523,11 @@ class AppState extends ChangeNotifier {
         await LocalDb.getCursorInt('rec_ts_hw') ?? lastSynced?.tsEpoch;
     await LocalDb.refreshComputeFreshness();
     final alarmPrefs = await SharedPreferences.getInstance();
+    // Upgrading the calculation version can invalidate history even when
+    // there is no new band transfer to trigger a heavy pass.
+    if (await LocalDb.hasRecomputableOlderDays(kAlgoVersion)) {
+      _deriveScheduler.requestHeavy();
+    }
     _savedAlarm = alarmPrefs.getInt('alarm_epoch');
     // Seed the confirmation machine from what the last session (foreground OR
     // headless — background_sync.dart writes the same two keys) actually
@@ -5786,6 +5817,7 @@ class AppState extends ChangeNotifier {
   /// Thin reads of [_deriveScheduler]'s own state; `onChanged: notifyListeners`
   /// already ticks on every transition, so nothing new to wire.
   bool get deriving => _deriveScheduler.running;
+  bool get finishingHistory => deriving && _finishingHistory;
 
   /// A job is queued behind its settle window (the offload/workout just
   /// ended) — about to run, not running yet. Kept distinct from [deriving]
@@ -6739,13 +6771,19 @@ class AppState extends ChangeNotifier {
   /// overlap). Off with [kAutoLogWorkoutsKey]. Returns how many were added.
   Future<int> _autoLogDetectedWorkouts() async {
     final r = repo;
-    if (r == null || !Prefs.getBool(kAutoLogWorkoutsKey, true)) return 0;
+    if (r == null) return 0;
+    if (!Prefs.getBool(kAutoLogWorkoutsKey, true)) {
+      _log('[workout-auto] automatic saving disabled');
+      return 0;
+    }
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     var added = 0;
     // The person's own named workouts of the last 8 weeks — what the habit
     // guess learns from (guessWorkoutType). Read once per pass.
     List<PastWorkout>? past;
-    for (final s in await LocalDb.activeWorkoutSuggestions()) {
+    final suggestions = await LocalDb.activeWorkoutSuggestions();
+    var deferred = 0, suppressed = 0;
+    for (final s in suggestions) {
       final id = s['id'] as String?;
       final st = (s['start_ts'] as num?)?.toInt();
       final en = (s['end_ts'] as num?)?.toInt();
@@ -6759,14 +6797,19 @@ class AppState extends ChangeNotifier {
         startSec: st,
         endSec: en,
         nowSec: nowSec,
+        recordedThroughSec: _lastRecTs,
         sessions: [for (final o in logged) (sec(o['start_ts']), sec(o['end_ts']))],
         answeredOverlap: await LocalDb.answeredSuggestionOverlaps(st, en),
         liveStartSec: activeWorkout == null
             ? null
             : activeWorkout!.startTime.millisecondsSinceEpoch ~/ 1000,
       );
-      if (decision == AutoLogDecision.wait) continue;
+      if (decision == AutoLogDecision.wait) {
+        deferred++;
+        continue;
+      }
       if (decision == AutoLogDecision.skip) {
+        suppressed++;
         await LocalDb.dismissWorkoutSuggestion(id);
         continue;
       }
@@ -6804,6 +6847,8 @@ class AppState extends ChangeNotifier {
             sessionId: sessionId, startSec: st, endSec: en, type: guess));
       }
     }
+    _log('[workout-auto] candidates=${suggestions.length} saved=$added '
+        'deferred=$deferred suppressed=$suppressed');
     return added;
   }
 

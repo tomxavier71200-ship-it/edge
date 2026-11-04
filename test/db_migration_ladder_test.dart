@@ -1245,6 +1245,34 @@ void main() {
     },
   );
 
+  test('v55 preserves existing workout windows and initializes edit flags', () async {
+    const name = 'migrate_v54_workout_window_test.db';
+    created.add(name);
+    await _seedOldDb(name, 54, [
+      'CREATE TABLE sessions (id TEXT PRIMARY KEY, start_ts INTEGER NOT NULL, '
+          'end_ts INTEGER, type TEXT NOT NULL, status TEXT NOT NULL, '
+          'source TEXT NOT NULL, created_at INTEGER NOT NULL)',
+    ], seedRows: (db) async {
+      await db.insert('sessions', {
+        'id': 'older-detection', 'start_ts': 1000, 'end_ts': 2000,
+        'type': 'cycling', 'status': 'done', 'source': 'detected',
+        'created_at': 1000000,
+      });
+    });
+    expect(await _openThroughLocalDb(name), LocalDb.schemaVersion);
+    final existing = await LocalDb.session('older-detection');
+    expect(existing?['start_ts'], 1000);
+    expect(existing?['end_ts'], 2000);
+    expect(existing?['source'], 'detected');
+    expect(existing?['window_edited'], 0);
+    final db = await LocalDb.instance;
+    await db.update('sessions', {'window_edited': 1},
+        where: 'id = ?', whereArgs: ['older-detection']);
+    await LocalDb.close();
+    expect(await _openThroughLocalDb(name), LocalDb.schemaVersion);
+    expect((await LocalDb.session('older-detection'))?['window_edited'], 1);
+  });
+
   test(
     'the paired band survives the upgrade: the prefs pair migrates into the '
     'device table on first load',

@@ -539,9 +539,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
   List<Widget> _history(BuildContext c, _WorkoutData d) {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);
-    if (d.workouts.isEmpty) {
+    if (d.workouts.isEmpty && d.suggestions.isNotEmpty) {
       return [
         ..._suggestionCards(c, d),
+        _logPastCard(c),
+      ];
+    }
+    if (d.workouts.isEmpty) {
+      return [
         StatusCard(
           loc?.workoutNoSessionsTitle ?? 'No sessions recorded yet',
           loc?.workoutNoSessionsBody ?? 'Sessions appear here once you start one.',

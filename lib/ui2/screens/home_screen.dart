@@ -40,6 +40,7 @@ import '../../ai/briefing.dart'
         BriefingStore,
         currentBriefingPeriod,
         resolveBriefingToShow;
+import '../../cloud/cloud_sync.dart';
 import '../../data/day_label.dart' show todayLabel, calendarDaysBetween, dayLabelOf;
 import '../../data/db.dart' show DbRebuild;
 import '../../data/journal_fields.dart' show formatMinuteOfDay;
@@ -2262,12 +2263,13 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   }
 
   void _tapSync(VoidCallback sync) {
-    sync();
+    if (_syncTapped || (context.read<AppState?>()?.syncingNow ?? false)) return;
     setState(() {
       _syncTapped = true;
       _syncFailed = false;
       _syncSawProgress = false;
     });
+    sync();
     _syncTapTimer?.cancel();
     _syncTapTimer = Timer(_tapGrace, () {
       if (mounted) {
@@ -2423,6 +2425,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       );
     }
     if (deriving) {
+      final finishingHistory = context.select<AppState?, bool>(
+          (app) => app?.finishingHistory ?? false);
+      if (finishingHistory) {
+        return StatusCard(
+          'Updating past days',
+          'You can use Today while older recordings are processed.',
+          leading: spinner,
+        );
+      }
       return StatusCard(
         l?.homeAnalyzingTitle ?? 'Crunching last night\'s numbers',
         l?.homeAnalyzingBody ??
@@ -2450,6 +2461,27 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       );
     }
     return null;
+  }
+
+  Widget? _homeSyncNotice(BuildContext c, AppLocalizations? l) {
+    final phase = _phaseStatusCard(c, l);
+    if (phase != null) return phase;
+    if (bandNameOf(c) == null) return null;
+    final at = lastDataAtOf(c);
+    if (at != null &&
+        DateTime.now().difference(at) < const Duration(hours: 1)) {
+      return null;
+    }
+    final sync = syncOf(c);
+    return StatusCard(
+      at == null ? 'No band data yet' : 'Band data is out of date',
+      at == null
+          ? 'Sync your band to load your recordings.'
+          : 'Home may be missing recent workouts and other readings.',
+      icon: LucideIcons.refreshCw,
+      fix: sync == null ? '' : (l?.homeSyncBand ?? 'Sync now'),
+      onFix: sync == null ? null : () => _tapSync(sync),
+    );
   }
 
   Widget _bareStatusCard(
@@ -2599,6 +2631,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     // gates the plan/live-workout copy below, which is about what to DO
     // today and reads as a stale instruction on a day already in the past.
     final isToday = _day == null || _day == todayLabel();
+    final bandPaired = bandNameOf(c) != null;
 
     final stale = staleInsightsCard(d.insightsStale, syncOf(c), l);
     // Above the greeting, not below it: if the app had to rebuild the database
@@ -2750,18 +2783,22 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 style: F.cap.copyWith(color: p.ink3),
               ),
             ),
-          // ── how far the data reaches · the coach · Customize ──
-          // (Not in WHOOP mode, whose Home has no such line: pull down to
-          // sync, as WHOOP's.)
-          if (!Look.whoop)
+          if (isToday && !bare)
+            if (_homeSyncNotice(c, l) case final notice?)
+              Padding(
+                padding: const EdgeInsets.only(top: S.x2),
+                child: notice,
+              ),
+          // Keep the recording timestamp and manual sync visible in both looks.
           Padding(
             padding: const EdgeInsets.only(bottom: S.x2),
             child: Row(
               children: [
                 Expanded(
                   child: Pressable(
-                    semanticLabel: l?.homeSyncBand ?? 'Sync now',
-                    onTap: switch (syncOf(c)) {
+                    semanticLabel:
+                        bandPaired ? (l?.homeSyncBand ?? 'Sync now') : null,
+                    onTap: switch (bandPaired ? syncOf(c) : null) {
                       final s? => () => _tapSync(s),
                       null => null,
                     },
@@ -2787,6 +2824,27 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             ),
           ),
 
+          if (isToday)
+            ListenableBuilder(
+              listenable: CloudSync.instance,
+              builder: (c, _) {
+                final cloud = CloudSync.instance;
+                if (!cloud.on) return const SizedBox.shrink();
+                final at = cloud.role == CloudRole.send
+                    ? cloud.lastUp
+                    : cloud.remoteSeen;
+                final state = cloud.busy
+                    ? 'Syncing…'
+                    : cloud.lastError != null
+                        ? 'Sync needs attention'
+                        : cloudAgo(at);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: S.x2),
+                  child: Text('Koop Cloud · $state',
+                      style: F.cap.copyWith(color: P.of(c).ink3)),
+                );
+              },
+            ),
           if (bare) ...[
             // A live workout holds derivation, so a bare day with a session open
             // is the hold at work, not a sync problem — see [workoutHoldCard].

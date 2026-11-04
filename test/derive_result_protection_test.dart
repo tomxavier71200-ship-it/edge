@@ -49,10 +49,11 @@ void main() {
   /// A GOOD, finished day: real headline scalars in `day_result` + the full
   /// baseline `metric_series` fan-out. Exactly what months-old history looks
   /// like after its raw has been pruned.
-  Future<void> seedGoodDay(String dayId, {bool finalized = true}) async {
+  Future<void> seedGoodDay(String dayId,
+      {bool finalized = true, int version = kAlgoVersion}) async {
     await LocalDb.putDayResult(
       dayId: dayId,
-      algoVersion: kAlgoVersion,
+      algoVersion: version,
       payloadJson: jsonEncode({
         'scalars': {
           'rhr': 52.0,
@@ -99,6 +100,21 @@ void main() {
   }
 
   // ── 1. an empty (raw-pruned) re-derive must not blank the day ─────────────
+
+  test('an older row does not requeue a day with a current result', () async {
+    const day = '2026-02-01';
+    final ts = DateTime(2026, 2, 1, 9).millisecondsSinceEpoch ~/ 1000;
+    await LocalDb.insertRecord(
+      RawRecord(counter: 999001, packetType: 47, hex: 'edge',
+          capturedAt: ts * 1000, recTs: ts),
+      Sample(tsEpoch: ts, counter: 999001, hr: 58, rrIntervalsMs: const [],
+          ax: 0, ay: 0, az: 1, spo2RedRaw: 1, spo2IrRaw: 1, skinTempRaw: 3000),
+    );
+    await seedGoodDay(day, version: kAlgoVersion - 1);
+    expect(await LocalDb.hasRecomputableOlderDays(kAlgoVersion), isTrue);
+    await seedGoodDay(day, finalized: false);
+    expect(await LocalDb.hasRecomputableOlderDays(kAlgoVersion), isFalse);
+  });
 
   test('re-analyzing a day whose raw is long gone keeps the existing result',
       () async {

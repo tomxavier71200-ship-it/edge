@@ -78,7 +78,7 @@ String _labelsBody(List<BandEntry> registry) => registry
 
 String _replaceBody(String plist, String key, String tag, String body) {
   final re = RegExp(
-    '(\\t<key>$key</key>\\n\\t<$tag>\\n).*?(\\t</$tag>\\n)',
+    '(\\t<key>$key</key>\\r?\\n\\t<$tag>\\r?\\n).*?(\\t</$tag>\\r?\\n)',
     dotAll: true,
   );
   final m = re.firstMatch(plist);
@@ -87,7 +87,10 @@ String _replaceBody(String plist, String key, String tag, String body) {
         '$kPlistPath has no <$tag> block for <key>$key</key> — add one '
         '(with at least one child) before running this.');
   }
-  return plist.replaceRange(m.start, m.end, '${m[1]}$body${m[2]}');
+  final replacement = m[1]!.endsWith('\r\n')
+      ? body.replaceAll('\n', '\r\n')
+      : body;
+  return plist.replaceRange(m.start, m.end, '${m[1]}$replacement${m[2]}');
 }
 
 /// [plist] with both generated blocks rebuilt from [registry].

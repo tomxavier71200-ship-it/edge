@@ -17,6 +17,12 @@ import 'package:openstrap_edge/models/metric.dart';
 
 void main() {
   group('whyFromNote', () {
+    test('explains the Recovery composite input gate', () {
+      expect(
+        whyFromNote('need_inputs:have=1,need=2,weight=0.4,need_weight=0.5'),
+        'Not enough qualified overnight readings to calculate Recovery.',
+      );
+    });
     test('nothing said means nothing is said', () {
       expect(whyFromNote(null), isNull);
       expect(whyFromNote(''), isNull);

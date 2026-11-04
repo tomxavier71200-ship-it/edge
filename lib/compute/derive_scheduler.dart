@@ -78,7 +78,9 @@ class DeriveScheduler {
   bool _pendingLight = false;
   bool _pendingHeavy = false;
   Timer? _timer;
-  bool _refreshing = false;
+  bool _timerIsHeavy = false;
+  Future<void> _snapshotRead = Future<void>.value();
+  bool _claiming = false;
 
   Future<void> init() async {
     await LocalDb.recoverComputeJobs();
@@ -189,25 +191,39 @@ class DeriveScheduler {
   }
 
   void _arm() {
-    if (_running || _offloadActive || _background || _workoutHeld) return;
+    if (_claiming || _running || _offloadActive || _background || _workoutHeld) return;
     if (!_pendingLight && !_pendingHeavy) {
       unawaited(_refreshSnapshot());
       return;
     }
+    // Incoming records can repeatedly enqueue the same durable job. Keep
+    // its existing deadline unless a heavy job calls for a shorter wait.
+    if (_timer != null && (_timerIsHeavy || !_pendingHeavy)) return;
     _timer?.cancel();
-    _timer = Timer(_pendingHeavy ? heavySettle : lightSettle, () {
-      unawaited(_drain());
+    _timerIsHeavy = _pendingHeavy;
+    _timer = Timer(_timerIsHeavy ? heavySettle : lightSettle, () {
+      _timer = null;
+      unawaited(_drain().catchError((Object error) {
+        log('[derive-scheduler] drain failed: $error');
+      }));
     });
     onChanged();
   }
 
   Future<void> _drain() async {
-    if (_running || _offloadActive || _background || _workoutHeld) return;
+    if (_claiming || _running || _offloadActive || _background || _workoutHeld) return;
     _timer?.cancel();
     _timer = null;
-    final job = await LocalDb.takeNextComputeJob();
+    _claiming = true;
+    final Map<String, Object?>? job;
+    try {
+      job = await LocalDb.takeNextComputeJob();
+    } finally {
+      _claiming = false;
+    }
     if (job == null) {
       await _refreshSnapshot();
+      if (_pendingHeavy || _pendingLight) _arm();
       return;
     }
     final id = job['id']?.toString();
@@ -221,13 +237,20 @@ class DeriveScheduler {
         await LocalDb.requeueComputeJob(id);
       }
       await _refreshSnapshot();
+      _arm();
       return;
     }
     final kind = _parseKind(job['type']?.toString());
     _running = true;
-    await _refreshSnapshot();
-    log('[derive-scheduler] running ${kind == DeriveJobKind.heavy ? "heavy" : "light"} pass');
     try {
+      // A status snapshot is best effort once the durable job is claimed.
+      // A read error must not leave the scheduler permanently marked running.
+      try {
+        await _refreshSnapshot();
+      } catch (e) {
+        log('[derive-scheduler] could not refresh queue status: $e');
+      }
+      log('[derive-scheduler] running ${kind == DeriveJobKind.heavy ? "heavy" : "light"} pass');
       await run(kind: kind);
       if (id != null && id.isNotEmpty) {
         await LocalDb.completeComputeJob(id);
@@ -255,9 +278,14 @@ class DeriveScheduler {
     }
   }
 
-  Future<void> _refreshSnapshot() async {
-    if (_refreshing) return;
-    _refreshing = true;
+  Future<void> _refreshSnapshot() {
+    final next = _snapshotRead.then((_) => _readSnapshot());
+    // A failed read must not poison subsequent refreshes.
+    _snapshotRead = next.then<void>((_) {}, onError: (Object _) {});
+    return next;
+  }
+
+  Future<void> _readSnapshot() async {
     try {
       final jobs = await LocalDb.computeJobs(state: 'queued', limit: 50);
       _pendingLight = jobs.any(
@@ -269,7 +297,6 @@ class DeriveScheduler {
             job['type']?.toString() == 'derive_heavy',
       );
     } finally {
-      _refreshing = false;
       onChanged();
     }
   }

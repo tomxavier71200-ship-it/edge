@@ -65,23 +65,18 @@ class SetRow extends StatelessWidget {
     final accent = danger ? C.red : color;
     return Pressable(
       onTap: onTap,
-      semanticLabel: sub.isEmpty ? title : '$title. $sub',
+      semanticLabel: [title, if (sub.isNotEmpty) sub, if (value.isNotEmpty) value]
+          .join('. '),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: S.x4),
         child: Row(children: [
-          // The icon on a soft gradient of its own colour — the same tile the
-          // More tab's doors wear, so every list in the app reads as one set.
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: R.rMd,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [p.wash(accent), p.card2],
-              ),
+              shape: BoxShape.circle,
+              color: danger ? p.wash(C.red) : p.card2,
             ),
             child: glyph != null
                 ? glyph!(p.on(accent))
@@ -92,7 +87,9 @@ class SetRow extends StatelessWidget {
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title,
-                  style: F.body.copyWith(color: danger ? p.on(C.red) : p.ink)),
+                  style: F.body.copyWith(
+                      color: danger ? p.on(C.red) : p.ink,
+                      fontWeight: FontWeight.w600)),
               if (value.isNotEmpty && bigText(c))
                 Text(value,
                     style: F.cap.copyWith(
@@ -112,7 +109,12 @@ class SetRow extends StatelessWidget {
           // itself and the chevron off the right of every settings screen.
           if (value.isNotEmpty && !bigText(c)) ...[
             const SizedBox(width: S.x2),
-            Text(value, style: F.cap.copyWith(color: p.ink3)),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 112),
+              child: Text(value,
+                  textAlign: TextAlign.end,
+                  style: F.cap.copyWith(color: p.ink3)),
+            ),
           ],
           if (chevron && !danger) ...[
             const SizedBox(width: S.x2),
@@ -127,9 +129,18 @@ class SetRow extends StatelessWidget {
 /// A titled card of [SetRow]s, hairline-separated.
 Widget settingsGroup(BuildContext c, String title, List<Widget> rows) {
   final p = P.of(c);
-  return Section(
-    title,
-    Surface(
+  return Padding(
+    padding: const EdgeInsets.only(bottom: S.x5),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.only(left: S.x1, bottom: S.x2),
+        child: Semantics(
+          header: true,
+          child: Text(title.toUpperCase(),
+              style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4)),
+        ),
+      ),
+      Surface(
       pad: const EdgeInsets.symmetric(horizontal: S.x4),
       child: Column(children: [
         for (var i = 0; i < rows.length; i++) ...[
@@ -137,7 +148,8 @@ Widget settingsGroup(BuildContext c, String title, List<Widget> rows) {
           if (i < rows.length - 1) Divider(color: p.line, height: 1),
         ],
       ]),
-    ),
+      ),
+    ]),
   );
 }
 

@@ -244,6 +244,10 @@ class LocalRepositoryImpl extends LocalRepository {
     return note is String ? note : null;
   }
 
+  String? _readinessAbsenceNote(Map<String, dynamic>? bundle) =>
+      _needNote(bundle, 'readiness_absent_diag') ??
+      _needNote(bundle, 'clinical.readiness_composite');
+
   /// WHY the bare-valued figure [key] is absent on this bundle, from the
   /// pipeline's `absent_notes` block (onehz_pipeline.dart / the engine's
   /// `_applyWakeDayFeatures`). Null when that figure is present.
@@ -395,7 +399,7 @@ class LocalRepositoryImpl extends LocalRepository {
     // 287 days of history.
     final overnightNote = showOvernight ? null : needInputNote('scored_night');
     final readinessNote = readinessScalar == null && showOvernight
-        ? _needNote(sleepBundle, 'clinical.readiness_composite') ??
+        ? _readinessAbsenceNote(sleepBundle) ??
               kUnknownAbsenceNote
         : overnightNote;
     final readinessMetric = _scalarMetric(
@@ -1668,7 +1672,10 @@ class LocalRepositoryImpl extends LocalRepository {
     final sleepPerf = await LocalDb.metricValueOn(date, 'sleep_perf');
     return {
       'sleep_perf': ?sleepPerf,
-      'readiness': b == null ? null : _scalar(b, 'readiness'),
+      'readiness': b == null
+          ? null
+          : _scalar(b, 'readiness') ??
+              _scalarMetric(null, 'HIGH', note: _readinessAbsenceNote(b)),
       // Bundle-only estimates (null whenever the full score exists), so a
       // past day on Home keeps the label it had when it was today.
       'readiness_early': b == null ? null : _scalar(b, 'readiness_early'),
@@ -1726,7 +1733,9 @@ class LocalRepositoryImpl extends LocalRepository {
     // Workouts + device events for that calendar day.
     // sessionsInRange has an inclusive upper bound; next midnight belongs
     // to the next day, including on 23/25-hour DST days.
-    final sess = await LocalDb.sessionsInRange(dayStart, dayEnd - 1);
+    final sess = _withoutDuplicateDetections(
+      await LocalDb.sessionsInRange(dayStart, dayEnd - 1),
+    );
     // Bounded BY THE DAY, in SQL. This used to pull `unuploadedEvents(limit:
     // 2000)` — `ORDER BY ts ASC LIMIT 2000`, i.e. the OLDEST 2000 rows — and
     // then filter that page down to this day. Once `events` held more than 2000
@@ -1883,7 +1892,9 @@ class LocalRepositoryImpl extends LocalRepository {
         now.subtract(const Duration(days: 31)).millisecondsSinceEpoch ~/ 1000;
     final toSec = to ?? nowSec;
 
-    final manualRows = await LocalDb.sessionsInRange(fromSec, toSec);
+    final manualRows = _withoutDuplicateDetections(
+      await LocalDb.sessionsInRange(fromSec, toSec),
+    );
     final manual = [for (final r in manualRows) _workoutOf(r)];
 
     // Manual/live sessions are ALL there is now. There used to be a second
@@ -2240,12 +2251,32 @@ class LocalRepositoryImpl extends LocalRepository {
     }
   }
 
+  /// Automatic rows can converge to the same window after reanalysis or merge.
+  /// Collapse only exact unedited copies; retain the stored rows and all
+  /// distinct or user-edited workouts.
+  List<Map<String, dynamic>> _withoutDuplicateDetections(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final seen = <(Object?, Object?, Object?, Object?)>{};
+    return [
+      for (final row in rows)
+        if (row['status'] != 'done' ||
+            row['window_edited'] == 1 ||
+            (row['source'] != 'detected' && row['source'] != 'auto') ||
+            row['end_ts'] == null ||
+            seen.add((row['start_ts'], row['end_ts'], row['type'], row['private'])))
+          row,
+    ];
+  }
+
   @override
   Future<Map<String, dynamic>> getWorkouts({String range = 'month'}) async {
     final now = DateTime.now();
     final nowSec = now.millisecondsSinceEpoch ~/ 1000;
     final fromTs = _rangeFromSec(range, now);
-    final rows = await LocalDb.sessionsInRange(fromTs, nowSec);
+    final rows = _withoutDuplicateDetections(
+      await LocalDb.sessionsInRange(fromTs, nowSec),
+    );
     final workouts = [for (final r in rows) _workoutOf(r)];
 
     // Per-session HR aggregates from the 1 Hz substrate (one indexed join).
@@ -2752,7 +2783,9 @@ class LocalRepositoryImpl extends LocalRepository {
   Future<List<SessionSpan>> savedSessionSpans() async {
     // Everything ever logged — the overlap check has to see a session from any
     // date the athlete might be back-filling into, not just a recent window.
-    final rows = await LocalDb.sessionsInRange(0, 1 << 40);
+    final rows = _withoutDuplicateDetections(
+      await LocalDb.sessionsInRange(0, 1 << 40),
+    );
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return [
       for (final r in rows)
@@ -2819,6 +2852,7 @@ class LocalRepositoryImpl extends LocalRepository {
       endTs: endTs,
       type: (existing['type'] as String?) ?? 'other',
       existing: existing,
+      editedWindow: true,
       validateAgainstId: id,
     );
   }
@@ -2840,6 +2874,7 @@ class LocalRepositoryImpl extends LocalRepository {
     Map<String, dynamic>? existing,
     String? sessionId,
     String source = 'manual',
+    bool editedWindow = false,
   }) async {
     // Re-check at the write seam. The form validates live, but its snapshot of
     // saved spans can be stale by the time save is tapped (a background derive
@@ -2900,7 +2935,13 @@ class LocalRepositoryImpl extends LocalRepository {
     // trace all band on the SAME ceiling this write did — `putSession` is
     // INSERT-OR-REPLACE, so omitting it would blank an edit's existing stamp.
     row['device_family'] = deviceFamily;
-    await LocalDb.putSession(row);
+    if (editedWindow && existing != null) {
+      row['window_edited'] = 1;
+      await LocalDb.putEditedSession(row, existing);
+    } else {
+      if (existing?['window_edited'] == 1) row['window_edited'] = 1;
+      await LocalDb.putSession(row);
+    }
 
     // Retire the fragment(s) this window supersedes, so the athlete isn't
     // asked "did you work out?" about the session they just logged.

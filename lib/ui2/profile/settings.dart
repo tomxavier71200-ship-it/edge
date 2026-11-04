@@ -612,6 +612,7 @@ class MoreSettingsView extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x10),
               children: [
+                const SizedBox(height: S.x4),
                 // App style first, where it is found: WHOOP mode turns the
                 // app into WHOOP's screens and colours; off is Koop's own
                 // layout, exactly as it was.

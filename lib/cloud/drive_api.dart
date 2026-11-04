@@ -63,10 +63,25 @@ class DriveException implements Exception {
   String toString() => 'Google Drive error $status: $body';
 }
 
+class _FileUploadRequest extends http.BaseRequest {
+  final File file;
+  _FileUploadRequest(Uri url, this.file, int length) : super('PUT', url) {
+    contentLength = length;
+  }
+
+  @override
+  http.ByteStream finalize() {
+    super.finalize();
+    return http.ByteStream(file.openRead());
+  }
+}
+
 class DriveApi {
   final http.Client _c;
   final String _token;
   DriveApi(this._token, {http.Client? client}) : _c = client ?? http.Client();
+
+  void close() => _c.close();
 
   Map<String, String> get _auth => {'Authorization': 'Bearer $_token'};
 
@@ -176,20 +191,17 @@ class DriveApi {
       'name': name,
       if (existingId == null) 'parents': [parent],
     });
-    final opened = await http.Response.fromStream(
-        await _c.send(start).timeout(kDriveCallTimeout));
+    final opened = await _c.send(start)
+        .then(http.Response.fromStream)
+        .timeout(kDriveCallTimeout);
     _check(opened, opened.body);
     final session = opened.headers['location'];
     if (session == null) throw DriveException(opened.statusCode, 'no upload session');
 
-    final put = http.StreamedRequest('PUT', Uri.parse(session))
-      ..headers['Content-Length'] = '$len'
-      ..contentLength = len;
-    final sent = _c.send(put);
-    await put.sink.addStream(src.openRead()).timeout(kDriveTransferTimeout);
-    await put.sink.close();
-    final r = await http.Response.fromStream(
-        await sent.timeout(kDriveTransferTimeout));
+    final put = _FileUploadRequest(Uri.parse(session), src, len);
+    final r = await _c.send(put)
+        .then(http.Response.fromStream)
+        .timeout(kDriveTransferTimeout);
     _check(r, r.body);
     final f = jsonDecode(r.body) as Map;
     return DriveFile(
@@ -207,7 +219,8 @@ class DriveApi {
       ..headers.addAll(_auth);
     final r = await _c.send(req).timeout(kDriveCallTimeout);
     if (r.statusCode != 200) {
-      throw DriveException(r.statusCode, await r.stream.bytesToString());
+      throw DriveException(
+          r.statusCode, await r.stream.bytesToString().timeout(kDriveCallTimeout));
     }
     final staging = File('${dest.path}.part');
     try {

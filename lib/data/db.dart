@@ -349,7 +349,7 @@ class LocalDb {
   /// pass it: sqflite throws `ArgumentError('onCreate must be null if no
   /// version is specified')` BEFORE opening anything when `onCreate` is given
   /// without `version` (sqflite_common database_mixin.dart).
-  static const int schemaVersion = 54;
+  static const int schemaVersion = 55;
 
   /// SQLite caps host parameters per statement (`SQLITE_MAX_VARIABLE_NUMBER` —
   /// only 999 on the builds shipped with older Android/iOS). Any `IN (?, ?, …)`
@@ -1073,6 +1073,11 @@ class LocalDb {
           // next free rung rather than collide with any of them.
           await _createEcgTables(db);
         }
+        if (oldV < 55) {
+          await _addColumnIfMissing(
+            db, 'sessions', 'window_edited', 'INTEGER NOT NULL DEFAULT 0',
+          );
+        }
       },
       onOpen: (db) async {
         await _repairOpenSchema(db);
@@ -1139,6 +1144,7 @@ class LocalDb {
     await _createCycleSymptom(db);
     await _ensureSessionSchema(db);
     await _ensureSyncStateSchema(db);
+    await _ensureCloudWorkoutChangeTracking(db);
     await _createWorkoutSuggestions(db);
     await _createSleepOverride(db);
     await _createSleepNap(db);
@@ -4217,6 +4223,7 @@ class LocalDb {
         cadence_spm INTEGER,
         hrr_bpm REAL,
         source TEXT NOT NULL DEFAULT 'manual',
+        window_edited INTEGER NOT NULL DEFAULT 0,
         private INTEGER NOT NULL DEFAULT 0,
         device_family TEXT,
         trace_json TEXT,
@@ -4453,11 +4460,25 @@ class LocalDb {
   /// Upsert an auto-detected workout suggestion (id = "$date:$startSec").
   static Future<void> putWorkoutSuggestion(Map<String, dynamic> row) async {
     final db = await instance;
-    await db.insert(
-      'workout_suggestions',
-      row,
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    await db.transaction((txn) async {
+      // More sensor data can refine an existing candidate's stop time.
+      // Keep answered suggestions immutable so a dismissal survives reanalysis.
+      final updated = await txn.update(
+        'workout_suggestions',
+        {
+          for (final field in [
+            'end_ts', 'avg_bpm', 'peak_bpm', 'duration_min', 'sport',
+          ])
+            if (row.containsKey(field)) field: row[field],
+        },
+        where: 'id = ? AND dismissed = 0',
+        whereArgs: [row['id']],
+      );
+      if (updated == 0) {
+        await txn.insert('workout_suggestions', row,
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    });
   }
 
   /// Active (not-yet-dismissed, not-yet-confirmed) suggestions, newest first.
@@ -7449,30 +7470,34 @@ class LocalDb {
     required int toRecTs,
     int? afterRecTs,
     int? afterCounter,
+    int? afterRowId,
   }) async {
     final db = await instance;
     if (afterRecTs == null || afterCounter == null) {
       return db.rawQuery(
-        'SELECT counter, rec_ts, hr, ax, ay, az, '
+        'SELECT rowid AS page_rowid, counter, rec_ts, hr, ax, ay, az, '
         'spo2_red_raw, spo2_ir_raw, skin_temp_raw, '
         'step_count, step_cadence, activity_class, skin_temp_c, '
         'on_wrist, hr_valid, hr_alt, device_family, device_id '
         'FROM decoded_onehz '
         'WHERE rec_ts >= ? AND rec_ts <= ? AND ${derivableSourceSql()} '
-        'ORDER BY rec_ts ASC, counter ASC LIMIT ?',
+        'ORDER BY rec_ts ASC, counter ASC, rowid ASC LIMIT ?',
         [fromRecTs, toRecTs, limit],
       );
     }
     return db.rawQuery(
-      'SELECT counter, rec_ts, hr, ax, ay, az, '
+      'SELECT rowid AS page_rowid, counter, rec_ts, hr, ax, ay, az, '
       'spo2_red_raw, spo2_ir_raw, skin_temp_raw, '
       'step_count, step_cadence, activity_class, skin_temp_c, '
       'on_wrist, hr_valid, hr_alt, device_family, device_id '
       'FROM decoded_onehz '
       'WHERE rec_ts >= ? AND rec_ts <= ? AND ${derivableSourceSql()} '
-      'AND (rec_ts > ? OR (rec_ts = ? AND counter > ?)) '
-      'ORDER BY rec_ts ASC, counter ASC LIMIT ?',
-      [fromRecTs, toRecTs, afterRecTs, afterRecTs, afterCounter, limit],
+      'AND (rec_ts > ? OR (rec_ts = ? AND '
+      '(counter > ? OR (counter = ? AND rowid > ?)))) '
+      'ORDER BY rec_ts ASC, counter ASC, rowid ASC LIMIT ?',
+      [fromRecTs > afterRecTs ? fromRecTs : afterRecTs, toRecTs,
+        afterRecTs, afterRecTs, afterCounter, afterCounter,
+        afterRowId ?? 9223372036854775807, limit],
     );
   }
 
@@ -8004,8 +8029,26 @@ class LocalDb {
     return {for (final r in rows) r['day_id'] as String};
   }
 
-  /// The set of day_id labels that are FINALIZED at [algoVersion] (locked). A
-  /// finalized day is never recomputed even on a version bump.
+  /// Whether older results still have retained input for a version upgrade.
+  static Future<bool> hasRecomputableOlderDays(int algoVersion) async {
+    final db = await instance;
+    final rows = await db.rawQuery('''
+      SELECT DISTINCT older.day_id
+      FROM day_result AS older
+      WHERE older.algo_version < ?
+        AND NOT EXISTS (
+          SELECT 1 FROM day_result AS fresh
+          WHERE fresh.day_id = older.day_id
+            AND fresh.algo_version >= ?
+            AND fresh.skipped = 0 AND fresh.partial = 0
+        )
+    ''', [algoVersion, algoVersion]);
+    if (rows.isEmpty) return false;
+    final retained = await decodedRecTsMaxByDay();
+    return rows.any((row) => retained.containsKey(row['day_id']));
+  }
+
+  /// The set of day_id labels that are FINALIZED at [algoVersion] (locked).
   static Future<Set<String>> finalizedDayIds(int algoVersion) async {
     final db = await instance;
     final rows = await db.query(
@@ -8896,6 +8939,15 @@ class LocalDb {
           // guards — the invariant that matters is per-row, not per-table.
           while (page.isNotEmpty) {
             await db.transaction((txn) async {
+              final editedSessionIds = t == 'sessions'
+                  ? {
+                      for (final row in await txn.query(
+                        'sessions', columns: ['id'],
+                        where: "window_edited = 1 OR status = 'duplicate'",
+                      ))
+                        row['id'],
+                    }
+                  : const <Object?>{};
               // CHUNKED, for the same reason commitSyncBatch chunks: sqflite
               // serialises a whole batch's args into ONE platform message, and
               // the orphan guard below adds an op per decoded_onehz row on top.
@@ -8916,6 +8968,16 @@ class LocalDb {
                     if (cols.contains(e.key)) e.key: e.value,
                 };
                 if (row.isEmpty) continue;
+                // This is a local mutation counter, not a portable band cursor.
+                if (t == 'sync_cursor' &&
+                    row['name'] == 'cloud_workout_revision') {
+                  continue;
+                }
+                if (t == 'sessions' &&
+                    row['window_edited'] != 1 &&
+                    editedSessionIds.contains(row['id'])) {
+                  continue;
+                }
                 if (t == 'decoded_onehz') {
                   // A pre-v46 export still carries the retired columns as
                   // VALUES (the disproven on_wrist/hr_valid reads and the
@@ -9524,13 +9586,32 @@ class LocalDb {
     );
   }
 
-  /// Koop Cloud's "is there new data" mark: the newest 1 Hz row's rowid
-  /// (INSERT OR REPLACE gives every insert, backfill included, a new one) —
-  /// O(1), and it moves only when a drain or import actually stored rows.
+  static Future<void> _ensureCloudWorkoutChangeTracking(Database db) async {
+    for (final event in ['INSERT', 'UPDATE', 'DELETE']) {
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS cloud_sessions_${event.toLowerCase()}
+        AFTER $event ON sessions BEGIN
+          UPDATE sync_cursor SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)
+          WHERE name = 'cloud_workout_revision';
+          INSERT INTO sync_cursor(name, value, updated_at)
+          SELECT 'cloud_workout_revision', '1', 0
+          WHERE NOT EXISTS (SELECT 1 FROM sync_cursor
+                            WHERE name = 'cloud_workout_revision');
+        END
+      ''');
+    }
+  }
+
+  /// Cloud's change mark includes stored band rows and workout writes. The
+  /// workout revision advances in the same transaction as the edit.
   static Future<String> cloudDataMark() async {
     final db = await instance;
-    final r = await db.rawQuery('SELECT MAX(rowid) AS m FROM decoded_onehz');
-    return '${r.first['m'] ?? 0}';
+    final row = (await db.rawQuery('''
+      SELECT (SELECT MAX(rowid) FROM decoded_onehz) AS raw_mark,
+             (SELECT value FROM sync_cursor
+              WHERE name = 'cloud_workout_revision') AS workout_mark
+    ''')).single;
+    return '${row['raw_mark'] ?? 0}:${row['workout_mark'] ?? 0}';
   }
 
   /// The FROZEN personal movement floor (g, dynAmp units) + when it was frozen.
@@ -10075,14 +10156,16 @@ class LocalDb {
     final db = await instance;
     final now = DateTime.now().millisecondsSinceEpoch;
     await db.transaction((txn) async {
-      final active = await txn.query(
+      final queued = await txn.query(
         'compute_jobs',
-        columns: ['id', 'type', 'state'],
-        where: 'scope = ? AND state IN (?, ?)',
-        whereArgs: ['derive', 'queued', 'running'],
+        columns: ['type'],
+        where: 'scope = ? AND state = ?',
+        whereArgs: ['derive', 'queued'],
       );
+      // A running pass may already have read its inputs. Only a queued pass
+      // can absorb a new batch without risking stale results on Home.
       bool hasType(String t) =>
-          active.any((row) => row['type']?.toString() == t);
+          queued.any((row) => row['type']?.toString() == t);
       if (type == 'derive_light') {
         if (hasType('derive_light') || hasType('derive_heavy')) return;
       } else if (type == 'derive_heavy') {
@@ -10094,7 +10177,7 @@ class LocalDb {
         );
       }
       await txn.insert('compute_jobs', {
-        'id': 'derive_${type}_$now',
+        'id': 'derive_${type}_${DateTime.now().microsecondsSinceEpoch}',
         'type': type,
         'scope': 'derive',
         'priority': type == 'derive_heavy' ? 200 : 100,
@@ -10617,6 +10700,29 @@ class LocalDb {
     );
   }
 
+  /// Save a corrected window and retire exact automatic copies together.
+  /// Retired rows remain readable by ID and keep their associated data.
+  static Future<void> putEditedSession(
+    Map<String, dynamic> row,
+    Map<String, dynamic> original,
+  ) async {
+    final db = await instance;
+    await db.transaction((txn) async {
+      if (original['status'] == 'done' &&
+          (original['source'] == 'auto' || original['source'] == 'detected') &&
+          original['window_edited'] != 1) {
+        await txn.update('sessions', {'status': 'duplicate'},
+            where: "id <> ? AND status = 'done' AND window_edited = 0 "
+                "AND source IN ('auto','detected') AND start_ts = ? "
+                'AND end_ts = ? AND type = ? AND private = ?',
+            whereArgs: [original['id'], original['start_ts'], original['end_ts'],
+              original['type'], original['private'] ?? 0]);
+      }
+      await txn.insert('sessions', row,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    });
+  }
+
   /// Retimes one saved auto-detected workout if it still has the window the
   /// derivation pass read. Manual rows, live rows and concurrent edits lose the
   /// compare-and-swap and remain untouched.
@@ -10652,8 +10758,11 @@ class LocalDb {
         'trace_samples': null,
       },
       where: "id = ? AND start_ts = ? AND end_ts = ? AND status = 'done' "
-          "AND source IN ('detected', 'auto')",
-      whereArgs: [id, expectedStartTs, expectedEndTs],
+          "AND source IN ('detected', 'auto') AND window_edited = 0 "
+          "AND NOT EXISTS (SELECT 1 FROM sessions AS other "
+          "WHERE other.id <> sessions.id AND other.status = 'done' "
+          "AND other.start_ts = ? AND other.end_ts = ?)",
+      whereArgs: [id, expectedStartTs, expectedEndTs, startTs, endTs],
     );
   }
 
@@ -10803,9 +10912,9 @@ class LocalDb {
     final db = await instance;
     return db.query(
       'sessions',
-      where: 'start_ts >= ? AND start_ts <= ?',
+      where: "start_ts >= ? AND start_ts <= ? AND status <> 'duplicate'",
       whereArgs: [fromTs, toTs],
-      orderBy: 'start_ts DESC',
+      orderBy: 'start_ts DESC, id ASC',
     );
   }
 

@@ -248,6 +248,9 @@ String? whyFromNote(String? note, {String unit = 'nights'}) {
   if (s.isEmpty) return null;
   final need = needMessageFromNote(s, unit: unit);
   if (need != null) return need;
+  if (s.startsWith('need_inputs:')) {
+    return 'Not enough qualified overnight readings to calculate Recovery.';
+  }
   if (s.startsWith('need_input:')) {
     final why = _inputWhy[_noteInput.firstMatch(s)?.group(1)];
     if (why == null) return null;

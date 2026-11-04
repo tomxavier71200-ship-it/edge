@@ -19,6 +19,7 @@
 // opened — the same contract as the encrypted backup, for the same reason.
 
 import 'dart:async';
+import 'package:http/http.dart' show ClientException;
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:ui' show IsolateNameServer;
@@ -128,7 +129,8 @@ bool cloudRemoteNewer(DateTime remote, String? seenIso) {
 class CloudOutcome {
   final bool ok;
   final String message;
-  const CloudOutcome(this.ok, this.message);
+  final bool retryable;
+  const CloudOutcome(this.ok, this.message, {this.retryable = false});
 }
 
 class CloudSync extends ChangeNotifier {
@@ -252,6 +254,7 @@ class CloudSync extends ChangeNotifier {
   Future<void> runIfDue(
     Future<int> Function(String path) importBackup, {
     Future<int> Function(List<String> paths)? importWhoop,
+    bool retryTransient = true,
   }) async {
     // The Android background sync writes these keys from its own isolate, so
     // re-read them: a stale cache re-uploaded what it had just sent.
@@ -281,8 +284,15 @@ class CloudSync extends ChangeNotifier {
         cloudDue(CloudRole.receive, now, lastCheck: lastCheck);
     if (!due && !check) return;
     try {
-      await run(importBackup,
+      final outcome = await run(importBackup,
           importWhoop: importWhoop, interactive: false, upload: due);
+      if (retryTransient && outcome.retryable) {
+        _retry ??= Timer(kCloudCheckEvery + const Duration(seconds: 1), () {
+          _retry = null;
+          unawaited(runIfDue(importBackup,
+              importWhoop: importWhoop, retryTransient: false));
+        });
+      }
     } catch (_) {
       // `run` records the error for the screen; a resume hook must not throw.
     }
@@ -324,6 +334,7 @@ class CloudSync extends ChangeNotifier {
     _busy = true;
     lastError = null;
     notifyListeners();
+    DriveApi? drive;
     try {
       final pass = await _secure.read(key: _kPassKey);
       if (pass == null || pass.isEmpty) {
@@ -338,7 +349,7 @@ class CloudSync extends ChangeNotifier {
       if (r == null) {
         return _fail('Choose whether this phone sends or receives first.');
       }
-      final api = DriveApi(token);
+      final api = drive = DriveApi(token);
       if (r == CloudRole.receive) return await _receive(api, pass, importBackup);
       final picked =
           importWhoop == null ? 0 : await _pickUpWhoop(api, pass, importWhoop);
@@ -351,12 +362,20 @@ class CloudSync extends ChangeNotifier {
     } on DriveException catch (e) {
       return _fail(e.unauthorized
           ? 'Google sign-in expired. Tap Sync now to sign in again.'
-          : 'Google Drive refused the request (${e.status}).');
+          : 'Google Drive refused the request (${e.status}).',
+          retryable: e.status == 429 || (e.status >= 500 && e.status < 600));
     } on TimeoutException {
-      return _fail('Google Drive did not answer. It will try again shortly.');
+      return _fail('Google Drive did not answer.', retryable: true);
+    } on SocketException {
+      return _fail('The connection to Google Drive was interrupted.',
+          retryable: true);
+    } on ClientException {
+      return _fail('The connection to Google Drive was interrupted.',
+          retryable: true);
     } catch (e) {
       return _fail('$e');
     } finally {
+      drive?.close();
       // Cleared on every path, including the throws above: a latch left set
       // here would stop cloud sync until the app is killed (AGENTS §4.3).
       _busy = false;
@@ -449,9 +468,9 @@ class CloudSync extends ChangeNotifier {
     return null;
   }
 
-  CloudOutcome _fail(String m) {
+  CloudOutcome _fail(String m, {bool retryable = false}) {
     lastError = m;
-    return CloudOutcome(false, m);
+    return CloudOutcome(false, m, retryable: retryable);
   }
 
   Future<CloudOutcome> _send(DriveApi api, String pass, {required bool interactive}) async {
@@ -477,9 +496,11 @@ class CloudSync extends ChangeNotifier {
     // Taken BEFORE the export: data landing during it moves the mark again,
     // so the next pass still sends it.
     final mark = await LocalDb.cloudDataMark();
+    final timing = Stopwatch()..start();
     final plain = await LocalDb.exportCopy();
     final enc = '$plain.kbak';
     try {
+      final snapshotMs = timing.elapsedMilliseconds;
       // gzip + PBKDF2 + AES-GCM over the whole database: seconds of CPU, so
       // off the UI isolate. Neither step touches a plugin.
       await Isolate.run(() async {
@@ -493,7 +514,14 @@ class CloudSync extends ChangeNotifier {
       });
       final folder = await api.folder();
       final existing = await api.find(kDriveFileName, parent: folder);
+      final uploadStartMs = timing.elapsedMilliseconds;
+      final bytes = await File(enc).length();
       final up = await api.upload(File(enc), folder, existingId: existing?.id);
+      unawaited(FileLog.write(
+        '[cloud] backup bytes=$bytes snapshot_ms=$snapshotMs '
+        'prepare_ms=${uploadStartMs - snapshotMs} '
+        'upload_ms=${timing.elapsedMilliseconds - uploadStartMs}',
+      ));
       // The diagnostics log rides along — best effort, never failing the data.
       try {
         await _uploadLog(api, folder, pass);

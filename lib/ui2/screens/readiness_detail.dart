@@ -567,8 +567,8 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
 
   /// The pipeline's own absence diagnostic, one row per input. Two facts per
   /// row and neither is inferred here: did last night produce this input, and
-  /// how many of your own nights are behind it. The line underneath QUOTES the
-  /// composite's note rather than guessing a reason from the rows above it —
+  /// how many of your own nights are behind it. The line underneath explains
+  /// the composite's note rather than guessing a reason from the rows above it —
   /// and it never turns a night count into a date, because nothing in the
   /// pipeline knows when you will next wear the band.
   Widget _absence(BuildContext c, P p, Map<String, dynamic> diag) {
@@ -586,6 +586,9 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
     }
     final note = diag['note']?.toString();
     final need = needMessageFromNote(note);
+    final why = whyFromNote(note);
+    final tempUnverified =
+        note?.contains('temp: no settled fraction measured') ?? false;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (rows.isNotEmpty)
@@ -613,13 +616,17 @@ class _ReadinessDetailState extends State<ReadinessDetail> {
             ? (l?.readinessDetailNeedSuffix(need) ??
                 '$need. Each input is ranked against your own nights, so the '
                     'score cannot start before there are enough of them.')
-            : (note != null && note.isNotEmpty
-                ? note
-                : (l?.readinessDetailNoNoteFallback ??
-                    'Everything above was present, and the comparison against '
-                        'your own history still could not be made.')),
+            : why ?? 'Koop could not qualify enough readings for this score.',
         style: F.cap.copyWith(color: p.ink3, height: 1.5),
       ),
+      if (tempUnverified) ...[
+        const SizedBox(height: S.x2),
+        Text(
+          'Skin temperature was excluded because Koop could not verify '
+          'that the band had settled against your skin.',
+          style: F.cap.copyWith(color: p.ink3, height: 1.5),
+        ),
+      ],
     ]);
   }
 

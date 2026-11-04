@@ -287,6 +287,90 @@ void main() {
     },
   );
 
+  test('an exact duplicate automatic ride appears once on the day timeline', () async {
+    final day = DateTime(2026, 2, 20);
+    final start = day.millisecondsSinceEpoch ~/ 1000 + 3600;
+    for (final id in ['duplicate-auto-a', 'duplicate-auto-b']) {
+      await LocalDb.putSession({
+        'id': id, 'start_ts': start, 'end_ts': start + 840,
+        'type': 'cycling', 'status': 'done', 'source': 'detected',
+        'created_at': start * 1000,
+      });
+    }
+    final timeline = await repo.getDayTimeline('2026-02-20');
+    final sessions = timeline['sessions'] as List;
+    expect(sessions.where((r) => (r['id'] as String).startsWith('duplicate-auto')),
+        hasLength(1));
+    final history = await repo.getSessions(from: start - 60, to: start + 900);
+    expect(history.where((r) => (r['id'] as String).startsWith('duplicate-auto')),
+        hasLength(1));
+    expect(history.singleWhere((r) => (r['id'] as String).startsWith('duplicate-auto'))['id'],
+        sessions.singleWhere((r) => (r['id'] as String).startsWith('duplicate-auto'))['id']);
+    expect(await LocalDb.session('duplicate-auto-a'), isNotNull);
+    expect(await LocalDb.session('duplicate-auto-b'), isNotNull);
+    expect(await LocalDb.retimeDetectedSession(
+      'duplicate-auto-a',
+      expectedStartTs: start, expectedEndTs: start + 840,
+      startTs: start, endTs: start + 840,
+    ), 0);
+    await repo.setWorkoutWindow('duplicate-auto-a',
+        startTs: start + 60, endTs: start + 840);
+    final corrected = await LocalDb.sessionsInRange(start, start + 900);
+    expect(corrected.map((r) => r['id']), ['duplicate-auto-a']);
+    expect(corrected.single['start_ts'], start + 60);
+    final retired = await LocalDb.session('duplicate-auto-b');
+    expect(retired?['status'], 'duplicate');
+    expect(retired?['start_ts'], start);
+  });
+
+  test('a user-retimed detection cannot be retimed by later analysis', () async {
+    final start = sessionStart - 18 * 86400;
+    const id = 'user-corrected-detection';
+    await LocalDb.putSession({
+      'id': id,
+      'start_ts': start,
+      'end_ts': start + 900,
+      'type': 'cycling',
+      'status': 'done',
+      'source': 'detected',
+      'created_at': start * 1000,
+    });
+    await repo.setWorkoutWindow(id, startTs: start + 60, endTs: start + 840);
+    expect(await LocalDb.retimeDetectedSession(
+      id, expectedStartTs: start + 60, expectedEndTs: start + 840,
+      startTs: start, endTs: start + 900,
+    ), 0);
+    final saved = await LocalDb.session(id);
+    expect(saved?['source'], 'detected');
+    expect(saved?['window_edited'], 1);
+    expect(saved?['start_ts'], start + 60);
+    expect(saved?['end_ts'], start + 840);
+  });
+
+  test('new detector bounds refresh only an unanswered suggestion', () async {
+    final row = <String, dynamic>{
+      'id': 'refined-suggestion',
+      'date': '2026-01-01',
+      'start_ts': sessionStart,
+      'end_ts': sessionStart + 600,
+      'created_at': sessionStart * 1000,
+    };
+    await LocalDb.putWorkoutSuggestion(row);
+    await LocalDb.putWorkoutSuggestion({
+      ...row,
+      'end_ts': sessionStart + 900,
+    });
+    final pending = await LocalDb.activeWorkoutSuggestions();
+    expect(pending.singleWhere((r) => r['id'] == row['id'])['end_ts'],
+        sessionStart + 900);
+    await LocalDb.dismissWorkoutSuggestion(row['id'] as String);
+    await LocalDb.putWorkoutSuggestion({...row, 'end_ts': sessionStart + 1200});
+    expect(await LocalDb.answeredSuggestionOverlaps(
+        sessionStart + 950, sessionStart + 1100), isFalse);
+    expect((await LocalDb.activeWorkoutSuggestions())
+        .any((r) => r['id'] == row['id']), isFalse);
+  });
+
   group('GPS routes follow the session window', () {
     // A run tracked for 90 min, one fix every 30 s heading due east.
     Future<void> seedRoute(String id, int start, int seconds) async {

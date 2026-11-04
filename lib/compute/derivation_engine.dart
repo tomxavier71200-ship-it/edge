@@ -1905,7 +1905,9 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // Walking before/after a short ride is removed even when HR stays elevated;
 // three recovered-HR or non-cycling minutes close the ride. The ten-minute
 // detection minimum is unchanged. Sibling pins are unchanged.
-const int kAlgoVersion = 121;
+// 121 → 122: an unobserved HR minute is not proof of recovery and no
+// longer contributes to the run of recovered minutes that ends a ride.
+const int kAlgoVersion = 122;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2881,10 +2883,12 @@ class DerivationEngine {
       // relative to the other concurrent workers even though the actual
       // isolate CPU work they await genuinely runs in parallel across cores.
       Future<void> processDay(String dayId) async {
+        final elapsed = Stopwatch()..start();
         activeDays.add(dayId);
         _diag['active_days'] = activeDays.toList();
         try {
           final prepared = await _prepareTargetDay(dayId);
+          final prepareMs = elapsed.elapsedMilliseconds;
           // Override day whose raw has been pruned (≥14 d): re-deriving would
           // produce an empty/absent result and clobber the user's manual sleep.
           // Keep the existing locked result instead.
@@ -2895,6 +2899,8 @@ class DerivationEngine {
           } else if (prepared != null) {
             _diag['prepared_days'] = (_diag['prepared_days'] as int) + 1;
             await _derivePreparedDay(prepared, profile, dataNowSec, history);
+            _log('derive timing $dayId: prepare_ms=$prepareMs '
+                'compute_and_save_ms=${elapsed.elapsedMilliseconds - prepareMs}');
             done++;
             _diag['done_days'] = done;
           } else {
@@ -2928,7 +2934,17 @@ class DerivationEngine {
         onDayDone?.call(dayId, completed, orderedDays.length);
       }
 
-      await runWithConcurrency(orderedDays, _deriveConcurrency, processDay);
+      final today = LocalDb.localDayLabelNow();
+      if (orderedDays.length > 1 && orderedDays.first == today) {
+        // Start Today without historical workers contending for the database
+        // and CPU. Older days still use the existing parallel worker pool.
+        await processDay(today);
+        await runWithConcurrency(
+          orderedDays.skip(1).toList(), _deriveConcurrency, processDay,
+        );
+      } else {
+        await runWithConcurrency(orderedDays, _deriveConcurrency, processDay);
+      }
 
       // 4. Cross-day rollup + notifications (best-effort).
       if (done > 0) {
@@ -3745,6 +3761,7 @@ class DerivationEngine {
       worker.send(const {'type': 'config', 'mode': 'substrate'});
       int? afterRecTs;
       int? afterCursor;
+      int? afterRowId;
       var rangePages = 0;
       var rangeRows = 0;
       // Low water mark for the BEAT read, which is NOT the same window as the
@@ -3775,6 +3792,7 @@ class DerivationEngine {
           toRecTs: toRecTs,
           afterRecTs: afterRecTs,
           afterCounter: afterCursor,
+          afterRowId: afterRowId,
         );
         if (decodedRows.isNotEmpty) {
           _trackPrepareBatch(decodedRows.length);
@@ -3829,6 +3847,7 @@ class DerivationEngine {
           final last = decodedRows.last;
           afterRecTs = (last['rec_ts'] as num?)?.toInt() ?? afterRecTs;
           afterCursor = (last['counter'] as num?)?.toInt() ?? afterCursor;
+          afterRowId = (last['page_rowid'] as num).toInt();
           if (isFinalPage) break;
           continue;
         }
@@ -9119,7 +9138,8 @@ class DerivationEngine {
 
   static bool _isDetectedSession(Map<String, dynamic> row) {
     final source = row['source'];
-    return source == 'detected' || source == 'auto';
+    return row['window_edited'] != 1 &&
+        (source == 'detected' || source == 'auto');
   }
 
   /// TS-03 — the day's OBSERVED heart-rate ceiling: the highest bpm any of this
