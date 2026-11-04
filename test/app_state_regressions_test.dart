@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:openstrap_edge/data/db.dart';
+import 'package:openstrap_edge/ble/ble_engine.dart';
 import 'package:openstrap_edge/health/health_export.dart';
 import 'package:openstrap_edge/notify/notification_center.dart';
 import 'package:openstrap_edge/notify/notification_event.dart';
@@ -90,6 +91,62 @@ void main() {
 
   // ── 6. `busy` must not latch true forever ──────────────────────────────────
   group('openSession (busy latch)', () {
+    test('Sync now requests fresh history over a healthy existing link', () async {
+      final engine = _ManualSyncBand();
+      final app = AppState.forTesting(engine: engine);
+      addTearDown(app.dispose);
+      app.paired = PairedDevice('r-1', '4C2248092');
+
+      await app.syncNow();
+
+      expect(engine.historyRequests, 1);
+      expect(engine.historyReads, 1);
+      expect(engine.connects, 0);
+      expect(app.busy, isFalse);
+    });
+
+    test('Sync now reconnects a connected link that stopped receiving', () async {
+      final engine = _ManualSyncBand(quiet: true);
+      final app = AppState.forTesting(engine: engine);
+      addTearDown(app.dispose);
+      app.paired = PairedDevice('r-1', '4C2248092');
+
+      await app.syncNow();
+
+      expect(engine.disconnects, 1);
+      expect(engine.connects, 1);
+      expect(engine.historyRequests, 0);
+      expect(app.busy, isFalse);
+    });
+
+    test('an interrupted pull stays visible until a successful retry', () async {
+      final engine = _ManualSyncBand()..complete = false;
+      final app = AppState.forTesting(engine: engine);
+      addTearDown(app.dispose);
+      app.paired = PairedDevice('r-1', '4C2248092');
+
+      await app.syncNow();
+      expect(app.bandSyncInterrupted, isTrue);
+
+      engine.complete = true;
+      await app.syncNow();
+      expect(app.bandSyncInterrupted, isFalse);
+      expect(engine.historyRequests, 2);
+    });
+
+    test('a refused request cannot report an earlier transfer as complete', () async {
+      final engine = _ManualSyncBand()..acceptRequest = false;
+      final app = AppState.forTesting(engine: engine);
+      addTearDown(app.dispose);
+      app.paired = PairedDevice('r-1', '4C2248092');
+
+      await app.syncNow();
+
+      expect(engine.historyRequests, 1);
+      expect(engine.historyReads, 0);
+      expect(app.bandSyncInterrupted, isTrue);
+    });
+
     test('unpairing while the session is opening does not wedge busy',
         () async {
       final app = AppState.forTesting();
@@ -563,4 +620,51 @@ void main() {
       expect(await LocalDb.liveWorkoutTally(id), isNull);
     });
   });
+}
+
+class _ManualSyncBand extends BleEngine {
+  _ManualSyncBand({this.quiet = false})
+      : super(onRecord: (_, _) async {}, onState: (_) {});
+
+  final bool quiet;
+  bool connected = true;
+  bool complete = true;
+  bool acceptRequest = true;
+  int historyRequests = 0;
+  int historyReads = 0;
+  int connects = 0;
+  int disconnects = 0;
+
+  @override
+  bool get isConnected => connected;
+
+  @override
+  Duration get sinceLastRx => quiet ? const Duration(minutes: 5) : Duration.zero;
+
+  @override
+  bool get liveEnabled => true;
+
+  @override
+  Future<bool> requestHistorySync() async {
+    historyRequests++;
+    return acceptRequest;
+  }
+
+  @override
+  Future<SyncReport> runSync({Duration timeout = const Duration(seconds: 600)}) async {
+    historyReads++;
+    return SyncReport(0, 0, complete);
+  }
+
+  @override
+  Future<void> disconnect() async {
+    disconnects++;
+    connected = false;
+  }
+
+  @override
+  Future<bool> connectToRemoteId(String remoteId, {String? generationHint}) async {
+    connects++;
+    return false;
+  }
 }

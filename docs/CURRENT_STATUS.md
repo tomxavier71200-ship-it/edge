@@ -11,6 +11,9 @@ when daily analysis is absent. Both were pushed to `whoop-ui`.
 
 ## Local stability work (algorithm 122)
 
+- Home's manual sync requests fresh history over a healthy existing link and
+  reconnects a stale link. Interrupted transfers offer a retry, while a
+  completed transfer with no new records does not look like a failed connection.
 - On the Realme test build, the November 3 Home timeline showed the 14:03–14:17
   ride once. The 05:42–05:54 ride also appeared in My Day.
 - Cloud now detects when saved analysis changes without new band data. Manual

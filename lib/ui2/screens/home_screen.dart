@@ -26,7 +26,6 @@
 // data layer. They live here rather than in a fourth file because there are
 // only three of them and they are read together.
 
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -120,7 +119,7 @@ UnitsController? unitsOf(BuildContext c) {
 /// The band-sync trigger, or null when there is no AppState above us. Every
 /// "Sync the band" CTA in this folder goes through here — a call to action
 /// with no action behind it is worse than no call to action.
-VoidCallback? syncOf(BuildContext c) {
+Future<void> Function()? syncOf(BuildContext c) {
   try {
     final app = c.read<AppState>();
     return app.syncNow;
@@ -2213,23 +2212,11 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   /// history that their band has never produced data is the wrong answer to it.
   bool _failed = false;
 
-  /// Set the moment "Sync the band" is tapped, cleared once real progress has
-  /// a signal of its own (`syncingNow`) or after [_tapGrace] with nothing —
-  /// the bridge over the gap between the tap and the first record landing,
-  /// where neither `busy` (skipped entirely on the common fast-reclaim path)
-  /// nor `syncingNow` has moved yet and the button would otherwise look inert.
+  /// Covers the gaps between requesting a transfer and records arriving.
   bool _syncTapped = false;
 
   /// Scrolled past the big dials: the small pinned row shows.
   bool _miniDials = false;
-  Timer? _syncTapTimer;
-  static const _tapGrace = Duration(seconds: 20);
-
-  /// Whether this tap ever saw the band syncing (or the derive after it).
-  bool _syncSawProgress = false;
-
-  /// The grace ran out with no sign of the band: say so, instead of the card
-  /// silently going back to "No score yet today" as if nothing was tried.
   bool _syncFailed = false;
 
   /// The streak seen last time Home showed one; a bigger one ignites the chip
@@ -2262,28 +2249,29 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     return _ignite;
   }
 
-  void _tapSync(VoidCallback sync) {
-    if (_syncTapped || (context.read<AppState?>()?.syncingNow ?? false)) return;
+  Future<void> _tapSync(Future<void> Function() sync) async {
+    final app = context.read<AppState?>();
+    if (_syncTapped || (app?.syncingNow ?? false)) return;
     setState(() {
       _syncTapped = true;
       _syncFailed = false;
-      _syncSawProgress = false;
     });
-    sync();
-    _syncTapTimer?.cancel();
-    _syncTapTimer = Timer(_tapGrace, () {
-      if (mounted) {
-        setState(() {
-          _syncTapped = false;
-          _syncFailed = !_syncSawProgress;
-        });
-      }
+    var failed = false;
+    try {
+      await sync();
+      failed = app != null && app.isPaired && !app.isConnected;
+    } catch (_) {
+      failed = true;
+    }
+    if (!mounted) return;
+    setState(() {
+      _syncTapped = false;
+      _syncFailed = failed;
     });
   }
 
   @override
   void dispose() {
-    _syncTapTimer?.cancel();
     homeLayoutRev.removeListener(_relayout);
     super.dispose();
   }
@@ -2397,18 +2385,11 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
   Widget? _phaseStatusCard(BuildContext c, AppLocalizations? l) {
     final syncing = syncingNowOf(c);
     final deriving = derivingOf(c);
-    // The tap latch is otherwise cleared only by its 20s grace timer — if
-    // real progress lands before that timer fires, clear it here too so the
-    // UI does not bounce back to "Connecting" once syncing/deriving goes
-    // quiet again.
-    if (syncing || deriving) {
-      _syncSawProgress = true;
-      _syncFailed = false;
-    }
-    if ((syncing || deriving) && _syncTapped) {
-      _syncTapped = false;
-      _syncTapTimer?.cancel();
-    }
+    final (paired, connected, interrupted) = context.select<
+        AppState?, (bool, bool, bool)>(
+      (app) => (app?.isPaired ?? false, app?.isConnected ?? false,
+          app?.bandSyncInterrupted ?? false),
+    );
     final spinner = SizedBox(
       width: 16,
       height: 16,
@@ -2421,6 +2402,27 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         l?.homeSyncingBody ??
             'Pulling data now — this can take a few minutes '
                 'on a full backlog.',
+        leading: spinner,
+      );
+    }
+    if (paired && interrupted) {
+      final sync = syncOf(c);
+      return StatusCard(
+        'Band sync interrupted',
+        'Saved readings are available. Try again to fetch the rest.',
+        fix: sync == null ? '' : 'Try again',
+        icon: LucideIcons.refreshCw,
+        onFix: sync == null ? null : () => _tapSync(sync),
+      );
+    }
+    if (_syncTapped) {
+      return StatusCard(
+        connected
+            ? 'Waiting for band data'
+            : (l?.homeConnectingTitle ?? 'Connecting to your band'),
+        connected
+            ? 'Koop is waiting for the band to respond.'
+            : (l?.homeConnectingBody ?? 'Hang on — this usually takes a few seconds.'),
         leading: spinner,
       );
     }
@@ -2442,14 +2444,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         leading: spinner,
       );
     }
-    if (_syncTapped) {
-      return StatusCard(
-        l?.homeConnectingTitle ?? 'Connecting to your band',
-        l?.homeConnectingBody ?? 'Hang on — this usually takes a few seconds.',
-        leading: spinner,
-      );
-    }
-    if (_syncFailed) {
+    if (paired && _syncFailed && !connected) {
       final sync = syncOf(c);
       return StatusCard(
         'Couldn\'t reach your band',

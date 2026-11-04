@@ -4361,14 +4361,26 @@ class AppState extends ChangeNotifier {
   /// this guard makes sure a periodic/forced/manual resync can never start a
   /// SECOND overlapping burst against the same drain controller.
   Future<SyncReport>? _syncBurst;
+  String? _interruptedBand;
+  bool get bandSyncInterrupted =>
+      _interruptedBand != null && _interruptedBand == paired?.remoteId;
 
   /// Start (or join) the historical sync burst. If a burst is already running,
   /// the existing one's future is returned — callers never overlap.
   Future<SyncReport> _kickSyncBurst({required bool kickFirst}) {
     final existing = _syncBurst;
     if (existing != null) return existing;
-    final fut = _runSyncBurst(kickFirst: kickFirst).whenComplete(() {
+    _interruptedBand = null;
+    final band = paired?.remoteId;
+    final fut = _runSyncBurst(kickFirst: kickFirst).then((report) {
+      _interruptedBand = report.complete ? null : band;
+      return report;
+    }, onError: (Object error, StackTrace stack) {
+      _interruptedBand = band;
+      Error.throwWithStackTrace(error, stack);
+    }).whenComplete(() {
       _syncBurst = null;
+      if (!_disposed) notifyListeners();
     });
     _syncBurst = fut;
     return fut;
@@ -4384,7 +4396,9 @@ class AppState extends ChangeNotifier {
     // real progress, so this only runs long when there's genuinely a lot to pull.
     int maxSessions = 20,
   }) async {
-    var last = SyncReport(0, 0, false);
+    var records = 0;
+    var batches = 0;
+    var complete = false;
     for (var i = 0; i < maxSessions && engine.isConnected; i++) {
       // Terminal `Stuck`: a burst failed validation
       // 15 times and the abort went out, so this connection's history is over.
@@ -4405,7 +4419,13 @@ class AppState extends ChangeNotifier {
       // read frontierAfter too).
       final frontierBefore = await LocalDb.getCursorInt('rec_ts_hw');
       if (kickFirst || i > 0) {
-        await engine.requestHistorySync();
+        final requested = await engine.requestHistorySync();
+        if (!requested && !engine.offloadActive) {
+          // Do not read a previous transfer's completion after a request
+          // that never went out.
+          complete = false;
+          break;
+        }
       }
       kickFirst = false;
       final report = await engine.runSync(
@@ -4433,7 +4453,9 @@ class AppState extends ChangeNotifier {
           strapNewest != null &&
           frontierAfter != null &&
           (strapNewest - frontierAfter) > 300;
-      last = report;
+      records += report.records;
+      batches += report.batches;
+      complete = report.complete && !backlogRemains;
       await LocalDb.upsertSyncLedgerEntry(
         status: report.complete ? 'complete' : 'session_end',
         metaPatch: {
@@ -4484,7 +4506,7 @@ class AppState extends ChangeNotifier {
         'frontier still behind strap newest ($strapNewest > $frontierAfter).',
       );
     }
-    return last;
+    return SyncReport(records, batches, complete);
   }
 
   // ── pairing (LOCAL only) ────────────────────────────────────────────────────
@@ -5283,7 +5305,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> openSession() async {
+  Future<void> openSession({bool manualSync = false}) async {
     if (busy || paired == null) return;
     BandOwnership.markForegroundIntent(true);
     _log('[OWNERSHIP] foreground intent on (${BandOwnership.debugState})');
@@ -5300,7 +5322,7 @@ class AppState extends ChangeNotifier {
     // Back in the foreground with an OS CPU/memory budget again — let the
     // scheduler drain any derive jobs that queued (durably) while backgrounded.
     _deriveScheduler.setBackground(false);
-    if (wasBackground && engine.isConnected) {
+    if (wasBackground && engine.isConnected && !manualSync) {
       IosBleRestore.foregroundActive = true;
       await IosBleRestore.setOwnsBand(true);
       EdgeTracking.start(); // Android: keep the foreground service up (idempotent)
@@ -5342,6 +5364,7 @@ class AppState extends ChangeNotifier {
       await engine.disconnect();
       // fall through to the full connect → subscribe → drain path below
     }
+    if (manualSync) _interruptedBand = null;
     _setBusy(true);
     _keepAlive = true;
     // From here on we WANT a link for the life of the process, so the level-
@@ -5358,6 +5381,39 @@ class AppState extends ChangeNotifier {
       if (band == null) {
         _log('Session start aborted — band was unpaired mid-resume.');
         return;
+      }
+      if (manualSync && engine.isConnected) {
+        final inFlight = _syncBurst;
+        if (inFlight != null) {
+          return inFlight.then<void>((_) {}).catchError((Object error) {
+            _log('Sync now failed: $error');
+          });
+        }
+        // Connecting a ready link is a no-op. Explicitly ask for new history,
+        // or reopen a stale link so it can resubscribe and start a fresh drain.
+        final canReuse = !engine.historyStuckThisSession &&
+            await _linkUsableAfterResume('Sync now');
+        if (_disposed || paired?.remoteId != band.remoteId || !_keepAlive) return;
+        if (canReuse && engine.isConnected) {
+          await _ensureForegroundLease();
+          if (_disposed || paired?.remoteId != band.remoteId || !_keepAlive) return;
+          if (wasBackground) {
+            IosBleRestore.foregroundActive = true;
+            await IosBleRestore.setOwnsBand(true);
+            EdgeTracking.start();
+            _nudgeLive();
+            _startBackfillTimer();
+          }
+          return _kickSyncBurst(kickFirst: true).then<void>((report) {
+            if (!_disposed && report.complete && report.records > 0) {
+              _deriveScheduler.requestHeavy();
+            }
+          }).catchError((Object error) {
+            _log('Sync now failed: $error');
+          });
+        }
+        await engine.disconnect();
+        if (_disposed || paired?.remoteId != band.remoteId || !_keepAlive) return;
       }
       // Android: start the Edge Tracking foreground service so the live connection keeps
       // draining while backgrounded (Android kills background processes otherwise).
@@ -5411,26 +5467,23 @@ class AppState extends ChangeNotifier {
       await _recoverOrphanedLiveSession();
       _resetLivePedometer(); // fresh live step count for this connected session
       await engine.reconcileLiveStreams(); // the owners' intent, not full live
-      unawaited(
-        _kickSyncBurst(kickFirst: false).then((report) async {
-          _log(
-            'Backlog drained: ${report.records} records in ${report.batches} '
-            'batches (${report.complete ? "complete" : "stopped early"}).',
-          );
-          // Re-evaluate the high-frequency wake window now the backlog landed.
-          await _refreshHighFreqWakeWindow();
-          // Re-arm the weekly schedule now the sync completed (Feature 1: "on
-          // every successful connect AND after each sync").
-          await _armNextAlarmOccurrence();
-          // The whole backlog landed → heavy foreground finalize (full sleep
-          // staging + 24-h spectra over every stale day).
-          _deriveScheduler.requestHeavy();
-          notifyListeners();
-        }).catchError((Object e) {
-          _log('Background sync burst failed: $e');
-        }),
-      );
+      final burst = _kickSyncBurst(kickFirst: false).then((report) async {
+        _log(
+          'Backlog drained: ${report.records} records in ${report.batches} '
+          'batches (${report.complete ? "complete" : "stopped early"}).',
+        );
+        // Re-evaluate the high-frequency wake window now the backlog landed.
+        await _refreshHighFreqWakeWindow();
+        // Re-arm the weekly schedule now the sync completed.
+        await _armNextAlarmOccurrence();
+        _deriveScheduler.requestHeavy();
+        if (!_disposed) notifyListeners();
+      }).catchError((Object e) {
+        _log('Background sync burst failed: $e');
+      });
       _startBackfillTimer();
+      if (manualSync) return burst;
+      unawaited(burst);
     } catch (e) {
       _log('Session start failed: $e');
     } finally {
@@ -5680,7 +5733,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> syncNow() => openSession();
+  Future<void> syncNow() => openSession(manualSync: true);
 
   /// The ONE place the band's HIGH_FREQ_SYNC prompt is programmed. Two
   /// requesters, one decision (`BandPromptPolicy`): the smart-wake window

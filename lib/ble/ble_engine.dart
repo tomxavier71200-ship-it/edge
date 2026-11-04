@@ -7154,7 +7154,7 @@ class BleEngine {
   /// SEND_HISTORICAL_DATA so the band streams anything banked since the last
   /// HISTORY_COMPLETE. Used when a workout ends so a live-fed session still gets its
   /// window backfilled from flash. Stays in `listening` — no mode change.
-  Future<void> requestHistorySync() async {
+  Future<bool> requestHistorySync() async {
     _historyRequests++;
     await LocalDb.upsertSyncLedgerEntry(
       status: 'requested',
@@ -7168,7 +7168,7 @@ class BleEngine {
         'strap_history_newest_ts': _strapHistoryNewestTs,
       },
     );
-    await _triggerBackfill(BackfillTrigger.manual);
+    return _triggerBackfill(BackfillTrigger.manual);
   }
 
   /// Await the CURRENT historical offload reaching HISTORY_COMPLETE (or link-down /
