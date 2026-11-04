@@ -1144,7 +1144,7 @@ class LocalDb {
     await _createCycleSymptom(db);
     await _ensureSessionSchema(db);
     await _ensureSyncStateSchema(db);
-    await _ensureCloudWorkoutChangeTracking(db);
+    await _ensureCloudChangeTracking(db);
     await _createWorkoutSuggestions(db);
     await _createSleepOverride(db);
     await _createSleepNap(db);
@@ -8970,7 +8970,8 @@ class LocalDb {
                 if (row.isEmpty) continue;
                 // This is a local mutation counter, not a portable band cursor.
                 if (t == 'sync_cursor' &&
-                    row['name'] == 'cloud_workout_revision') {
+                    (row['name'] == _cloudWorkoutRevision ||
+                        row['name'] == _cloudAnalysisRevision)) {
                   continue;
                 }
                 if (t == 'sessions' &&
@@ -9586,32 +9587,47 @@ class LocalDb {
     );
   }
 
-  static Future<void> _ensureCloudWorkoutChangeTracking(Database db) async {
-    for (final event in ['INSERT', 'UPDATE', 'DELETE']) {
-      await db.execute('''
-        CREATE TRIGGER IF NOT EXISTS cloud_sessions_${event.toLowerCase()}
-        AFTER $event ON sessions BEGIN
-          UPDATE sync_cursor SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)
-          WHERE name = 'cloud_workout_revision';
-          INSERT INTO sync_cursor(name, value, updated_at)
-          SELECT 'cloud_workout_revision', '1', 0
-          WHERE NOT EXISTS (SELECT 1 FROM sync_cursor
-                            WHERE name = 'cloud_workout_revision');
-        END
-      ''');
+  static const _cloudWorkoutRevision = 'cloud_workout_revision';
+  static const _cloudAnalysisRevision = 'cloud_analysis_revision';
+
+  static List<String> _cloudRevisionWrites(String key) => [
+    'UPDATE sync_cursor SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) '
+        "WHERE name = '$key'",
+    'INSERT INTO sync_cursor(name, value, updated_at) '
+        "SELECT '$key', '1', 0 WHERE NOT EXISTS "
+        "(SELECT 1 FROM sync_cursor WHERE name = '$key')",
+  ];
+
+  static Future<void> _ensureCloudChangeTracking(Database db) async {
+    const tables = {
+      'sessions': _cloudWorkoutRevision,
+      'day_result': _cloudAnalysisRevision,
+    };
+    for (final table in tables.entries) {
+      for (final event in ['INSERT', 'UPDATE', 'DELETE']) {
+        await db.execute('''
+          CREATE TRIGGER IF NOT EXISTS cloud_${table.key}_${event.toLowerCase()}
+          AFTER $event ON ${table.key} BEGIN
+            ${_cloudRevisionWrites(table.value).join(';\n')};
+          END
+        ''');
+      }
     }
   }
 
-  /// Cloud's change mark includes stored band rows and workout writes. The
-  /// workout revision advances in the same transaction as the edit.
+  /// Cloud's change mark covers band rows, workouts and published analysis.
+  /// The revisions advance in the same transaction as their data.
   static Future<String> cloudDataMark() async {
     final db = await instance;
     final row = (await db.rawQuery('''
       SELECT (SELECT MAX(rowid) FROM decoded_onehz) AS raw_mark,
              (SELECT value FROM sync_cursor
-              WHERE name = 'cloud_workout_revision') AS workout_mark
-    ''')).single;
-    return '${row['raw_mark'] ?? 0}:${row['workout_mark'] ?? 0}';
+              WHERE name = ?) AS workout_mark,
+             (SELECT value FROM sync_cursor
+              WHERE name = ?) AS analysis_mark
+    ''', [_cloudWorkoutRevision, _cloudAnalysisRevision])).single;
+    return '${row['raw_mark'] ?? 0}:${row['workout_mark'] ?? 0}:'
+        '${row['analysis_mark'] ?? 0}';
   }
 
   /// The FROZEN personal movement floor (g, dynAmp units) + when it was frozen.
@@ -9658,11 +9674,16 @@ class LocalDb {
     double? value,
   ) async {
     final db = await instance;
-    await db.insert('metric_series', {
-      'date': date,
-      'key': key,
-      'value': value,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.transaction((txn) async {
+      await txn.insert('metric_series', {
+        'date': date,
+        'key': key,
+        'value': value,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      for (final sql in _cloudRevisionWrites(_cloudAnalysisRevision)) {
+        await txn.execute(sql);
+      }
+    });
   }
 
   /// A long-format metric series (oldest first) for trends/sparklines.

@@ -9,7 +9,19 @@ workout counter-reset trimming, nap imports, and dashboard metric reads.
 `da45dbac` keeps saved workouts on the selected past day's Home timeline even
 when daily analysis is absent. Both were pushed to `whoop-ui`.
 
-## Current implementation (algorithm 121)
+## Local stability work (algorithm 122)
+
+- On the Realme test build, the November 3 Home timeline showed the 14:03–14:17
+  ride once. The 05:42–05:54 ride also appeared in My Day.
+- Cloud now detects when saved analysis changes without new band data. Manual
+  reanalysis, sleep edits and background baseline rescans request an upload
+  after the revised results are saved. The encrypted backup format is unchanged.
+- Comparing the November 2 and 3 retained snapshots, changed SQLite pages
+  compressed to essentially the same size as the full backup (49.9 MB each).
+  The equivalent comparison by row key found about 16% of the newer 1 Hz rows
+  had changed, supporting a row-based approach for incremental sync.
+- Incremental sync, paired-band transfer and iPhone verification remain open.
+  The local stability changes have not been pushed.
 
 - Automatic workout detection now uses a ten-minute minimum. Nearby elevated-HR
   fragments merge before the duration gate, so a brief HR dip does not erase a

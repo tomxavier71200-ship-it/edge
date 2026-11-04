@@ -230,6 +230,21 @@ void main() {
     expect(await LocalDb.cloudDataMark(), isNot(edited));
   });
 
+  test('reanalysis and scalar corrections advance the cloud change mark', () async {
+    final before = await LocalDb.cloudDataMark();
+    await LocalDb.putDayResult(
+      dayId: '2026-08-04',
+      algoVersion: 1,
+      payloadJson: '{}',
+      windowJson: '{}',
+      series: {'strain': 3.0},
+    );
+    final analyzed = await LocalDb.cloudDataMark();
+    expect(analyzed, isNot(before));
+    await LocalDb.putMetricSeriesValue('2026-08-04', 'strain', 4.0);
+    expect(await LocalDb.cloudDataMark(), isNot(analyzed));
+  });
+
   test('an older backup cannot replace a user-corrected workout window', () async {
     final row = <String, Object?>{
       'id': 'corrected-workout',

@@ -1789,10 +1789,8 @@ class AppState extends ChangeNotifier {
       // Same signal, for the surfaces that can't listen: home/lock-screen
       // widget, Watch mirror, Siri intents (WidgetService.refresh).
       unawaited(WidgetService.refresh(repo));
-      // Koop Cloud, WHOOP-like: if this pass followed a drain that stored new
-      // rows, the sending phone uploads the full copy now (runIfDue checks the
-      // data mark, spaces bursts 2 min apart, and is a no-op when Koop Cloud
-      // is off or this phone receives).
+      // Cloud checks the data mark after derivation so a newly published
+      // result can be sent even when no additional band rows arrived.
       unawaited(CloudSync.instance
           .runIfDue(importEdgeBackup, importWhoop: importWhoopCsvs));
       // A heavy finalize is where a freshly-closed sleep window + recovery for a
@@ -1808,6 +1806,7 @@ class AppState extends ChangeNotifier {
             final n = await _derive.rescanRecent(_profile);
             if (n > 0) {
               notifyListeners(); // screens re-read the refreshed scalars
+              unawaited(_sendUpdatedAnalysis());
             }
           } catch (e) {
             _log('[derive] rescan failed: $e');
@@ -2248,6 +2247,16 @@ class AppState extends ChangeNotifier {
   /// Empty when idle. Updated per-day as the sweep advances.
   String reanalyzeProgress = '';
 
+  Future<void> _sendUpdatedAnalysis() async {
+    final cloud = CloudSync.instance;
+    if (_disposed || !cloud.on || cloud.role != CloudRole.send) return;
+    try {
+      await cloud.runIfDue(importEdgeBackup, importWhoop: importWhoopCsvs);
+    } catch (e) {
+      _log('Cloud analysis check failed: $e');
+    }
+  }
+
   /// User-initiated "Re-analyze data": force-derive EVERY day that has raw,
   /// ignoring the derived cursor, then refresh the UI. Returns the number of days
   /// derived (for a result message). Use when screens are empty despite stored raw.
@@ -2272,6 +2281,7 @@ class AppState extends ChangeNotifier {
       );
       await LocalDb.refreshComputeFreshness();
       bumpInsights();
+      unawaited(_sendUpdatedAnalysis());
       return n;
     } catch (e) {
       _log('[derive] reanalyze failed: $e');
@@ -2368,6 +2378,7 @@ class AppState extends ChangeNotifier {
       // The day_result rows just changed — without this no RevisionReload screen
       // re-reads, so an override/nap edit only showed up after a restart.
       bumpInsights();
+      unawaited(_sendUpdatedAnalysis());
     } catch (e) {
       _log('[derive] sleep-override re-derive failed: $e');
     } finally {
