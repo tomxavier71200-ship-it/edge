@@ -8858,8 +8858,31 @@ class LocalDb {
     // null when day_result could not be read at all, so the caller can tell
     // "nothing imported" from "we don't know".
     Set<String>? importedDays;
+    final retainedFinalizedVersions = <String, int>{};
+    final newerSeriesDays = <String>{};
     try {
-      for (final t in (only ?? tables)) {
+      final selectedTables = only ?? tables;
+      final protectedKeys = <String>{};
+      const analysisTables = {'day_result', 'metric_series', 'metric_series_version'};
+      if (selectedTables.any(analysisTables.contains)) {
+        final finalized = await db.query(
+          'day_result',
+          columns: ['day_id', 'algo_version'],
+          where: 'finalized = 1',
+        );
+        for (final row in finalized) {
+          final date = row['day_id'];
+          final version = row['algo_version'];
+          protectedKeys.add('$date|$version');
+          if (date is String &&
+              version is int &&
+              version <= kAlgoVersion &&
+              version > (retainedFinalizedVersions[date] ?? -1)) {
+            retainedFinalizedVersions[date] = version;
+          }
+        }
+      }
+      for (final t in selectedTables) {
         try {
           // PAGED SOURCE READ — never `SELECT *` a whole table.
           //
@@ -8911,21 +8934,31 @@ class LocalDb {
           }
           final cols = await destCols(t);
           if (cols.isEmpty) continue; // table absent in THIS build
-          // FINALIZED-DAY PROTECTION: a local day_result row with finalized=1 is
-          // LOCKED (this device's own fully-derived history — the long-term
-          // system of record). A foreign export merged with REPLACE must never
-          // clobber it on a (day_id, algo_version) collision; non-finalized rows
-          // keep the plain REPLACE behavior (the import may well be fresher).
-          var protectedKeys = const <String>{};
-          if (t == 'day_result') {
-            final fin = await db.query(
-              'day_result',
-              columns: ['day_id', 'algo_version'],
-              where: 'finalized = 1',
-            );
-            protectedKeys = {
-              for (final r in fin) '${r['day_id']}|${r['algo_version']}',
-            };
+          if (t == 'metric_series' && retainedFinalizedVersions.isNotEmpty) {
+            // Keep the scalar values with a protected result unless the source
+            // can attribute them to a newer result this build can serve.
+            try {
+              final versions = await src.rawQuery('''
+                SELECT v.date, v.algo_version FROM metric_series_version v
+                JOIN day_result d ON d.day_id = v.date
+                  AND d.algo_version = v.algo_version
+                WHERE v.algo_version <= ?
+              ''', [kAlgoVersion]);
+              for (final row in versions) {
+                final date = row['date'];
+                final version = row['algo_version'];
+                final retained = retainedFinalizedVersions[date];
+                if (date is String &&
+                    version is int &&
+                    retained != null &&
+                    version > retained) {
+                  newerSeriesDays.add(date);
+                }
+              }
+            } on DatabaseException catch (e) {
+              if (!e.isNoSuchTableError()) rethrow;
+              // Legacy backup with no version stamp.
+            }
           }
           var copied = 0;
           var page = firstPage;
@@ -9010,6 +9043,11 @@ class LocalDb {
                     continue; // locally finalized — never overwritten by import
                   }
                   importedDays?.add('${row['day_id']}');
+                }
+                if ((t == 'metric_series' || t == 'metric_series_version') &&
+                    retainedFinalizedVersions.containsKey(row['date']) &&
+                    !newerSeriesDays.contains(row['date'])) {
+                  continue;
                 }
                 // A LEGACY export's decoded_rr carries no rec_ts column; derive
                 // it from rr_ts_ms (= rec_ts*1000) so the NOT NULL PK column is

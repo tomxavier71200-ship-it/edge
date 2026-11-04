@@ -16,6 +16,9 @@ when daily analysis is absent. Both were pushed to `whoop-ui`.
 - Cloud now detects when saved analysis changes without new band data. Manual
   reanalysis, sleep edits and background baseline rescans request an upload
   after the revised results are saved. The encrypted backup format is unchanged.
+- Restores keep a protected finalized result and its matching chart values
+  together. A newer analysis version can replace the displayed result and
+  values when the backup contains both.
 - Comparing the November 2 and 3 retained snapshots, changed SQLite pages
   compressed to essentially the same size as the full backup (49.9 MB each).
   The equivalent comparison by row key found about 16% of the newer 1 Hz rows

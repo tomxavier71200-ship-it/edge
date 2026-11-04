@@ -281,7 +281,7 @@ void main() {
     }
   });
 
-  test('importFromDbFile never overwrites a locally-FINALIZED day_result', () async {
+  test('a backup preserves finalized results and their matching scalars', () async {
     const v = 30;
     await LocalDb.putDayResult(
       dayId: '2026-07-01',
@@ -289,6 +289,7 @@ void main() {
       payloadJson: '{"src":"local-finalized"}',
       windowJson: '{}',
       finalized: true,
+      series: {'strain': 5.0},
     );
     await LocalDb.putDayResult(
       dayId: '2026-07-02',
@@ -296,6 +297,7 @@ void main() {
       payloadJson: '{"src":"local-open"}',
       windowJson: '{}',
       finalized: false,
+      series: {'strain': 5.0},
     );
 
     // Build a foreign export carrying: a collision with the finalized day, a
@@ -316,6 +318,16 @@ void main() {
         PRIMARY KEY (day_id, algo_version)
       )
     ''');
+    await src.execute('''
+      CREATE TABLE metric_series (
+        date TEXT NOT NULL, key TEXT NOT NULL, value REAL, PRIMARY KEY (date, key)
+      )
+    ''');
+    await src.execute('''
+      CREATE TABLE metric_series_version (
+        date TEXT PRIMARY KEY, algo_version INTEGER NOT NULL
+      )
+    ''');
     for (final day in ['2026-07-01', '2026-07-02', '2026-06-30']) {
       await src.insert('day_result', {
         'day_id': day,
@@ -325,6 +337,8 @@ void main() {
         'computed_at': 1,
         'finalized': 1,
       });
+      await src.insert('metric_series', {'date': day, 'key': 'strain', 'value': 7.0});
+      await src.insert('metric_series_version', {'date': day, 'algo_version': v});
     }
     await src.close();
 
@@ -335,10 +349,27 @@ void main() {
         (await LocalDb.dayResult(day))!['payload_json'] as String;
     // Locally finalized → protected.
     expect(await payload('2026-07-01'), '{"src":"local-finalized"}');
+    expect(await LocalDb.metricValueOn('2026-07-01', 'strain'), 5.0);
     // Non-finalized → merge-REPLACE (import wins).
     expect(await payload('2026-07-02'), '{"src":"foreign"}');
+    expect(await LocalDb.metricValueOn('2026-07-02', 'strain'), 7.0);
     // New day → imported.
     expect(await payload('2026-06-30'), '{"src":"foreign"}');
+
+    final updated = await databaseFactory.openDatabase(srcPath);
+    await updated.insert('day_result', {
+      'day_id': '2026-07-01',
+      'algo_version': v + 1,
+      'payload_json': '{"src":"recalculated"}',
+      'computed_at': 2,
+      'finalized': 1,
+    });
+    await updated.update('metric_series_version', {'algo_version': v + 1},
+        where: 'date = ?', whereArgs: ['2026-07-01']);
+    await updated.close();
+    await LocalDb.importFromDbFile(srcPath);
+    expect(await payload('2026-07-01'), '{"src":"recalculated"}');
+    expect(await LocalDb.metricValueOn('2026-07-01', 'strain'), 7.0);
   });
 
   group('sync_ledger real per-chunk rows + sync_quarantine reader', () {
