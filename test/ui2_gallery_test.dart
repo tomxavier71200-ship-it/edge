@@ -43,7 +43,7 @@ void main() {
     await tester.pumpWidget(_wrap(
         const MoreSettingsView(version: '0.9.26 (57)', devMode: false)));
     expect(find.text('Component gallery'), findsNothing);
-    expect(find.text('Developer'), findsNothing);
+    expect(find.text('DEVELOPER'), findsNothing);
     // …and the row that reveals it says nothing about what it does.
     expect(find.text('Version'), findsOneWidget);
   });
@@ -59,7 +59,7 @@ void main() {
     // The list builds lazily; scroll the Developer group into view first.
     await tester.scrollUntilVisible(find.text('Component gallery'), 300,
         scrollable: find.byType(Scrollable).first);
-    expect(find.text('Developer'), findsOneWidget);
+    expect(find.text('DEVELOPER'), findsOneWidget);
     await tester.ensureVisible(find.text('Component gallery'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Component gallery'));

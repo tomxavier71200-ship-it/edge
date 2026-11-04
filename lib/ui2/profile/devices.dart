@@ -1573,7 +1573,9 @@ class MyDevicesView extends StatelessWidget {
                   ),
                   if (sources.isNotEmpty) const SizedBox(height: S.x3),
                 ],
-                if (hasBand && localizedStatus != null) ...[
+                if (hasBand &&
+                    localizedStatus != null &&
+                    localizedStatus.condition != BandCondition.disconnected) ...[
                   _BandConnectionCard(localizedStatus),
                   const SizedBox(height: S.x5),
                 ],

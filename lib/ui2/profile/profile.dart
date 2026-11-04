@@ -137,17 +137,18 @@ Widget settingsGroup(BuildContext c, String title, List<Widget> rows) {
         child: Semantics(
           header: true,
           child: Text(title.toUpperCase(),
+              semanticsLabel: title,
               style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4)),
         ),
       ),
       Surface(
-      pad: const EdgeInsets.symmetric(horizontal: S.x4),
-      child: Column(children: [
-        for (var i = 0; i < rows.length; i++) ...[
-          rows[i],
-          if (i < rows.length - 1) Divider(color: p.line, height: 1),
-        ],
-      ]),
+        pad: const EdgeInsets.symmetric(horizontal: S.x4),
+        child: Column(children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            rows[i],
+            if (i < rows.length - 1) Divider(color: p.line, height: 1),
+          ],
+        ]),
       ),
     ]),
   );
