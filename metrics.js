@@ -26,7 +26,19 @@
     return finite(value) && value > 0 ? value : null;
   }
   const isNap = value => /^(true|yes|1)$/i.test(String(value ?? "").trim());
-  const api = Object.freeze({ finite, sleepWindow, hoursMinutes, recovery, needForNight, isNap });
+  function visibleWorkoutRows(rows) {
+    const seen = new Set();
+    return rows.filter(row => {
+      if (/discard|delet|reject|^duplicate$/i.test(row.status ?? "")) return false;
+      if (row.status !== "done" || row.window_edited === 1 || row.end_ts == null ||
+          !["auto", "detected"].includes(row.source)) return true;
+      const key = JSON.stringify([row.start_ts, row.end_ts, row.type, row.private]);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  const api = Object.freeze({ finite, sleepWindow, hoursMinutes, recovery, needForNight, isNap, visibleWorkoutRows });
   root.KoopMetrics = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
