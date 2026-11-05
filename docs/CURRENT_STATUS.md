@@ -19,6 +19,12 @@ stage table. No sleep measurements or staging rules changed. Whether those
 awake estimates match real wakefulness is still unverified. This follow-up
 requires the owner's approval before another push.
 
+The shared preflight guard also checks the internal analytics/protocol
+fingerprints before Flutter runs. Executable regressions verify matching pins
+pass and either stale fingerprint fails, without relying on network access.
+The test workflow runs these checks with its dashboard reader tests. Publishing
+the rolling iPhone build still runs independently of the full test workflow.
+
 ## Previously delivered
 
 `8f39f03c` corrected observed-duration strain integration, sleep result reuse,

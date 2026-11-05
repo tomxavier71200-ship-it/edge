@@ -42,8 +42,8 @@ fi
 
 for pkg in openstrap_protocol openstrap_analytics; do
   case "$pkg" in
-    openstrap_protocol) repo="protocol" ;;
-    openstrap_analytics) repo="analytics" ;;
+    openstrap_protocol) repo="protocol"; fingerprint="kProtocolPin" ;;
+    openstrap_analytics) repo="analytics"; fingerprint="kAnalyticsPin" ;;
   esac
 
   block=$(awk -v p="  $pkg:" '$0==p{f=1;next} /^  [a-z_]+:/{f=0} f' pubspec.lock)
@@ -71,6 +71,15 @@ for pkg in openstrap_protocol openstrap_analytics; do
     continue
   fi
   echo "$pkg pinned at $pinned, lock agrees."
+
+  recorded=$(awk -F"'" -v name="$fingerprint" \
+    '$0 ~ "^const String " name " = " {print $2; exit}' lib/compute/derivation_engine.dart)
+  if [ "$recorded" != "$pinned" ]; then
+    echo "::error::$fingerprint records '$recorded' but $pkg resolves $pinned."
+    echo "::error::Update the derivation fingerprint and review the algorithm-version bump before release."
+    fail=1
+    continue
+  fi
 
   # Bounded: git ls-remote has no built-in timeout, and this whole probe is
   # supposed to degrade to a warning on any network trouble — an unbounded

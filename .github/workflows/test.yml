@@ -68,8 +68,8 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Dashboard metric readers
-        run: node --test tool/dashboard_metrics_test.cjs
+      - name: Dashboard readers and dependency guard regressions
+        run: node --test tool/dashboard_metrics_test.cjs tool/sibling_pin_guard_test.cjs
 
       # --concurrency=1: the suite uses sqflite_common_ffi against real database
       # files, and parallel workers race on them.
