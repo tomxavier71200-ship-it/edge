@@ -63,6 +63,8 @@ input,select{font:inherit;color:var(--ink);background:var(--card);border:1px sol
 .ranges button{border:0;background:none;padding:5px 12px;border-radius:999px;font:600 12px var(--display);cursor:pointer;color:var(--ink)}
 .ranges button.on{background:var(--today);color:#fff}
 main{max-width:1100px;margin:0 auto;padding:8px 16px 20px;display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px;align-items:start}
+#workout-reviews{max-width:1100px;margin:0 auto;padding:0 16px 20px;font-size:14px}
+#workout-reviews h3{font-size:16px}#workout-reviews p{color:var(--ink2);line-height:1.5;overflow-wrap:anywhere}
 main>section{background:none;padding:0}
 body[data-tab=overview] main{grid-template-columns:1fr}
 body[data-tab=overview] main>.stats{display:none}
@@ -171,6 +173,7 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
   <section class="chart"><h3 id="ch-title">Day Recovery</h3><div class="vs" id="ch-vs"></div><div class="bubbles" id="bubbles"></div><div class="chartbox" id="chartbox"><canvas id="chart"></canvas></div><div class="mcards" id="mcards" hidden></div><div class="zones" id="zones" hidden></div>
     <div class="donutwrap" id="donutwrap" hidden><div class="legend" id="legend"></div><div style="width:180px;height:180px"><canvas id="donut"></canvas></div></div></section>
 </main>
+<section id="workout-reviews" hidden aria-label="Workout reviews"></section>
 <section class="scrub"><div class="scrubin"><div class="scr"><button class="sarrow" id="sprev" aria-label="Previous day">‹</button><div class="smid"><canvas id="scrub" aria-label="Seven days of heart rate; click a day to open it"></canvas><div class="slabels" id="slabels"></div></div><button class="sarrow" id="snext" aria-label="Next day">›</button></div></div></section>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
@@ -355,6 +358,27 @@ function dayCurve(d){
   take(p?.sleep?.window);if(on==null)try{take(JSON.parse(wj||"{}"));}catch{}
   return {pts,on,off};}
 
+function reviewsOn(d){
+  if(!liveDb)return [];
+  let result;
+  try{result=liveDb.exec("SELECT * FROM workout_suggestions WHERE date=? ORDER BY start_ts",[d]);}catch{return [];}
+  if(!result[0])return [];
+  const {columns,values}=result[0];
+  return KoopMetrics.workoutReviews(values.map(v=>Object.fromEntries(columns.map((k,i)=>[k,v[i]]))),sessionsOn(d),...dayBounds(d));
+}
+function renderReviews(){
+  const box=document.getElementById("workout-reviews");box.replaceChildren();
+  const rows=range===1&&tab==="overview"&&!focus?reviewsOn(day):[];
+  box.hidden=rows.length===0;
+  if(!rows.length)return;
+  const title=document.createElement("h3");title.textContent="Workouts to review";box.append(title);
+  const hint=document.createElement("p");hint.textContent="Estimated activity windows. Open this day in the Koop app to confirm, correct or dismiss them.";box.append(hint);
+  for(const row of rows){
+    const line=document.createElement("p"),time=sec=>new Date(sec*1000).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+    line.textContent=`Possible ${String(row.sport||"workout").replace(/_/g," ")} · ${time(row.start_ts)}–${time(row.end_ts)} · ${Math.round((row.end_ts-row.start_ts)/60)} min`;
+    box.append(line);
+  }
+}
 function sessionsOn(d){
   if(!liveDb)return exampleSessions(d);
   const [a,b]=dayBounds(d);let r;
@@ -573,7 +597,7 @@ function strip(){const today=iso(new Date());let end=shift(day,1);if(end>today)e
   document.getElementById("slabels").innerHTML=scrubDays.map(d=>`<button data-d="${d}" class="${d===day?"sel":""}">${new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</button>`).join("");
   document.getElementById("snext").disabled=day>=today;}
 
-function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();
+function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();renderReviews();
   document.getElementById("chartbox").hidden=false;document.getElementById("mcards").hidden=true;
   document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
   Chart.defaults.font.family=css("--num");Chart.defaults.font.size=12;Chart.defaults.color=css("--ink2");Chart.defaults.elements.bar.borderRadius=4;

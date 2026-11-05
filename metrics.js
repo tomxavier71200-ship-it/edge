@@ -38,7 +38,13 @@
       return true;
     });
   }
-  const api = Object.freeze({ finite, sleepWindow, hoursMinutes, recovery, needForNight, isNap, visibleWorkoutRows });
+  function workoutReviews(rows, sessions, start, end) {
+    return rows.filter(row => row.dismissed === 0 && finite(row.start_ts) &&
+      finite(row.end_ts) && row.end_ts > row.start_ts &&
+      row.start_ts >= start && row.start_ts < end &&
+      !sessions.some(s => s.start < row.end_ts && (s.end == null || s.end > row.start_ts)));
+  }
+  const api = Object.freeze({ finite, sleepWindow, hoursMinutes, recovery, needForNight, isNap, visibleWorkoutRows, workoutReviews });
   root.KoopMetrics = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
