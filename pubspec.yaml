@@ -506,7 +506,9 @@ dependencies:
       # nearby HR fragments are merged, so brief HR dips do not erase short
       # workouts. Low-wrist-motion cycling uses a rapid one-minute 12 bpm onset
       # while the slow-drift rejection remains in place.
-      ref: caa1e205cdb3142eaa722cd5f6c5f5243939fa5b
+      # Easy cycling review uses gait, covered motion and a rising HR together.
+      # The ten-minute minimum retains longer supported activity windows.
+      ref: e2abc745aefb70d35661cd84764b307ffc83a00c
 
   # BLE — flutter_blue_plus is the maintained cross-platform GATT client.
   flutter_blue_plus: ^1.36.8

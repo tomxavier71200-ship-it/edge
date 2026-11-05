@@ -374,7 +374,7 @@ class LocalDb {
   /// pass it: sqflite throws `ArgumentError('onCreate must be null if no
   /// version is specified')` BEFORE opening anything when `onCreate` is given
   /// without `version` (sqflite_common database_mixin.dart).
-  static const int schemaVersion = 56;
+  static const int schemaVersion = 57;
 
   /// SQLite caps host parameters per statement (`SQLITE_MAX_VARIABLE_NUMBER` —
   /// only 999 on the builds shipped with older Android/iOS). Any `IN (?, ?, …)`
@@ -1106,6 +1106,12 @@ class LocalDb {
         if (oldV < 56) {
           await _addColumnIfMissing(
             db, 'sessions', 'type_edited_at', 'INTEGER NOT NULL DEFAULT 0',
+          );
+        }
+        if (oldV < 57) {
+          await _createWorkoutSuggestions(db);
+          await _addColumnIfMissing(
+            db, 'workout_suggestions', 'review_only', 'INTEGER NOT NULL DEFAULT 0',
           );
         }
       },
@@ -4275,6 +4281,7 @@ class LocalDb {
         peak_bpm INTEGER,
         duration_min INTEGER,
         sport TEXT,
+        review_only INTEGER NOT NULL DEFAULT 0,
         dismissed INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       )
@@ -4482,6 +4489,7 @@ class LocalDb {
         peak_bpm INTEGER,
         duration_min INTEGER,
         sport TEXT,
+        review_only INTEGER NOT NULL DEFAULT 0,
         dismissed INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       )
@@ -4498,7 +4506,7 @@ class LocalDb {
         'workout_suggestions',
         {
           for (final field in [
-            'end_ts', 'avg_bpm', 'peak_bpm', 'duration_min', 'sport',
+            'end_ts', 'avg_bpm', 'peak_bpm', 'duration_min', 'sport', 'review_only',
           ])
             if (row.containsKey(field)) field: row[field],
         },
@@ -8453,6 +8461,7 @@ class LocalDb {
       await copyRows('journal', where: 'date = ?', whereArgs: [dayId]);
       await copyRows('journal_metric', where: 'date = ?', whereArgs: [dayId]);
       await copyRows('cycle_log', where: 'date = ?', whereArgs: [dayId]);
+      await copyRows('workout_suggestions', where: 'date = ?', whereArgs: [dayId]);
       await copyRows('notifications', where: 'date = ?', whereArgs: [dayId]);
       await copyRows(
         'sleep_session_candidates',
@@ -8877,6 +8886,7 @@ class LocalDb {
       'metric_series',
       'metric_series_version',
       'sessions',
+      'workout_suggestions',
       'notifications',
       'baselines',
       // The devices this phone knows about — so a SECONDARY device's identity
@@ -9082,6 +9092,20 @@ class LocalDb {
                     if (cols.contains(e.key)) e.key: e.value,
                 };
                 if (row.isEmpty) continue;
+                if (t == 'workout_suggestions' && row['dismissed'] != 1) {
+                  final start = row['start_ts'], end = row['end_ts'];
+                  if (start is int && end is int) {
+                    final answered = await txn.rawQuery(
+                      'SELECT 1 FROM workout_suggestions '
+                      'WHERE dismissed = 1 AND start_ts < ? AND end_ts > ? '
+                      'UNION ALL SELECT 1 FROM sessions WHERE start_ts < ? '
+                      "AND (end_ts IS NULL OR end_ts > ?) AND status IN ('done','live') "
+                      'LIMIT 1',
+                      [end, start, end, start],
+                    );
+                    if (answered.isNotEmpty) row['dismissed'] = 1;
+                  }
+                }
                 // This is a local mutation counter, not a portable band cursor.
                 if (t == 'sync_cursor' &&
                     (row['name'] == _cloudWorkoutRevision ||
@@ -9738,6 +9762,7 @@ class LocalDb {
     const tables = {
       'sessions': _cloudWorkoutRevision,
       'day_result': _cloudAnalysisRevision,
+      'workout_suggestions': _cloudAnalysisRevision,
     };
     for (final table in tables.entries) {
       for (final event in ['INSERT', 'UPDATE', 'DELETE']) {

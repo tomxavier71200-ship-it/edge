@@ -99,7 +99,9 @@ AutoLogDecision autoLogDecision({
   required bool answeredOverlap,
   int? liveStartSec,
   int? recordedThroughSec,
+  bool reviewRequired = false,
 }) {
+  if (reviewRequired) return AutoLogDecision.wait;
   if (endSec <= startSec) return AutoLogDecision.skip;
   if (nowSec - endSec < kAutoLogSettleMin * 60) return AutoLogDecision.wait;
   // A late offload can make an incomplete workout look old enough to save.

@@ -985,8 +985,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: caa1e205cdb3142eaa722cd5f6c5f5243939fa5b
-      resolved-ref: caa1e205cdb3142eaa722cd5f6c5f5243939fa5b
+      ref: e2abc745aefb70d35661cd84764b307ffc83a00c
+      resolved-ref: e2abc745aefb70d35661cd84764b307ffc83a00c
       url: "https://github.com/tomxavier71200-ship-it/analytics.git"
     source: git
     version: "1.0.0"

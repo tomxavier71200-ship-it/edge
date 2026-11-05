@@ -61,6 +61,7 @@ import 'onehz_pipeline.dart';
 import 'step_cadence.dart';
 import 'profile.dart';
 import 'bout_trim.dart' show trimGaitEdges;
+import 'cycling_review.dart';
 import 'quiet_level.dart' show personalQuietHrr;
 import 'substrate.dart';
 import 'whoop_calibration.dart'
@@ -1907,7 +1908,10 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // detection minimum is unchanged. Sibling pins are unchanged.
 // 121 → 122: an unobserved HR minute is not proof of recovery and no
 // longer contributes to the run of recovered minutes that ends a ride.
-const int kAlgoVersion = 122;
+// 122 → 123: recover easy cycling as review-only candidates using covered
+// HR, motion and gait (analytics e2abc745), and persist eligible historical
+// candidates beyond 36 hours. Confirmed/dismissed activities remain protected.
+const int kAlgoVersion = 123;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -4942,6 +4946,12 @@ class DerivationEngine {
         }
       }
       for (final sug in blocks.suggestionsToPersist) {
+        if (sug['review_only'] == 1 &&
+            await LocalDb.answeredSuggestionOverlaps(
+              sug['start_ts'] as int, sug['end_ts'] as int,
+            )) {
+          continue;
+        }
         await LocalDb.putWorkoutSuggestion({
           ...sug,
           'created_at': DateTime.now().millisecondsSinceEpoch,
@@ -8885,6 +8895,19 @@ class DerivationEngine {
   /// bout JSON, the mean `hrr_bpm`, the retrospective per-session HRR writes, the
   /// recent-day suggestions to persist, and the freshly-ended notif candidate —
   /// the DB writes + notification are performed by the caller on the main isolate.
+  @visibleForTesting
+  static List<Map<String, dynamic>> workoutSuggestionsForTesting({
+    required Substrate substrate,
+    required String date,
+    required int dayEndSec,
+    required int dataNowSec,
+    int restingBpm = 57,
+    int maxBpm = 190,
+  }) => _computeWorkouts(
+    s: substrate, maxHr: maxBpm, rhrScalar: restingBpm.toDouble(),
+    saved: const [], date: date, dayEndSec: dayEndSec, dataNowSec: dataNowSec,
+  ).suggestionsToPersist;
+
   static _WorkoutCompute _computeWorkouts({
     required Substrate s,
     required int? maxHr,
@@ -9017,9 +9040,8 @@ class DerivationEngine {
         if (hrr != null) r['hrr_bpm'] = hrr;
       }
 
-      // Persist + notify only for RECENT days (≤ ~36 h old) so imports/re-analyze
-      // don't resurface 90 days of prompts.
-      final recent = (dataNowSec - dayEndSec) < 36 * 3600;
+      // Retained recordings can recover missed workouts on older days too.
+      // Notifications remain limited to newly completed activities.
       final toPersist = <Map<String, dynamic>>[];
       ({String id, int durationMin})? notif;
       // ONE definition of the row id. The notification checks the table by it
@@ -9032,7 +9054,7 @@ class DerivationEngine {
       final unmatchedBouts = bouts
           .where((b) => !matchedBoutStarts.contains(b.startSec))
           .toList(growable: false);
-      if (recent && unmatchedBouts.isNotEmpty) {
+      if (unmatchedBouts.isNotEmpty) {
         for (final b in unmatchedBouts) {
           toPersist.add({
             'id': sugId(b.startSec),
@@ -9043,6 +9065,7 @@ class DerivationEngine {
             'peak_bpm': b.peakBpm,
             'duration_min': b.durationMin,
             'sport': b.sport,
+            'review_only': 0,
             'dismissed': 0,
           });
         }
@@ -9059,6 +9082,35 @@ class DerivationEngine {
             id: sugId(newest.startSec),
             durationMin: newest.durationMin,
           );
+        }
+      }
+      if (rhr != null && s.stepCount.isNotEmpty) {
+        final possible = reviewEasyCycling(
+          s, motion,
+          restingBpm: rhr,
+          maxBpm: maxHr ?? ana.AutoWorkoutDetector.defaultMaxHR,
+        );
+        for (final ride in possible) {
+          bool overlaps(int start, int end) =>
+              ride.startSec < end && start < ride.endSec;
+          if (bouts.any((b) => overlaps(b.startSec, b.endSec)) ||
+              saved.any((row) => row['start_ts'] is int &&
+                  overlaps(row['start_ts'] as int,
+                      row['end_ts'] as int? ?? dataNowSec))) {
+            continue;
+          }
+          toPersist.add({
+            'id': sugId(ride.startSec),
+            'date': date,
+            'start_ts': ride.startSec,
+            'end_ts': ride.endSec,
+            'avg_bpm': ride.avgBpm,
+            'peak_bpm': ride.peakBpm,
+            'duration_min': ride.durationMin,
+            'sport': ride.sport,
+            'review_only': 1,
+            'dismissed': 0,
+          });
         }
       }
       return _WorkoutCompute(

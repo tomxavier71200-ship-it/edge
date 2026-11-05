@@ -904,13 +904,15 @@ class CoachBubble extends StatelessWidget {
 /// Nothing is logged from here. Absent when there is nothing waiting or
 /// auto-detection is off (see [activeSuggestions]).
 class DetectedWorkoutCard extends StatefulWidget {
-  const DetectedWorkoutCard({super.key});
+  final String? dayId;
+  const DetectedWorkoutCard({super.key, this.dayId});
 
   @override
   State<DetectedWorkoutCard> createState() => _DetectedWorkoutCardState();
 }
 
-class _DetectedWorkoutCardState extends State<DetectedWorkoutCard> {
+class _DetectedWorkoutCardState extends State<DetectedWorkoutCard>
+    with RevisionReload {
   List<Suggestion> _all = const [];
 
   @override
@@ -920,8 +922,29 @@ class _DetectedWorkoutCardState extends State<DetectedWorkoutCard> {
   }
 
   Future<void> _load() async {
+    final token = beginRead(#suggestions);
+    final day = widget.dayId;
     final s = await activeSuggestions();
-    if (mounted) setState(() => _all = s);
+    if (stillNewest(#suggestions, token)) {
+      setState(() => _all = [
+        for (final suggestion in s)
+          if (day == null || dayLabelOf(DateTime.fromMillisecondsSinceEpoch(
+              suggestion.startTs * 1000)) == day)
+            suggestion,
+      ]);
+    }
+  }
+
+  @override
+  void reload() => _load();
+
+  @override
+  void didUpdateWidget(covariant DetectedWorkoutCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dayId != widget.dayId) {
+      _all = const [];
+      _load();
+    }
   }
 
   @override

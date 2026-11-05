@@ -2864,6 +2864,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             // sensor analysis exists for that date.
             if (homeSections().any((s) => s.id == 'day' && s.on))
               Section('My Day', yourDayCard(c, d)),
+            if (repoOf(c) != null) DetectedWorkoutCard(dayId: d.dayId),
           ] else ...[
             // ── the three rings ──
             //
@@ -2922,7 +2923,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             // Monday and the first days of a month: a door into the report.
             if (isToday && repoOf(c) != null) ?reportCard(c, DateTime.now()),
             // A detected bout waiting for a yes or no. Draws nothing when none is.
-            if (isToday && repoOf(c) != null) const DetectedWorkoutCard(),
+            if (repoOf(c) != null) DetectedWorkoutCard(dayId: d.dayId),
 
             // ── the rollup was withheld, not absent ──
             if (stale != null) ...[const SizedBox(height: S.x3), stale],

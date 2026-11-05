@@ -1,6 +1,6 @@
 # Koop development status
 
-Updated 2026-11-03. Read this with `AGENTS.md`, then only the files relevant to the task.
+Updated 2026-11-05. Read this with `AGENTS.md`, then only the files relevant to the task.
 
 ## Previously delivered
 
@@ -9,7 +9,25 @@ workout counter-reset trimming, nap imports, and dashboard metric reads.
 `da45dbac` keeps saved workouts on the selected past day's Home timeline even
 when daily analysis is absent. Both were pushed to `whoop-ui`.
 
-## Local stability work (algorithm 122)
+## Next update (algorithm 123, schema 57)
+
+Algorithm 123 adds review-only suggestions for easy cycling using the pinned
+analytics revision e2abc745. Replaying the November 4 recording through the app
+with the data edge five days later produced 05:50–06:03 and 14:20–14:30 in
+Workout Review. These are estimates awaiting athlete confirmation. Longer
+supported rides keep their full window. Stored and dismissed sessions exclude
+repeat suggestions.
+
+The 36-hour persistence limit has been removed. Reanalysis can recover older
+candidates where the required recordings remain. Home filters reviews to the
+selected day and refreshes after reanalysis or dismissal. Older recovered
+workouts do not generate a backlog of new-workout notifications.
+
+Encrypted restores now include workout reviews and preserve local dismissals,
+including a shifted overlapping candidate. Saved workouts suppress duplicate
+reviews on import. Review-only edits advance the Cloud change mark, and the
+dashboard Overview shows pending reviews for the selected date without counting
+them as confirmed workouts. Selected-day exports include the reviews too.
 
 - Workout restores preserve the existing sport when a backup has no newer
   sport edit. Schema 56 records sport edit time so a newer correction can be
@@ -34,7 +52,8 @@ when daily analysis is absent. Both were pushed to `whoop-ui`.
   The equivalent comparison by row key found about 16% of the newer 1 Hz rows
   had changed, supporting a row-based approach for incremental sync.
 - Incremental sync, paired-band transfer and iPhone verification remain open.
-  The local stability changes have not been pushed.
+  Build 78 (66a1bd18) contains the prior stability fixes. The incremental Cloud
+  prototype is not part of the algorithm 123 release.
 
 - Automatic workout detection now uses a ten-minute minimum. Nearby elevated-HR
   fragments merge before the duration gate, so a brief HR dip does not erase a

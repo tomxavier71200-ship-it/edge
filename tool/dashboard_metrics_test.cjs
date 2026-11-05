@@ -6,6 +6,27 @@ const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../web/dashboard/index.html'), 'utf8');
 const section = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 
+test('reviews follow the selected day and exclude answered, saved and invalid windows', () => {
+  const row={start_ts:100,end_ts:700,dismissed:0,sport:'cycling'};
+  assert.deepEqual(m.workoutReviews([row],[],0,1000),[row]);
+  assert.deepEqual(m.workoutReviews([row],[],1000,2000),[]);
+  assert.deepEqual(m.workoutReviews([{...row,dismissed:1},{...row,end_ts:50},{...row,start_ts:NaN}],[],0,1000),[]);
+  assert.deepEqual(m.workoutReviews([row],[{start:600,end:800}],0,1000),[]);
+  assert.deepEqual(m.workoutReviews([row],[{start:700,end:800}],0,1000),[row]);
+});
+
+test('the dashboard reads persisted review candidates for the selected past day', () => {
+  const row={start_ts:100,end_ts:700,dismissed:0,sport:'cycling'};
+  const context={KoopMetrics:m,dayBounds:()=>[0,1000],sessionsOn:()=>[],liveDb:{exec(sql,args){
+    assert.match(sql,/FROM workout_suggestions WHERE date=/);
+    assert.deepEqual(Array.from(args),['2026-11-04']);
+    return [{columns:Object.keys(row),values:[Object.values(row)]}];
+  }}};
+  vm.runInNewContext(section('function reviewsOn(d){','function renderReviews(){')+'\nresult=reviewsOn("2026-11-04");',context);
+  assert.equal(context.result.length,1);
+  assert.equal(context.result[0].sport,'cycling');
+});
+
 test('workout history hides retired and exact automatic copies, preserving manual edits', () => {
   const base = {start_ts:100, end_ts:900, type:'cycling', status:'done', source:'detected'};
   const rows = [

@@ -6861,6 +6861,7 @@ class AppState extends ChangeNotifier {
         startSec: st,
         endSec: en,
         nowSec: nowSec,
+        reviewRequired: s['review_only'] == 1,
         recordedThroughSec: _lastRecTs,
         sessions: [for (final o in logged) (sec(o['start_ts']), sec(o['end_ts']))],
         answeredOverlap: await LocalDb.answeredSuggestionOverlaps(st, en),
@@ -6906,7 +6907,7 @@ class AppState extends ChangeNotifier {
       await LocalDb.dismissWorkoutSuggestion(id);
       added++;
       final sessionId = saved['workout_id']?.toString();
-      if (sessionId != null) {
+      if (sessionId != null && nowSec - en < 2 * 3600) {
         unawaited(_notifyDetectedWorkout(
             sessionId: sessionId, startSec: st, endSec: en, type: guess));
       }
