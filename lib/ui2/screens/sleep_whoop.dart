@@ -197,7 +197,7 @@ class StageRangesCard extends StatelessWidget {
                         fontWeight: FontWeight.w700)),
               ]),
             Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: S.x3, children: [
-              Text('DURATION',
+              Text('TIME IN BED',
                   style: F.over.copyWith(
                       color: p.ink2,
                       letterSpacing: 1.4,

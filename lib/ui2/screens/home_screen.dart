@@ -1433,7 +1433,7 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
           LucideIcons.moon,
           C.sleep,
           value: '${perf.round()}%',
-          sub: hm(v),
+          sub: '${hm(v)} ${(l?.sleepDetailAsleep ?? 'ASLEEP').toLowerCase()}',
           frac: perf / 100,
           n: perf.toDouble(),
           fmt: (x) => '${x.round()}%',

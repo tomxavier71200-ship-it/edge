@@ -2,6 +2,23 @@
 
 Updated 2026-11-05. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Follow-up prepared after build 79
+
+Build 79 (`a1a2ff15`) published successfully; its IPA and SideStore manifest
+agree on 0.10.79/79. Android build 84 automatically recalculated retained days
+and showed both November 4 cycling reviews (05:50–06:03, 14:20–14:30).
+CI passed 4,559 tests and skipped 662, with one failed dependency-fingerprint
+assertion: pubspec/lock used e2abc745 but kAnalyticsPin still named caa1e205.
+The follow-up corrects the internal fingerprint; algorithm 123 was already
+bumped and the actual resolved dependency was correct.
+
+On November 4, Home and Sleep detail both read 3h 57m asleep; the 5h 36m sleep
+window includes 1h 39m classified awake (rounded independently). UI labels now
+explicitly distinguish time asleep from time in bed on Home, My Day and the
+stage table. No sleep measurements or staging rules changed. Whether those
+awake estimates match real wakefulness is still unverified. This follow-up
+requires the owner's approval before another push.
+
 ## Previously delivered
 
 `8f39f03c` corrected observed-duration strain integration, sleep result reuse,

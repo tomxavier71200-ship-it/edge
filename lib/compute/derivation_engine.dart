@@ -2087,7 +2087,7 @@ const int kStrainRhrCarryDays = 7;
 //
 // Koop analytics @ 610e56f — workout boundary refinement described in the
 // v116 changelog above. Must match pubspec.yaml exactly.
-const String kAnalyticsPin = 'caa1e205cdb3142eaa722cd5f6c5f5243939fa5b';
+const String kAnalyticsPin = 'e2abc745aefb70d35661cd84764b307ffc83a00c';
 // Repinned to analytics main's tip, which carries BOTH PR #72 (hrv_freq
 // Welch gap guard) and PR #73 (overreachingConjunction rhr quantum guard) —
 // the two independent kAlgoVersion bumps above (93 and 94). Verified both

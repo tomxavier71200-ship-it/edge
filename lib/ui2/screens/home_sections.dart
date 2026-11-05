@@ -507,12 +507,13 @@ Widget yourDayCard(BuildContext c, HomeData d) {
     for (final s in (t['sleep'] as List? ?? const [])) {
       if (s is! Map || s['onset_ts'] is! num || s['wake_ts'] is! num) continue;
       final on = (s['onset_ts'] as num).toInt(), off = (s['wake_ts'] as num).toInt();
-      // The pill holds the time in bed as h:mm, the way WHOOP's sleep pill
-      // reads; the label under it on the Sleep screen says what it measures.
+      // This spans bedtime to wake time, including estimated awake minutes.
+      // Name the measurement so it is not mistaken for Home's time asleep.
       final mins = ((off - on) / 60).round();
       rows.add(_dayRow(c, p, LucideIcons.moon, C.sleep, 'Sleep',
           '${mins ~/ 60}:${(mins % 60).toString().padLeft(2, '0')}',
-          hhmm(on), hhmm(off), () => go(c, SleepDetail(day: past))));
+          hhmm(on), hhmm(off), () => go(c, SleepDetail(day: past)),
+          measurementLabel: 'Time in bed'));
     }
     for (final w in (t['sessions'] as List? ?? const [])) {
       if (w is! Map || w['start_ts'] is! num) continue;
@@ -1151,9 +1152,9 @@ Widget? morningCard(BuildContext c, HomeData d) {
 /// the activity's colour.
 Widget _dayRow(BuildContext c, P p, IconData icon, Color col, String name,
         String value, String start, String end, VoidCallback onTap,
-        {VoidCallback? onEdit}) =>
+        {VoidCallback? onEdit, String? measurementLabel}) =>
     Pressable(
-      semanticLabel: '$name, $value, $start to $end',
+      semanticLabel: '$name, $value${measurementLabel == null ? '' : ' $measurementLabel'}, $start to $end',
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(S.x2, S.x2, S.x3, S.x2),
@@ -1178,11 +1179,16 @@ Widget _dayRow(BuildContext c, P p, IconData icon, Color col, String name,
           ),
           const SizedBox(width: S.x3),
           Expanded(
-            child: Text(name.toUpperCase(),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: F.over.copyWith(
                     color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+              if (measurementLabel != null)
+                Text(measurementLabel, maxLines: 2,
+                    style: F.cap.copyWith(color: p.ink2)),
+            ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text(start, style: F.cap.copyWith(color: p.ink2)),
