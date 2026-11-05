@@ -1911,7 +1911,12 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // 122 → 123: recover easy cycling as review-only candidates using covered
 // HR, motion and gait (analytics e2abc745), and persist eligible historical
 // candidates beyond 36 hours. Confirmed/dismissed activities remain protected.
-const int kAlgoVersion = 123;
+// 123 → 124: stage the complete selected fragmented night, including observed
+// gaps between detection blocks, instead of assuming those gaps are awake.
+// Analytics c620705 keeps the boundaries and unobserved-data protections.
+// 124 → 125: persist each recalculated night's sleep performance in the same
+// scalar fan-out as its duration, so historical scores cannot stay stale.
+const int kAlgoVersion = 125;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2087,7 +2092,7 @@ const int kStrainRhrCarryDays = 7;
 //
 // Koop analytics @ 610e56f — workout boundary refinement described in the
 // v116 changelog above. Must match pubspec.yaml exactly.
-const String kAnalyticsPin = 'e2abc745aefb70d35661cd84764b307ffc83a00c';
+const String kAnalyticsPin = 'c62070540212a5a97df75795c6a48fa640dafbb7';
 // Repinned to analytics main's tip, which carries BOTH PR #72 (hrv_freq
 // Welch gap guard) and PR #73 (overreachingConjunction rhr quantum guard) —
 // the two independent kAlgoVersion bumps above (93 and 94). Verified both
@@ -5110,6 +5115,7 @@ class DerivationEngine {
       series: {
         'rhr': sc('rhr'),
         'rmssd': sc('rmssd'),
+        'sleep_perf': sc('sleep_perf'),
         'sdnn': sc('sdnn'),
         'readiness': sc('readiness'),
         'ln_rmssd': sc('ln_rmssd'),

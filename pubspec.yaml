@@ -508,7 +508,9 @@ dependencies:
       # while the slow-drift rejection remains in place.
       # Easy cycling review uses gait, covered motion and a rising HR together.
       # The ten-minute minimum retains longer supported activity windows.
-      ref: e2abc745aefb70d35661cd84764b307ffc83a00c
+      # Fragmented main sleep is staged over its full selected window; observed
+      # gaps are scored from their readings instead of assumed awake.
+      ref: c62070540212a5a97df75795c6a48fa640dafbb7
 
   # BLE — flutter_blue_plus is the maintained cross-platform GATT client.
   flutter_blue_plus: ^1.36.8

@@ -1629,6 +1629,9 @@ Map<String, dynamic> deriveDayBundle(Map<String, dynamic> inputJson) {
       'rmssd': rmssdScalar,
       'rmssd_whole': rmssdWholeScalar,
       'readiness': readinessScalar,
+      // Persist this night's score with its duration. The cross-day pass only
+      // updates Today; without this, reanalysed past nights keep an old score.
+      'sleep_perf': perfNight,
       // The early estimate (see where it is computed). Null whenever the full
       // score exists, and never charted: it is not a reading of the series.
       'readiness_early': readinessEarlyScalar,

@@ -2,6 +2,53 @@
 
 Updated 2026-11-05. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Fragmented-night correction prepared (algorithm 125)
+
+Analytics c620705 fixes an observed accounting defect: main-sleep detection
+joined adjacent fragments but left intervening observed seconds as assumed
+wake. It now stages the complete selected night through the canonical window
+stager. Boundaries stay unchanged, actual wake can remain wake, and missing
+recordings remain unobserved. Single-fragment and manually selected windows
+keep their existing staging path. Algorithm 125 invalidates older eligible
+results; existing protections keep results when overnight recordings expired.
+
+The complete app replay on a disposable copy of the retained export gave:
+
+| Night | Previous sleep | Replayed sleep | Previous awake | Replayed awake |
+|---|---:|---:|---:|---:|
+| November 2 | 352.2 min | 352.2 min | 11.5 min | 11.5 min |
+| November 3 | 247.1 min | 296.5 min | 86.6 min | 37.1 min |
+| November 4 | 237.1 min | 302.9 min | 98.8 min | 33.0 min |
+
+Home, Sleep detail and stored chart values agreed after reanalysis; saved
+edits and the source export were preserved. These are software replay results,
+not PSG-labelled accuracy measurements. Recovery stayed unavailable in these
+replays; the prior November 4 diagnostics refused its composite for insufficient
+qualified baseline components, a separate issue from the sleep-duration defect.
+The opt-in retained replay reads KOOP_SLEEP_REPLAY_DB/KOOP_SLEEP_REPLAY_DAYS;
+no personal recordings are committed. Analytics checks passed 91 tests with one
+missing-fixture skip. App regression checks passed 68 tests, plus the retained
+seven-night acceptance replay (October 29–November 4). Publication still
+requires owner approval.
+
+Android build 85 verified November 4 Home changing from 3h 57m to 5h 03m
+after automatic version-124 processing. It also exposed a second defect:
+historical sleep performance stayed at its old percentage. Per-day derivation
+now includes that night's computed performance in both the bundle scalars and
+the atomic series fan-out; previously only the cross-day pass wrote today's
+score. Algorithm 125 refreshes those historical scores too. Two focused score
+regressions and the seven-night acceptance replay verify the score matches
+its calculated value in Home and storage. The final focused app batch passed
+56 tests, including provenance and result-retention guards. A further synthetic
+database regression verifies a historical score is replaced even when there
+are too few days for the Today cross-day pass to run.
+
+Android build 86 (algorithm 125) verified automatic historical processing:
+November 4 Home now displays 5h 03m asleep and 46% sleep performance instead
+of 3h 57m and 34%. Its time-in-bed window remains 23:17–04:52. The phone's
+other settings and saved data were preserved. This is a local device build;
+the analytics and app commits have not been pushed.
+
 ## Follow-up prepared after build 79
 
 Build 79 (`a1a2ff15`) published successfully; its IPA and SideStore manifest
