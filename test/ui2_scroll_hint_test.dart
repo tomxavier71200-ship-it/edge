@@ -55,11 +55,10 @@ double _chip(String label, double scale, {required bool active}) {
 }
 
 /// The row's laid-out width: every chip plus a S.x2 separator between them.
-double _row(List<String> labels, double scale, {double pad = S.x4}) {
+double _row(List<String> labels, double scale) {
   var w = S.x2 * (labels.length - 1);
   for (var i = 0; i < labels.length; i++) {
-    final c = _chip(labels[i], scale, active: i == 0);
-    w += pad == S.x4 ? c : c - 2 * (S.x4 - pad);
+    w += _chip(labels[i], scale, active: i == 0);
   }
   return w;
 }
@@ -131,10 +130,40 @@ void main() {
       });
     }
 
-    test('and halving the chip padding does not rescue it either', () {
-      // S.x2 a side is no longer a chip, and it STILL overflows on the
-      // narrowest phone. This is the number that closed "just make it fit".
-      expect(_row(_wellness, 1.0, pad: S.x2), greaterThan(_viewport(360)));
+    testWidgets('all actual tabs remain reachable with comfortable tap targets',
+        (t) async {
+      // Font changes can make a hypothetical tighter row fit. What matters
+      // is the shipped row: every tab must remain reachable and >=44 pt.
+      for (final width in const [360.0, 390.0, 430.0]) {
+        for (final scale in const [1.0, 1.5, 2.0, 3.1]) {
+          for (final labels in const [_wellness, _health]) {
+            _phone(t, width);
+            var picked = -1;
+            await t.pumpWidget(MaterialApp(
+              theme: buildTheme(Brightness.light)
+                  .copyWith(platform: TargetPlatform.iOS),
+              builder: (c, child) => MediaQuery(
+                data: MediaQuery.of(c).copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(body: Center(child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: S.x4),
+                child: SubTabs(labels, 0, (i) => picked = i),
+              ))),
+            ));
+            await t.pumpAndSettle();
+            await _toEnd(t);
+            final last = find.text(labels.last);
+            final hit = find.ancestor(of: last, matching: find.byType(Pressable)).first;
+            expect(t.getSize(hit).width, greaterThanOrEqualTo(S.tap));
+            expect(t.getSize(hit).height, greaterThanOrEqualTo(S.tap));
+            await t.tap(last);
+            expect(picked, labels.length - 1,
+                reason: '${labels.last}, $width pt, ${scale}x text');
+            expect(t.takeException(), isNull);
+          }
+        }
+      }
     });
 
     test('at accessibility text sizes it is not close', () {
