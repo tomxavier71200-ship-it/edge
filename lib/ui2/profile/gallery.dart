@@ -344,6 +344,15 @@ Map<String, Widget> goldenCases() => {
         onSelect: (_) {},
       ),
       'nav_bar': const NavBar('Last night', sub: 'MON 14 AUG'),
+      'home_header': HomeHeader(
+        sideWidth: 108,
+        leading: const SizedBox(width: 108, child: Text('Profile · 12')),
+        trailing: const SizedBox(width: 76, child: Text('Band 78%')),
+        day: DayNav(day: '2026-08-16',
+            days: const ['2026-08-16', '2026-08-15'], onDay: (_) {}),
+      ),
+      'settings_switch': SetRow.toggle(LucideIcons.watch, C.blue,
+          'Band alerts', value: true, onTap: () {}),
       // The stepper every single-day screen wears. Shot mid-history, where
       // both arrows are live and the middle opens the calendar — the state a
       // user spends all their time in once there is more than a week on disk.

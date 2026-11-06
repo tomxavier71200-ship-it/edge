@@ -35,93 +35,165 @@ class SetRow extends StatelessWidget {
   final String title, sub, value;
   final bool danger, chevron;
   final VoidCallback? onTap;
+  final bool? toggleValue;
 
   /// A brand mark in place of [icon] — Lucide has no GitHub/Discord/Reddit
   /// logo, and a generic glyph standing in for one of those is worse than
   /// the extra param. Sized and tinted the same as the [Icon] it replaces.
   final Widget Function(Color tint)? glyph;
 
-  const SetRow(IconData this.icon, this.color, this.title,
-      {super.key,
-      this.sub = '',
-      this.value = '',
-      this.danger = false,
-      this.chevron = true,
-      this.onTap})
-      : glyph = null;
+  const SetRow(
+    IconData this.icon,
+    this.color,
+    this.title, {
+    super.key,
+    this.sub = '',
+    this.value = '',
+    this.danger = false,
+    this.chevron = true,
+    this.onTap,
+  }) : glyph = null,
+       toggleValue = null;
 
-  const SetRow.brand(this.glyph, this.color, this.title,
-      {super.key,
-      this.sub = '',
-      this.value = '',
-      this.danger = false,
-      this.chevron = true,
-      this.onTap})
-      : icon = null;
+  const SetRow.brand(
+    this.glyph,
+    this.color,
+    this.title, {
+    super.key,
+    this.sub = '',
+    this.value = '',
+    this.danger = false,
+    this.chevron = true,
+    this.onTap,
+  }) : icon = null,
+       toggleValue = null;
+
+  /// Binary preferences expose their state and action as one switch to
+  /// VoiceOver/TalkBack, whether the user taps the label or the control.
+  const SetRow.toggle(
+    IconData this.icon,
+    this.color,
+    this.title, {
+    super.key,
+    this.sub = '',
+    required bool value,
+    this.onTap,
+  }) : toggleValue = value,
+       value = '',
+       danger = false,
+       chevron = false,
+       glyph = null;
 
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
     final accent = danger ? C.red : color;
-    return Pressable(
-      onTap: onTap,
-      semanticLabel: [title, if (sub.isNotEmpty) sub, if (value.isNotEmpty) value]
-          .join('. '),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: S.x4),
-        child: Row(children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: danger ? p.wash(C.red) : p.card2,
-            ),
-            child: glyph != null
-                ? glyph!(p.on(accent))
-                : Icon(icon, size: 19, color: p.on(accent)),
+    final label = [
+      title,
+      if (sub.isNotEmpty) sub,
+      if (value.isNotEmpty) value,
+    ].join('. ');
+    final row = LayoutBuilder(
+      builder: (c, constraints) {
+        final stackValue = bigText(c) || constraints.maxWidth < S.tap * 7;
+        final stackToggle = toggleValue != null && stackValue;
+        Widget toggle() => ExcludeSemantics(
+          child: Switch.adaptive(
+            value: toggleValue!,
+            activeTrackColor: p.fill(accent),
+            onChanged: onTap == null ? null : (_) => onTap!(),
           ),
-          const SizedBox(width: S.x3),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title,
-                  style: F.body.copyWith(
-                      color: danger ? p.on(C.red) : p.ink,
-                      fontWeight: FontWeight.w600)),
-              if (value.isNotEmpty && bigText(c))
-                Text(value,
-                    style: F.cap.copyWith(
-                        color: p.ink3, fontWeight: FontWeight.w600)),
-              if (sub.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(sub, style: F.cap.copyWith(color: p.ink3)),
+        );
+        return Pressable(
+          onTap: onTap,
+          semanticLabel: toggleValue == null ? label : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: S.x4),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: R.rMd,
+                    color: p.wash(accent),
+                  ),
+                  child: glyph != null
+                      ? glyph!(p.on(accent))
+                      : Icon(icon, size: 19, color: p.on(accent)),
                 ),
-            ]),
-          ),
-          // THE ROW RULE (see MetricRow): the title is the only flexible part,
-          // so every value in a settings list ends on one right edge. Two flex
-          // children would split the width by ratio and break that column.
-          // The value moves UNDER the title at accessibility sizes instead —
-          // "2026-08-16 04:12" is arbitrary-length, and at 3.1× it pushed
-          // itself and the chevron off the right of every settings screen.
-          if (value.isNotEmpty && !bigText(c)) ...[
-            const SizedBox(width: S.x2),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 112),
-              child: Text(value,
-                  textAlign: TextAlign.end,
-                  style: F.cap.copyWith(color: p.ink3)),
+                const SizedBox(width: S.x3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: F.body.copyWith(
+                          color: danger ? p.on(C.red) : p.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (value.isNotEmpty && stackValue)
+                        Text(
+                          value,
+                          style: F.cap.copyWith(
+                            color: p.ink3,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      if (sub.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            sub,
+                            style: F.cap.copyWith(color: p.ink3),
+                          ),
+                        ),
+                      if (stackToggle) toggle(),
+                    ],
+                  ),
+                ),
+                // THE ROW RULE (see MetricRow): the title is the only flexible part,
+                // so every value in a settings list ends on one right edge. Two flex
+                // children would split the width by ratio and break that column.
+                // The value moves UNDER the title at accessibility sizes instead —
+                // "2026-08-16 04:12" is arbitrary-length, and at 3.1× it pushed
+                // itself and the chevron off the right of every settings screen.
+                if (value.isNotEmpty && !stackValue) ...[
+                  const SizedBox(width: S.x2),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 112),
+                    child: Text(
+                      value,
+                      textAlign: TextAlign.end,
+                      style: F.cap.copyWith(color: p.ink3),
+                    ),
+                  ),
+                ],
+                if (toggleValue != null && !stackToggle) ...[
+                  const SizedBox(width: S.x2),
+                  toggle(),
+                ],
+                if (chevron && !danger) ...[
+                  const SizedBox(width: S.x2),
+                  Icon(LucideIcons.chevronRight, size: 17, color: p.ink3),
+                ],
+              ],
             ),
-          ],
-          if (chevron && !danger) ...[
-            const SizedBox(width: S.x2),
-            Icon(LucideIcons.chevronRight, size: 17, color: p.ink3),
-          ],
-        ]),
-      ),
+          ),
+        );
+      },
+    );
+    if (toggleValue == null) return row;
+    return Semantics(
+      container: true,
+      label: label,
+      toggled: toggleValue,
+      enabled: onTap != null,
+      onTap: onTap,
+      child: ExcludeSemantics(child: row),
     );
   }
 }
@@ -131,26 +203,34 @@ Widget settingsGroup(BuildContext c, String title, List<Widget> rows) {
   final p = P.of(c);
   return Padding(
     padding: const EdgeInsets.only(bottom: S.x5),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.only(left: S.x1, bottom: S.x2),
-        child: Semantics(
-          header: true,
-          child: Text(title.toUpperCase(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: S.x1, bottom: S.x2),
+          child: Semantics(
+            header: true,
+            child: Text(
+              title.toUpperCase(),
               semanticsLabel: title,
-              style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4)),
+              style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4),
+            ),
+          ),
         ),
-      ),
-      Surface(
-        pad: const EdgeInsets.symmetric(horizontal: S.x4),
-        child: Column(children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            rows[i],
-            if (i < rows.length - 1) Divider(color: p.line, height: 1),
-          ],
-        ]),
-      ),
-    ]),
+        Surface(
+          pad: const EdgeInsets.symmetric(horizontal: S.x4),
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                rows[i],
+                if (i < rows.length - 1)
+                  Divider(color: p.line, height: 1, indent: S.x12),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -456,47 +536,50 @@ class _ProfileHero extends StatelessWidget {
         : sources == 0
             ? 'No measurement source connected'
             : '$sources measurement source${sources == 1 ? '' : 's'} connected';
+    final heading = Text(shownName,
+        maxLines: bigText(c) ? null : 2,
+        overflow: TextOverflow.ellipsis,
+        style: F.t2.copyWith(color: p.ink));
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(status, style: F.cap.copyWith(color: p.ink3)),
+        if (s?.storageBytes != null) ...[
+          const SizedBox(height: S.x2),
+          Text('${formatBytes(s!.storageBytes!)} stored on this phone',
+              style: F.over.copyWith(color: p.ink2)),
+        ],
+      ],
+    );
+    final avatar = Container(
+      width: S.x16,
+      height: S.x16,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: p.wash(C.blue)),
+      child: initial == null
+          ? Icon(LucideIcons.user, size: 26, color: p.on(C.blue))
+          : FittedBox(fit: BoxFit.scaleDown,
+              child: Text(initial, style: F.n34.copyWith(
+                  color: p.on(C.blue), fontWeight: FontWeight.w700))),
+    );
+    final identity = Row(children: [
+      avatar,
+      const SizedBox(width: S.x4),
+      Expanded(child: bigText(c) ? heading : Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [heading, const SizedBox(height: S.x1), details],
+      )),
+      const SizedBox(width: S.x2),
+      Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+    ]);
     return Surface(
       onTap: onEdit,
       semanticLabel: '$shownName. $status. Edit profile',
       pad: const EdgeInsets.all(S.x5),
-      child: Row(children: [
-        Container(
-          width: 64,
-          height: 64,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: p.wash(C.blue),
-          ),
-          child: initial == null
-              ? Icon(LucideIcons.user, size: 26, color: p.on(C.blue))
-              : Text(initial,
-                  style: F.n34.copyWith(
-                      color: p.on(C.blue), fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(width: S.x4),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(shownName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: F.t2.copyWith(color: p.ink)),
-              const SizedBox(height: S.x1),
-              Text(status, style: F.cap.copyWith(color: p.ink3)),
-              if (s?.storageBytes != null) ...[
-                const SizedBox(height: S.x2),
-                Text('${formatBytes(s!.storageBytes!)} stored on this phone',
-                    style: F.over.copyWith(color: p.ink2)),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(width: S.x2),
-        Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
-      ]),
+      child: bigText(c) ? Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [identity, const SizedBox(height: S.x3), details],
+      ) : identity,
     );
   }
 }

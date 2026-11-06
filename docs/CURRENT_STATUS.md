@@ -2,6 +2,31 @@
 
 Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Local Apple-guided UI improvements (not published)
+
+The community `wshobson/agents` mobile-ios-design skill is installed in the
+owner's Codex skills directory. Its layout/accessibility guidance was applied
+to Flutter using the existing Koop theme, without adding app dependencies.
+
+- Home's centered day header reflows below the profile/streak and band controls
+  when width or text size would squeeze it. The controls can also wrap.
+- 26 binary settings and notification preferences now use adaptive switches.
+  Label taps, switch taps and accessibility actions retain the existing handlers
+  and expose one toggled-state semantic node. Permission/consent flows remain.
+- Shared settings rows use aligned dividers, consistent icon tiles and stacked
+  values/controls when space is limited. Large navigation titles wrap; Profile
+  gives long names and source/storage details room instead of squeezing them
+  beside the avatar.
+- Widget font loading now includes the bundled Barlow family used in WHOOP mode.
+
+Validation: 244 focused checks passed (layout, navigation, switches, existing
+Home/gallery, design tokens and contrast). The new layout checks use real streak
+and band controls on iOS/Android target themes at 320/390 pt and 1x/2x/3.1x text.
+Six Profile/Settings/Devices renders were generated for review at 1x/2x text.
+Scoped analysis and whitespace checks passed. These are desktop widget checks;
+ADB found no connected Android device. Real-phone verification is pending.
+No calculation, schema, dependency pin or build number changed. No push made.
+
 ## Published build 80 verification
 
 App a811a03f and analytics c620705 are pushed. The iPhone workflow published

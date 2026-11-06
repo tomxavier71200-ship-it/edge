@@ -599,7 +599,6 @@ class MoreSettingsView extends StatelessWidget {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
     final on = l?.stateOn ?? 'On';
-    final off = l?.stateOff ?? 'Off';
     return Scaffold(
       backgroundColor: p.bg,
       body: SafeArea(
@@ -617,11 +616,10 @@ class MoreSettingsView extends StatelessWidget {
                 // app into WHOOP's screens and colours; off is Koop's own
                 // layout, exactly as it was.
                 settingsGroup(c, 'App style', [
-                  SetRow(LucideIcons.palette, C.blue, 'WHOOP mode',
+                  SetRow.toggle(LucideIcons.palette, C.blue, 'WHOOP mode',
                       sub: 'WHOOP’s screens, tabs, dials and colours. Off '
                           'brings back Koop’s own',
-                      value: whoopLook ? on : off,
-                      chevron: false,
+                      value: whoopLook,
                       onTap: onToggleWhoopLook),
                 ]),
                 // No "Edit profile" here. It lives in one place — Quick access
@@ -637,13 +635,12 @@ class MoreSettingsView extends StatelessWidget {
                   // to start buzzing mid-workout. The target-zone row below
                   // only appears once this is on; a target for an alert
                   // that's off is furniture, same rule as battery/water above.
-                  SetRow(LucideIcons.heartPulse, C.red,
+                  SetRow.toggle(LucideIcons.heartPulse, C.red,
                       l?.settingsZoneAlertRowTitle ?? 'HR zone alert',
                       sub: l?.settingsZoneAlertRowSub ??
                           'Buzz when your heart rate crosses into or out of '
                               'the target zone during a live workout',
-                      value: zoneAlertEnabled ? on : off,
-                      chevron: false,
+                      value: zoneAlertEnabled,
                       onTap: onToggleZoneAlert),
                   if (zoneAlertEnabled)
                     SetRow(LucideIcons.target, C.red,
@@ -661,12 +658,12 @@ class MoreSettingsView extends StatelessWidget {
                 // band covers the workout, the phone covers the rest — and
                 // "This phone" is what the sources screen already calls it.
                 settingsGroup(c, l?.settingsGroupThisPhone ?? 'This phone', [
-                  SetRow(LucideIcons.footprints, C.teal,
+                  SetRow.toggle(LucideIcons.footprints, C.teal,
                       l?.settingsStepsRowTitle ?? 'Steps',
                       sub: l?.settingsStepsRowSub ??
                           'This phone’s own step counter, for the hours the '
                               'band doesn’t cover. Nothing leaves the device',
-                      value: phoneSteps ? on : off,
+                      value: phoneSteps,
                       onTap: onTogglePhoneSteps),
                 ]),
                 settingsGroup(
@@ -690,12 +687,12 @@ class MoreSettingsView extends StatelessWidget {
                   // Opt-in, and it says what it does rather than what it is
                   // about — "Cycle tracking" alone leaves you guessing whether
                   // switching it off throws the entries away.
-                  SetRow(LucideIcons.droplet, C.pink,
+                  SetRow.toggle(LucideIcons.droplet, C.pink,
                       l?.settingsCycleTrackingRowTitle ?? 'Cycle tracking',
                       sub: l?.settingsCycleTrackingRowSub ??
                           'Adds the Cycle tab to Wellness. Off hides it and '
                               'keeps everything already logged',
-                      value: cycleTracking ? on : off,
+                      value: cycleTracking,
                       onTap: onToggleCycleTracking),
                 ]),
                 settingsGroup(c, l?.settingsGroupYourData ?? 'Your data', [
@@ -710,11 +707,11 @@ class MoreSettingsView extends StatelessWidget {
                   // was already written and simply had no way to be switched
                   // on, so the write entitlement and usage strings described a
                   // path that could not run.
-                  SetRow(LucideIcons.heartPulse, C.red,
+                  SetRow.toggle(LucideIcons.heartPulse, C.red,
                       l?.settingsWriteToHealthStoreRowTitle(healthStore) ??
                           'Write to $healthStore',
                       sub: healthSyncSub(c, healthSync, healthState, healthStore),
-                      value: healthSync ? on : off,
+                      value: healthSync,
                       onTap: onToggleHealthSync),
                 ]),
                 settingsGroup(c, l?.settingsGroupAutomation ?? 'Automation', [
@@ -742,34 +739,34 @@ class MoreSettingsView extends StatelessWidget {
                       onTap: onAutomation),
                 ]),
                 settingsGroup(c, l?.settingsGroupPrivacy ?? 'Privacy', [
-                  SetRow(LucideIcons.bug, C.orange,
+                  SetRow.toggle(LucideIcons.bug, C.orange,
                       l?.settingsCrashReportsRowTitle ?? 'Crash reports',
                       sub: l?.settingsCrashReportsRowSub ??
                           'Nothing is sent until you say so',
-                      value: telemetry ? on : off,
+                      value: telemetry,
                       onTap: onToggleTelemetry),
                   // The food log's one outbound call. Named by what it sends,
                   // not by the feature it powers — a scan is the only thing
                   // that triggers it and the barcode is the whole payload.
-                  SetRow(LucideIcons.scanBarcode, C.domFood,
+                  SetRow.toggle(LucideIcons.scanBarcode, C.domFood,
                       l?.settingsBarcodeLookupRowTitle ??
                           'Look barcodes up online',
                       sub: l?.settingsBarcodeLookupRowSub ??
                           'Sends a scanned barcode to openfoodfacts.org. '
                               'Nothing about you goes with it',
-                      value: barcodeLookup ? on : off,
+                      value: barcodeLookup,
                       onTap: onToggleBarcodeLookup),
                   if (showHealthShare)
-                    SetRow(LucideIcons.cloudUpload, C.red,
+                    SetRow.toggle(LucideIcons.cloudUpload, C.red,
                         l?.settingsContributeHealthDataRowTitle ??
                             'Contribute my health data',
                         sub: l?.settingsContributeHealthDataRowSub ??
                             'Uploads your whole database once a day, on '
                                 'Wi-Fi and charging, to improve the algorithms',
-                        value: healthShare ? on : off,
+                        value: healthShare,
                         onTap: onToggleHealthShare),
                   if (showUpdateChecks)
-                    SetRow(LucideIcons.refreshCw, C.blue,
+                    SetRow.toggle(LucideIcons.refreshCw, C.blue,
                         l?.settingsCheckForUpdatesRowTitle ??
                             'Check for updates',
                         sub: updateMandatory
@@ -782,7 +779,7 @@ class MoreSettingsView extends StatelessWidget {
                                 : (l?.settingsUpdateCheckSub ??
                                     'Asks the release server on launch. It sees '
                                         'your IP address and when you open the app'),
-                        value: updateChecks ? on : off,
+                        value: updateChecks,
                         onTap: onToggleUpdateChecks),
                 ]),
                 settingsGroup(c, l?.settingsGroupAbout ?? 'About', [
@@ -954,8 +951,6 @@ class NotificationSettingsView extends StatelessWidget {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
-    final on = l?.stateOn ?? 'On';
-    final off = l?.stateOff ?? 'Off';
     void set(NotificationPrefs next) => onChanged?.call(next);
     return Scaffold(
       backgroundColor: p.bg,
@@ -986,49 +981,45 @@ class NotificationSettingsView extends StatelessWidget {
                       c,
                       l?.settingsGroupManageNotifications ??
                           'Manage notifications', [
-                    SetRow(LucideIcons.heartPulse, C.red,
+                    SetRow.toggle(LucideIcons.heartPulse, C.red,
                         l?.settingsHealthExceptionsRowTitle ??
                             'Health exceptions',
                         sub: l?.settingsHealthExceptionsRowSub ??
                             'One a day at most, and only when something in '
                                 'your own baseline moved',
-                        value: prefs.healthEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.healthEnabled,
                         onTap: () => set(prefs.copyWith(
                             healthEnabled: !prefs.healthEnabled))),
-                    SetRow(LucideIcons.watch, C.orange,
+                    SetRow.toggle(LucideIcons.watch, C.orange,
                         l?.settingsBandAlertsRowTitle ?? 'Band alerts',
                         sub: l?.settingsBandAlertsRowSub ??
                             'Flat battery, on the charger, gone quiet',
-                        value: prefs.deviceEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.deviceEnabled,
                         onTap: () => set(prefs.copyWith(
                             deviceEnabled: !prefs.deviceEnabled))),
                     // On by default, unlike the reminders below: this exists to
                     // catch a wake alarm that silently isn't going to fire, and
                     // starting silent would defeat the point.
-                    SetRow(LucideIcons.alarmClock, C.red,
+                    SetRow.toggle(LucideIcons.alarmClock, C.red,
                         l?.settingsAlarmLatchFailedRowTitle ??
                             'Alarm not confirmed',
                         sub: l?.settingsAlarmLatchFailedRowSub ??
                             'Warn when the band never confirms an alarm this '
                                 'app just armed',
-                        value: prefs.alarmLatchFailedEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.alarmLatchFailedEnabled,
                         onTap: () => set(prefs.copyWith(
                             alarmLatchFailedEnabled:
                                 !prefs.alarmLatchFailedEnabled))),
                     // Also on by default, same reasoning: silent whenever an
                     // alarm IS armed for tonight, so it only ever speaks up
                     // about a real gap.
-                    SetRow(LucideIcons.moon, C.red,
+                    SetRow.toggle(LucideIcons.moon, C.red,
                         l?.settingsAlarmNightCheckRowTitle ??
                             'No-alarm check-in',
                         sub: l?.settingsAlarmNightCheckRowSub ??
                             'A 7pm heads-up on any night with no wake alarm '
                                 'armed — silent otherwise',
-                        value: prefs.alarmNightCheckEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.alarmNightCheckEnabled,
                         onTap: () => set(prefs.copyWith(
                             alarmNightCheckEnabled:
                                 !prefs.alarmNightCheckEnabled))),
@@ -1050,27 +1041,25 @@ class NotificationSettingsView extends StatelessWidget {
                     // event behind it again: the morning "recovery is ready"
                     // note. It was cut in the three-class cull and sat dead —
                     // emitted, classified null, dropped.
-                    SetRow(LucideIcons.activity, C.green,
+                    SetRow.toggle(LucideIcons.activity, C.green,
                         l?.settingsRecoveryReadyRowTitle ?? 'Recovery ready',
                         sub: l?.settingsRecoveryReadyRowSub ??
                             'One note when your morning recovery score '
                                 'lands',
-                        value: prefs.recoveryEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.recoveryEnabled,
                         onTap: () => set(prefs.copyWith(
                             recoveryEnabled: !prefs.recoveryEnabled))),
                     // Says what it DOES now: the finding is computed from the
                     // week's own crossday rollup (medical flags first, then a
                     // plainly-stated resting-HR drift), and most weeks still
                     // say nothing — which is the point.
-                    SetRow(LucideIcons.calendarDays, C.purple,
+                    SetRow.toggle(LucideIcons.calendarDays, C.purple,
                         l?.settingsWeeklyLookbackRowTitle ??
                             'Weekly lookback',
                         sub: l?.settingsWeeklyLookbackRowSub ??
                             'Sunday evening, but only for a week that '
                                 'actually found something. Most weeks are quiet',
-                        value: prefs.remindersEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.remindersEnabled,
                         onTap: () => set(prefs.copyWith(
                             remindersEnabled: !prefs.remindersEnabled))),
                     // The auto-detector's off switch, asked for twice (#102,
@@ -1078,29 +1067,25 @@ class NotificationSettingsView extends StatelessWidget {
                     // prompt was emitted, and nothing anywhere could stop
                     // either. The sub-line says exactly what it stops,
                     // because it does NOT stop the detection itself.
-                    SetRow(LucideIcons.radar, C.green,
+                    SetRow.toggle(LucideIcons.radar, C.green,
                         l?.settingsDetectedWorkoutsRowTitle ??
                             'Detected workouts',
                         sub: l?.settingsDetectedWorkoutsRowSub ??
                             'Ask about efforts the band spotted that you did '
                                 'not start. Off hides the prompt and the review '
                                 'cards; the band goes on measuring either way',
-                        value: prefs.autoDetectEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.autoDetectEnabled,
                         onTap: () => set(prefs.copyWith(
                             autoDetectEnabled: !prefs.autoDetectEnabled))),
                     // WHOOP's behaviour: a detected effort is logged as an
                     // activity on its own (marked Auto-detected) instead of
                     // waiting to be confirmed. Delete one and it stays gone.
-                    StatefulBuilder(builder: (c, setRow) => SetRow(LucideIcons.listPlus, C.green,
+                    StatefulBuilder(builder: (c, setRow) => SetRow.toggle(LucideIcons.listPlus, C.green,
                         'Add detected workouts automatically',
                         sub: 'Log efforts the band spotted as activities, '
                             'marked Auto-detected, like WHOOP. Off leaves them '
                             'as suggestions to confirm',
-                        value: Prefs.getBool(AppState.kAutoLogWorkoutsKey, true)
-                            ? on
-                            : off,
-                        chevron: false,
+                        value: Prefs.getBool(AppState.kAutoLogWorkoutsKey, true),
                         onTap: () => setRow(() => Prefs.setBool(
                             AppState.kAutoLogWorkoutsKey,
                             !Prefs.getBool(AppState.kAutoLogWorkoutsKey, true))))),
@@ -1111,51 +1096,47 @@ class NotificationSettingsView extends StatelessWidget {
                     // sedentary surfaces: the OS-scheduled two-hour-still
                     // one-shot, and the foreground desk-posture check (which
                     // also buzzes the band when it fires).
-                    SetRow(LucideIcons.footprints, C.orange,
+                    SetRow.toggle(LucideIcons.footprints, C.orange,
                         l?.settingsMovementNudgeRowTitle ?? 'Movement nudge',
                         sub: l?.settingsMovementNudgeRowSub ??
                             'Nudges you after a still stretch — two hours '
                                 'with no movement at all, or 90 minutes in a '
                                 'desk posture. Phone notification plus a buzz '
                                 'on the band while it is connected',
-                        value: prefs.movementEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.movementEnabled,
                         onTap: () => set(prefs.copyWith(
                             movementEnabled: !prefs.movementEnabled))),
                     // WHOOP's daily stress summary: one note in the evening
                     // with the day's measured stress. Opt-in.
-                    SetRow(LucideIcons.brain, C.green, 'Daily stress summary',
+                    SetRow.toggle(LucideIcons.brain, C.green, 'Daily stress summary',
                         sub: 'One note after 8 pm with your time at high and '
                             'medium stress today and its peak. Needs an hour '
                             'of readings',
-                        value: prefs.stressSummaryEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.stressSummaryEnabled,
                         onTap: () => set(prefs.copyWith(
                             stressSummaryEnabled:
                                 !prefs.stressSummaryEnabled))),
                     // The wind-down nudge. Silent until the Sleep Coach has
                     // actually LEARNED a bedtime — the nudge's whole content
                     // is that time, so there is no honest fallback.
-                    SetRow(LucideIcons.moonStar, C.indigo,
+                    SetRow.toggle(LucideIcons.moonStar, C.indigo,
                         l?.settingsWindDownRowTitle ?? 'Wind-down',
                         sub: l?.settingsWindDownRowSub ??
                             'A heads-up about 45 minutes before the bedtime '
                                 'learned from your own nights, kept clear of your '
                                 'quiet hours. Appears after about a week of wear',
-                        value: prefs.windDownEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.windDownEnabled,
                         onTap: () => set(prefs.copyWith(
                             windDownEnabled: !prefs.windDownEnabled))),
                     // The step-goal achievement's off switch. On by default:
                     // once a day at most, and only on a real crossing.
-                    SetRow(LucideIcons.trophy, C.orange,
+                    SetRow.toggle(LucideIcons.trophy, C.orange,
                         l?.settingsStepGoalAlertsRowTitle ??
                             'Step goal alerts',
                         sub: l?.settingsStepGoalAlertsRowSub ??
                             'Tells you once when today crosses your steps '
                                 'goal',
-                        value: prefs.stepGoalEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.stepGoalEnabled,
                         onTap: () => set(prefs.copyWith(
                             stepGoalEnabled: !prefs.stepGoalEnabled))),
                     // The one prompt whose time is not a guess: it is the
@@ -1163,7 +1144,7 @@ class NotificationSettingsView extends StatelessWidget {
                     // dose still due is armed, and the notification names no
                     // drug — it lands on a lock screen in front of whoever is
                     // in the room.
-                    SetRow(LucideIcons.pill, C.blue,
+                    SetRow.toggle(LucideIcons.pill, C.blue,
                         l?.settingsMedicationRemindersRowTitle ??
                             'Medication reminders',
                         sub: l?.settingsMedicationRemindersRowSub ??
@@ -1171,34 +1152,31 @@ class NotificationSettingsView extends StatelessWidget {
                                 'times you entered — with a buzz on the band if '
                                 'it is connected. Nothing is sent for a dose '
                                 'already marked taken or skipped',
-                        value: prefs.medsEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.medsEnabled,
                         onTap: () =>
                             set(prefs.copyWith(medsEnabled: !prefs.medsEnabled))),
                     // ONE prompt for the whole journal, not one per field —
                     // mood, energy, stress and the rest are all the same
                     // screen, so five rows would be five interruptions for one
                     // minute of typing.
-                    SetRow(LucideIcons.notebookPen, C.purple,
+                    SetRow.toggle(LucideIcons.notebookPen, C.purple,
                         l?.settingsDailyCheckInRowTitle ?? 'Daily check-in',
                         sub: l?.settingsDailyCheckInRowSub ??
                             'One prompt in the evening to write the day — '
                                 'mood, energy, stress. Skipped once the day '
                                 'already has a rating in it',
-                        value: prefs.checkInEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.checkInEnabled,
                         onTap: () => set(prefs.copyWith(
                             checkInEnabled: !prefs.checkInEnabled))),
                     // A prompt to log, not a reading. The app measures no
                     // hydration and this row may never imply it does.
-                    SetRow(LucideIcons.glassWater, C.teal,
+                    SetRow.toggle(LucideIcons.glassWater, C.teal,
                         l?.settingsWaterReminderRowTitle ?? 'Water reminder',
                         sub: l?.settingsWaterReminderRowSub ??
                             'A buzz on the strap and a notification on your '
                                 'phone through your waking hours, to remind you to '
                                 'log a drink. Nothing is measured either way',
-                        value: prefs.waterEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.waterEnabled,
                         onTap: () => set(
                             prefs.copyWith(waterEnabled: !prefs.waterEnabled))),
                     // only while it's on — the group is dense enough, and an
@@ -1227,12 +1205,11 @@ class NotificationSettingsView extends StatelessWidget {
                           onTap: () => goto(c, const BandNotifications())),
                     ]),
                   settingsGroup(c, l?.settingsGroupQuietHours ?? 'Quiet hours', [
-                    SetRow(LucideIcons.moon, C.indigo,
+                    SetRow.toggle(LucideIcons.moon, C.indigo,
                         l?.settingsQuietHoursRowTitle ?? 'Quiet hours',
                         sub: l?.settingsQuietHoursRowSub ??
                             'Nothing buzzes inside this window',
-                        value: prefs.quietEnabled ? on : off,
-                        chevron: false,
+                        value: prefs.quietEnabled,
                         onTap: () => set(
                             prefs.copyWith(quietEnabled: !prefs.quietEnabled))),
                     SetRow(LucideIcons.sunset, C.blue,
@@ -1251,11 +1228,10 @@ class NotificationSettingsView extends StatelessWidget {
                           final v = await _pickMinute(c, prefs.quietEndMin);
                           if (v != null) set(prefs.copyWith(quietEndMin: v));
                         }),
-                    SetRow(LucideIcons.triangleAlert, C.red,
+                    SetRow.toggle(LucideIcons.triangleAlert, C.red,
                         l?.settingsHealthExceptionsBreakThroughRowTitle ??
                             'Health exceptions break through',
-                        value: prefs.criticalOverridesQuiet ? on : off,
-                        chevron: false,
+                        value: prefs.criticalOverridesQuiet,
                         onTap: () => set(prefs.copyWith(
                             criticalOverridesQuiet:
                                 !prefs.criticalOverridesQuiet))),

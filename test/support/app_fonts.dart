@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 
 /// Directory under assets/fonts → the family name the tokens use.
 const _families = {
+  'Barlow': 'Barlow',
   'Montserrat': 'Montserrat',
   'BarlowSemiCondensed': 'Barlow Semi Condensed',
   'BarlowCondensed': 'Barlow Condensed',

@@ -2462,6 +2462,62 @@ class NoData extends StatelessWidget {
   }
 }
 
+/// Home keeps its day centered, moving it below the controls when the
+/// controls would otherwise squeeze the date or the user's text size.
+class HomeHeader extends StatelessWidget {
+  final Widget leading, day, trailing;
+  final double sideWidth;
+
+  const HomeHeader({
+    super.key,
+    required this.leading,
+    required this.day,
+    required this.trailing,
+    required this.sideWidth,
+  });
+
+  @override
+  Widget build(BuildContext c) => LayoutBuilder(
+    builder: (c, constraints) {
+      final minimumDayWidth = MediaQuery.textScalerOf(c).scale(S.tap * 4);
+      final reservedSide = MediaQuery.textScalerOf(c).scale(sideWidth)
+          .clamp(sideWidth, double.infinity);
+      if (constraints.maxWidth - reservedSide * 2 < minimumDayWidth) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: S.x2,
+                runSpacing: S.x2,
+                children: [leading, trailing],
+              ),
+            ),
+            const SizedBox(height: S.x2),
+            day,
+          ],
+        );
+      }
+      return Row(
+        children: [
+          SizedBox(
+            width: reservedSide,
+            child: Align(alignment: Alignment.centerLeft, child: leading),
+          ),
+          Expanded(child: day),
+          SizedBox(
+            width: reservedSide,
+            child: Align(alignment: Alignment.centerRight, child: trailing),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 /// The pushed-screen header. Back → title → one optional action.
 class NavBar extends StatelessWidget {
   final String title;
@@ -2519,14 +2575,16 @@ class NavBar extends StatelessWidget {
                           letterSpacing: 2,
                           fontWeight: FontWeight.w700)
                       : F.head.copyWith(color: p.ink),
-                  maxLines: 1,
+                  maxLines: bigText(c) ? 2 : 1,
+                  textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (sub.isNotEmpty)
                   Text(
                     sub,
                     style: F.over.copyWith(color: p.ink3),
-                    maxLines: 1,
+                    maxLines: bigText(c) ? 2 : 1,
+                    textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
                   ),
               ],

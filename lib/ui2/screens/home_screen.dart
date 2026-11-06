@@ -2708,51 +2708,40 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                                 pt.t * 1000)): readinessBand(pt.v, l).color,
                         },
                       );
-                return SizedBox(
-                  height: 44,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          _circle(
-                            c,
-                            LucideIcons.user,
-                            l?.homeProfileSettings ?? 'Profile and settings',
-                            () => go(c, const ProfileHome()),
+                return HomeHeader(
+                  sideWidth: side,
+                  leading: Row(mainAxisSize: MainAxisSize.min, children: [
+                    _circle(
+                      c,
+                      LucideIcons.user,
+                      l?.homeProfileSettings ?? 'Profile and settings',
+                      () => go(c, const ProfileHome()),
+                    ),
+                    if (streak case final n when n >= 2) ...[
+                      const SizedBox(width: S.x2),
+                      StreakChip(
+                        n: n,
+                        ignite: _igniteFor(n),
+                        onTap: () => go(
+                          c,
+                          StreakScreen(
+                            current: n,
+                            points: d.series['readiness'] ??
+                                const <ChartPoint>[],
                           ),
-                          if (streak case final n when n >= 2) ...[
-                            const SizedBox(width: S.x2),
-                            StreakChip(
-                              n: n,
-                              ignite: _igniteFor(n),
-                              onTap: () => go(
-                                c,
-                                StreakScreen(
-                                  current: n,
-                                  points: d.series['readiness'] ??
-                                      const <ChartPoint>[],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ]),
-                      ),
-                      Positioned(left: side, right: side, child: day),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Look.whoop
-                            ? WhoopBandBadge(
-                                paired: bandNameOf(c) != null,
-                                connected: bandConnectedOf(c),
-                                battery: deviceBatteryOf(c),
-                                onTap: () => go(c, const MyDevices()),
-                              )
-                            : const SizedBox(width: 40),
+                        ),
                       ),
                     ],
-                  ),
+                  ]),
+                  day: day,
+                  trailing: Look.whoop
+                      ? WhoopBandBadge(
+                          paired: bandNameOf(c) != null,
+                          connected: bandConnectedOf(c),
+                          battery: deviceBatteryOf(c),
+                          onTap: () => go(c, const MyDevices()),
+                        )
+                      : const SizedBox(width: 40),
                 );
               },
             ),
