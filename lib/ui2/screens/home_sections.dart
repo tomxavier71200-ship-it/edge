@@ -89,6 +89,7 @@ const kDashMetrics = [
   'time_in_bed',
   'weight',
   'lean_mass',
+  'cigarettes',
 ];
 
 /// On by default: WHOOP's dashboard set, as far as this app stores it.
@@ -97,6 +98,7 @@ const _dashDefaultOn = {
   'efficiency', 'readiness', 'avg_hr', 'sleep_need', 'zones_13', //
   'zones_45', 'strength_min', 'vo2max', 'sleep_perf', 'restorative_pct', //
   'sleep_debt', 'consistency',
+  'cigarettes',
   // Off by default, as WHOOP lists them under "Add to my dashboard":
   // zones_all, restorative_h, time_in_bed, weight, lean_mass.
   // 'stress_graph' stays off by default: Home's Stress Monitor tile already
@@ -146,7 +148,7 @@ void setDashMetrics(List<({String id, bool on})> v) {
   homeLayoutRev.value++;
 }
 
-String dashName(String k) => _dashSpec(k).title;
+String dashName(String k) => k == 'cigarettes' ? 'Cigarettes' : _dashSpec(k).title;
 
 String _fmt(String k, double v) => switch (k) {
       'sleep' || 'deep' || 'rem' || 'sleep_need' || 'sleep_debt' || //
@@ -210,21 +212,18 @@ Widget dashboardCard(BuildContext c, HomeData d, VoidCallback onEdit) {
   final shown = dashMetrics().where((m) => m.on).toList();
   // One card per metric, WHOOP's dashboard: a stack, not rows in one box.
   if (shown.isEmpty) {
-    return Column(children: [
-      _CigaretteDashboard(date: d.pastDay ?? todayLabel()),
-      const SizedBox(height: S.x2),
-      Surface(
-        onTap: onEdit,
-        child: Text('No metrics picked. Tap Edit to add some.',
-            style: F.body.copyWith(color: p.ink3)),
-      ),
-    ]);
+    return Surface(
+      onTap: onEdit,
+      child: Text('No metrics picked. Tap Edit to add some.',
+          style: F.body.copyWith(color: p.ink3)),
+    );
   }
   return Column(children: [
-    _CigaretteDashboard(date: d.pastDay ?? todayLabel()),
     for (var i = 0; i < shown.length; i++) ...[
       if (i > 0) const SizedBox(height: S.x2),
-      if (shown[i].id == 'stress_graph')
+      if (shown[i].id == 'cigarettes')
+        _CigaretteDashboard(date: d.pastDay ?? todayLabel())
+      else if (shown[i].id == 'stress_graph')
         const StressDashRow()
       else
         _dashRow(

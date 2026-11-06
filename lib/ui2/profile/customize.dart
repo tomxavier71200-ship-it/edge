@@ -172,6 +172,14 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
                 _sections = _flip(_sections, i);
                 setHomeSections(_sections);
               }),
+              onMoveToBottom: _sections[i].id == 'tonight' && i < _sections.length - 1
+                  ? () => setState(() {
+                      final moved = [..._sections];
+                      moved.add(moved.removeAt(i));
+                      _sections = moved;
+                      setHomeSections(_sections);
+                    })
+                  : null,
             ),
         ]),
       ),
@@ -334,17 +342,24 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
   }
 
   /// An ordered row: optional eye toggle, the name, up and down.
-  Widget _row(BuildContext c, String name, bool? on, int i, int n,
-      void Function(int d) move,
-      {VoidCallback? onToggle}) {
+  Widget _row(
+    BuildContext c,
+    String name,
+    bool? on,
+    int i,
+    int n,
+    void Function(int d) move, {
+    VoidCallback? onToggle,
+    VoidCallback? onMoveToBottom,
+  }) {
     final p = P.of(c);
     Widget btn(IconData icon, String label, VoidCallback? onTap, Color col) =>
         Pressable(
           semanticLabel: label,
           onTap: onTap,
           child: Container(
-            width: 40,
-            height: 40,
+            width: S.tap,
+            height: S.tap,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: p.card2, borderRadius: R.rSm),
             child: Icon(icon, size: 18, color: onTap == null ? p.line : col),
@@ -353,23 +368,61 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
     final shown = on ?? true;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: S.x2),
-      child: Row(children: [
-        if (on != null) ...[
-          btn(on ? LucideIcons.eye : LucideIcons.eyeOff,
-              on ? 'Hide $name' : 'Show $name', onToggle,
-              on ? p.on(p.accent) : p.ink3),
-          const SizedBox(width: S.x3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              if (on != null) ...[
+                btn(
+                  on ? LucideIcons.eye : LucideIcons.eyeOff,
+                  on ? 'Hide $name' : 'Show $name',
+                  onToggle,
+                  on ? p.on(p.accent) : p.ink3,
+                ),
+                const SizedBox(width: S.x3),
+              ],
+              Expanded(
+                child: Text(
+                  name,
+                  style: F.body.copyWith(color: shown ? p.ink : p.ink3),
+                ),
+              ),
+              btn(
+                LucideIcons.chevronUp,
+                'Move $name up',
+                i == 0 ? null : () => move(-1),
+                p.ink2,
+              ),
+              const SizedBox(width: S.x2),
+              btn(
+                LucideIcons.chevronDown,
+                'Move $name down',
+                i == n - 1 ? null : () => move(1),
+                p.ink2,
+              ),
+            ],
+          ),
+          if (onMoveToBottom != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Pressable(
+                onTap: onMoveToBottom,
+                semanticLabel: 'Move $name to bottom',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: S.x3),
+                  child: Text(
+                    'Move to bottom',
+                    style: F.cap.copyWith(
+                      color: p.on(p.accent),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
-        Expanded(
-          child:
-              Text(name, style: F.body.copyWith(color: shown ? p.ink : p.ink3)),
-        ),
-        btn(LucideIcons.chevronUp, 'Move $name up',
-            i == 0 ? null : () => move(-1), p.ink2),
-        const SizedBox(width: S.x2),
-        btn(LucideIcons.chevronDown, 'Move $name down',
-            i == n - 1 ? null : () => move(1), p.ink2),
-      ]),
+      ),
     );
   }
 }

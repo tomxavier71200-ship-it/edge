@@ -2,6 +2,36 @@
 
 Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Local typography and customization follow-up (not pushed)
+
+The owner reviewed bundled-font specimens and selected **Montserrat text with
+Barlow numbers**. Shared UI2 tokens, its Material fallback and the root theme
+now use Montserrat for text, retaining body/caption sizes and system text scaling.
+WHOOP-mode score numerals remain Barlow. No WHOOP font assets were copied.
+
+Home sections and grouped settings share a restrained section-heading style.
+WHOOP-mode settings rows use larger labels and neutral icon tiles; destructive
+actions retain their warning colour, and switches retain their state colour.
+Shared changes reach Profile, More, deeper settings and band controls using those
+components. This is a shared-component polish pass, not verification of every
+screen or motion on a physical iPhone.
+
+Cigarettes is now an ordered Dashboard item in Customize, appended at the bottom
+for existing layouts. Moving/hiding it preserves logs, other metric order and
+visibility, and wrist-action preferences. Tonight's Sleep remains a Home section
+with a one-tap Move to bottom shortcut. The other sections keep their settings.
+
+Validation: 259 targeted functional/layout/contrast/offline-font checks passed;
+scoped analysis of the ten changed Dart files passed. Narrow 320/390pt iPhone
+themes and text scales through 3.1 were checked. Fresh shared-component and font
+previews were rendered with sample data and visually reviewed outside Git.
+The older optional onboarding/profile screenshot suite did not pass: this
+worktree has incomplete, untracked local golden images, and existing images
+predate the changed typography. Those baselines were preserved, not overwritten.
+The Flutter web build target is unavailable (the web dashboard is separate), and
+native iOS building/device verification require a Mac/iPhone release workflow.
+No schema, algorithm, dependency or release version changed. Nothing pushed.
+
 ## Local cigarette history and accidental-entry protection
 
 The cigarette dashboard card now includes 7-day and 30-day daily bar graphs,

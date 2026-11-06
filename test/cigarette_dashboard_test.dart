@@ -5,6 +5,8 @@ import 'package:openstrap_edge/data/journal_fields.dart';
 import 'package:openstrap_edge/data/local_repository.dart';
 import 'package:openstrap_edge/gestures/device_action.dart';
 import 'package:openstrap_edge/state/app_state.dart';
+import 'package:openstrap_edge/state/prefs.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openstrap_edge/ui2/screens/home_screen.dart';
 import 'package:openstrap_edge/ui2/screens/home_sections.dart';
 import 'package:openstrap_edge/ui2/theme.dart';
@@ -50,6 +52,43 @@ class _JournalRepo extends LocalRepository {
 void main() {
   setUpAll(loadAppFonts);
 
+  testWidgets('dashboard honors cigarette order and hiding without deleting logs', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    await Prefs.ensureLoaded();
+    addTearDown(() => Prefs.setString('ui.dash_metrics', ''));
+    final app = AppState.forTesting();
+    addTearDown(app.dispose);
+    final repo = _JournalRepo();
+    app.repo = repo;
+    Widget show() => MaterialApp(
+      theme: buildTheme(Brightness.dark),
+      home: ChangeNotifierProvider.value(value: app,
+        child: Scaffold(body: SingleChildScrollView(child: Builder(
+          builder: (c) => dashboardCard(c,
+            HomeData(dayId: '2026-11-06', pastDay: '2026-11-06'), () {}))))));
+    void select(List<({String id, bool on})> first) => setDashMetrics([
+      ...first,
+      for (final id in kDashMetrics)
+        if (!first.any((item) => item.id == id)) (id: id, on: false),
+    ]);
+    select([(id: 'hrv', on: true), (id: 'cigarettes', on: true)]);
+    await t.pumpWidget(show());
+    await t.pumpAndSettle();
+    expect(t.getTopLeft(find.text('HRV')).dy,
+      lessThan(t.getTopLeft(find.byType(CigaretteLogCard)).dy));
+    select([(id: 'cigarettes', on: true), (id: 'hrv', on: true)]);
+    await t.pumpWidget(show());
+    await t.pumpAndSettle();
+    expect(t.getTopLeft(find.byType(CigaretteLogCard)).dy,
+      lessThan(t.getTopLeft(find.text('HRV')).dy));
+    select([(id: 'cigarettes', on: false), (id: 'hrv', on: true)]);
+    await t.pumpWidget(show());
+    await t.pumpAndSettle();
+    expect(find.byType(CigaretteLogCard), findsNothing);
+    expect(repo.counts['2026-11-06']!.value, 3);
+    expect(t.takeException(), isNull);
+  });
+
   testWidgets(
     'dashboard reads the selected day and refreshes after a wrist entry',
     (t) async {
@@ -90,6 +129,8 @@ void main() {
       final current = t.widget<CigaretteLogCard>(find.byType(CigaretteLogCard));
       expect(current.count, 4);
       expect(current.lastMinute, 900);
+      await t.ensureVisible(find.text('Remove one'));
+      await t.pumpAndSettle();
       await t.tap(find.text('Remove one'));
       await t.pumpAndSettle();
       expect(

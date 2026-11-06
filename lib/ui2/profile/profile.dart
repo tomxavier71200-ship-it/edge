@@ -117,11 +117,12 @@ class SetRow extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     borderRadius: R.rMd,
-                    color: p.wash(accent),
+                    color: Look.whoop && !danger ? p.card2 : p.wash(accent),
                   ),
                   child: glyph != null
-                      ? glyph!(p.on(accent))
-                      : Icon(icon, size: 19, color: p.on(accent)),
+                      ? glyph!(Look.whoop && !danger ? p.ink2 : p.on(accent))
+                      : Icon(icon, size: 19,
+                          color: Look.whoop && !danger ? p.ink2 : p.on(accent)),
                 ),
                 const SizedBox(width: S.x3),
                 Expanded(
@@ -130,7 +131,7 @@ class SetRow extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: F.body.copyWith(
+                        style: F.settingsTitle.copyWith(
                           color: danger ? p.on(C.red) : p.ink,
                           fontWeight: FontWeight.w600,
                         ),
@@ -202,7 +203,7 @@ class SetRow extends StatelessWidget {
 Widget settingsGroup(BuildContext c, String title, List<Widget> rows) {
   final p = P.of(c);
   return Padding(
-    padding: const EdgeInsets.only(bottom: S.x5),
+    padding: EdgeInsets.only(bottom: Look.compact ? S.x4 : S.x6),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -213,7 +214,8 @@ Widget settingsGroup(BuildContext c, String title, List<Widget> rows) {
             child: Text(
               title.toUpperCase(),
               semanticsLabel: title,
-              style: F.over.copyWith(color: p.ink2, letterSpacing: 1.4),
+              style: (Look.whoop ? F.section : F.over)
+                  .copyWith(color: p.ink2),
             ),
           ),
         ),

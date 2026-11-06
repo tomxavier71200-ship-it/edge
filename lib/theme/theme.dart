@@ -17,7 +17,7 @@
 //    do on first use. SIL Open Font License (OFL.txt ships alongside the
 //    .ttf files).
 //  - Everything else (`h1`/`h2`/`title`/`body`/`bodySoft`/`label`/`caption`/
-//    `overline`) uses Manrope, bundled the same way (assets/fonts/Manrope/
+//    `overline`) uses Montserrat, bundled the same way (assets/fonts/Montserrat/
 //    *.ttf, OFL.txt alongside). It used to resolve through google_fonts,
 //    which fetches the family from fonts.gstatic.com on first launch — before
 //    the consent screen, and contrary to PRIVACY.md.
@@ -48,20 +48,20 @@ import 'package:flutter/material.dart';
 import 'page_transitions.dart';
 import 'tokens.dart';
 
-/// Type scale — one family (Manrope). Numerics carry tabular figures.
+/// Type scale — one family (Montserrat). Numerics carry tabular figures.
 /// Colours come from the live [AppColors] getters → they track the active mode.
-/// Manrope, bundled as a local asset (pubspec.yaml `flutter.fonts`) rather
+/// Montserrat, bundled as a local asset (pubspec.yaml `flutter.fonts`) rather
 /// than resolved through google_fonts, which fetches the family from
 /// fonts.gstatic.com on first launch — before the consent screen, and contrary
-/// to PRIVACY.md. Same call shape as `GoogleFonts.manrope(...)`, no network.
-TextStyle _manrope({
+/// to PRIVACY.md. No runtime font resolution or network requests.
+TextStyle _textFace({
   double? fontSize,
   FontWeight? fontWeight,
   double? height,
   double? letterSpacing,
   Color? color,
 }) => TextStyle(
-  fontFamily: 'Manrope',
+  fontFamily: 'Montserrat',
   fontSize: fontSize,
   fontWeight: fontWeight,
   height: height,
@@ -120,14 +120,14 @@ class AppText {
   );
 
   // ── Headings ──
-  static TextStyle get h1 => _manrope(
+  static TextStyle get h1 => _textFace(
     fontSize: 28,
     fontWeight: FontWeight.w800,
     height: 1.05,
     letterSpacing: -0.7,
     color: AppColors.ink,
   );
-  static TextStyle get h2 => _manrope(
+  static TextStyle get h2 => _textFace(
     fontSize: 20,
     fontWeight: FontWeight.w700,
     height: 1.1,
@@ -136,41 +136,41 @@ class AppText {
   );
 
   // ── Body / labels ──
-  static TextStyle get title => _manrope(
+  static TextStyle get title => _textFace(
     fontSize: 16,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.15,
     color: AppColors.ink,
   );
-  static TextStyle get body => _manrope(
+  static TextStyle get body => _textFace(
     fontSize: 14.5,
     fontWeight: FontWeight.w500,
     height: 1.45,
     color: AppColors.ink,
   );
-  static TextStyle get bodySoft => _manrope(
+  static TextStyle get bodySoft => _textFace(
     fontSize: 14.5,
     fontWeight: FontWeight.w500,
     height: 1.45,
     color: AppColors.inkSoft,
   );
-  static TextStyle get label => _manrope(
+  static TextStyle get label => _textFace(
     fontSize: 13,
     fontWeight: FontWeight.w700,
     color: AppColors.inkSoft,
     letterSpacing: 0.1,
   );
-  static TextStyle get caption => _manrope(
+  static TextStyle get caption => _textFace(
     fontSize: 12,
     fontWeight: FontWeight.w600,
     color: AppColors.inkSoft,
   );
-  static TextStyle get captionMuted => _manrope(
+  static TextStyle get captionMuted => _textFace(
     fontSize: 12,
     fontWeight: FontWeight.w600,
     color: AppColors.inkMuted,
   );
-  static TextStyle get overline => _manrope(
+  static TextStyle get overline => _textFace(
     fontSize: 11,
     fontWeight: FontWeight.w800,
     letterSpacing: 1.5,
@@ -209,7 +209,7 @@ ThemeData buildOpenStrapTheme(Palette p) {
             ? Typography.material2021().white
             : Typography.material2021().black)
         .apply(
-      fontFamily: 'Manrope',
+      fontFamily: 'Montserrat',
       bodyColor: p.ink,
       displayColor: p.ink,
     ),
@@ -236,7 +236,7 @@ ThemeData buildOpenStrapTheme(Palette p) {
       foregroundColor: p.ink,
       elevation: 0,
       centerTitle: false,
-      titleTextStyle: _manrope(
+      titleTextStyle: _textFace(
         fontSize: 20,
         fontWeight: FontWeight.w700,
         height: 1.1,
@@ -251,12 +251,12 @@ ThemeData buildOpenStrapTheme(Palette p) {
         horizontal: Sp.x5,
         vertical: Sp.x4,
       ),
-      hintStyle: _manrope(
+      hintStyle: _textFace(
         fontSize: 14.5,
         fontWeight: FontWeight.w500,
         color: p.inkMuted,
       ),
-      labelStyle: _manrope(
+      labelStyle: _textFace(
         fontSize: 14.5,
         fontWeight: FontWeight.w500,
         color: p.inkSoft,
@@ -288,7 +288,7 @@ ThemeData buildOpenStrapTheme(Palette p) {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(R.pill),
         ),
-        textStyle: _manrope(
+        textStyle: _textFace(
           fontSize: 16,
           fontWeight: FontWeight.w800,
         ),
@@ -302,7 +302,7 @@ ThemeData buildOpenStrapTheme(Palette p) {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(R.pill),
         ),
-        textStyle: _manrope(
+        textStyle: _textFace(
           fontSize: 15,
           fontWeight: FontWeight.w700,
         ),
@@ -311,7 +311,7 @@ ThemeData buildOpenStrapTheme(Palette p) {
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: p.brandDeep,
-        textStyle: _manrope(
+        textStyle: _textFace(
           fontSize: 14,
           fontWeight: FontWeight.w700,
         ),
@@ -320,7 +320,7 @@ ThemeData buildOpenStrapTheme(Palette p) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: p.isDark ? p.surfaceAlt : AppColors.night,
-      contentTextStyle: _manrope(color: AppColors.onNight),
+      contentTextStyle: _textFace(color: AppColors.onNight),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(R.chip),
       ),

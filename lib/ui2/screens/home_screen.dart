@@ -1935,7 +1935,7 @@ class HomeData {
     final out = <String, List<ChartPoint>>{};
     for (final k in kDashMetrics) {
       // The extra rows are not charted series; dashExtraSeries reads them.
-      if (isDashExtra(k)) continue;
+      if (k == 'cigarettes' || isDashExtra(k)) continue;
       try {
         out[k] = pointsOf(await repo.getChart(specOf(k).chartKey));
       } catch (_) {}

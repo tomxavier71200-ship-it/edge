@@ -283,7 +283,7 @@ class Section extends StatelessWidget {
               Flexible(
                 child: Text(
                   title,
-                  style: F.head.copyWith(color: p.ink),
+                  style: F.section.copyWith(color: p.ink),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -297,7 +297,7 @@ class Section extends StatelessWidget {
                       child: Text(
                         action!,
                         style: F.cap.copyWith(
-                          color: p.on(C.blue),
+                          color: p.on(p.accent),
                           fontWeight: FontWeight.w600,
                         ),
                         maxLines: 1,

@@ -238,7 +238,7 @@ enum RingStyle { classic, thin, glow }
 class Look {
   static RingStyle ring = RingStyle.thin;
 
-  /// Numbers in Manrope instead of the condensed display face.
+  /// Numbers in the selected text face instead of the condensed display face.
   static bool rounded = false;
 
   /// Tighter card padding and section gaps.
@@ -434,16 +434,14 @@ class P {
 
 /// ── TYPE ── 7 steps, 3 weights, tabular figures on anything that changes ──
 ///
-/// The family is the platform's own text face where it exists, falling back to
-/// the bundled Manrope (assets/fonts/Manrope) everywhere else — so Android and
-/// the golden tests render the same shapes the design was drawn in rather than
-/// silently landing on Roboto.
+/// Bundled Montserrat text and Barlow display numerals give every platform the
+/// same hierarchy, including offline rendering and font-loaded widget tests.
 class F {
-  // Rounded text and a separate Barlow numeral ramp, informed by the owner's
-  // populated WHOOP screens. Use bundled faces consistently on both phones;
-  // this approximates the reference without depending on its private fonts.
-  static const _f = 'Manrope';
-  static const _fb = ['Montserrat'];
+  // Owner-selected Montserrat text with a separate Barlow numeral ramp.
+  // Both faces are bundled, so the same typography works offline on iPhone,
+  // Android and web without depending on WHOOP's private font files.
+  static const _f = 'Montserrat';
+  static const _fb = ['Manrope'];
   static const _tab = [FontFeature.tabularFigures()];
 
   // The 7 steps.
@@ -475,6 +473,14 @@ class F {
       height: 24 / 15,
       fontWeight: FontWeight.w600,
       letterSpacing: -.1);
+  // Shared hierarchy for Home sections and grouped settings.
+  static TextStyle get section => Look.whoop
+      ? head.copyWith(fontSize: 13, fontWeight: FontWeight.w700,
+          height: 20 / 13, letterSpacing: .7)
+      : head;
+  static TextStyle get settingsTitle => Look.whoop
+      ? head.copyWith(fontSize: 16, height: 22 / 16)
+      : body.copyWith(fontWeight: FontWeight.w600);
   static const body = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
@@ -763,7 +769,7 @@ ThemeData buildTheme(Brightness b) {
     scaffoldBackgroundColor: p.bg,
     colorScheme:
         ColorScheme.fromSeed(seedColor: C.green, brightness: b, surface: p.card),
-    fontFamily: '.SF Pro Text',
+    fontFamily: 'Montserrat',
     fontFamilyFallback: const ['Manrope'],
     splashFactory: NoSplash.splashFactory,
     highlightColor: const Color(0x00000000),
