@@ -20,7 +20,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/day_label.dart';
-import '../../data/journal_fields.dart' show JournalMetricValue, formatMinuteOfDay;
+import '../../data/journal_fields.dart' show JournalMetricValue, formatMinuteOfDay, journalWindowDays;
 import '../../gestures/device_action.dart';
 import '../../notify/notification_center.dart';
 import '../../notify/notification_prefs.dart';
@@ -242,21 +242,40 @@ Widget dashboardCard(BuildContext c, HomeData d, VoidCallback onEdit) {
 }
 
 /// A self-reported count, kept separate from sensor measurements and scores.
-class CigaretteLogCard extends StatelessWidget {
+class CigaretteLogCard extends StatefulWidget {
   final int? count, lastMinute;
   final String? status;
-  final VoidCallback? onEdit;
+  final VoidCallback? onEdit, onRemove;
+  final String? day;
+  final Map<String, JournalMetricValue> history;
   const CigaretteLogCard({super.key, this.count, this.lastMinute,
-      this.status, this.onEdit});
+      this.status, this.onEdit, this.onRemove, this.day, this.history = const {}});
+  @override
+  State<CigaretteLogCard> createState() => _CigaretteLogCardState();
+}
 
+class _CigaretteLogCardState extends State<CigaretteLogCard> {
+  int _days = 7;
   @override
   Widget build(BuildContext c) {
+    final count = widget.count, lastMinute = widget.lastMinute;
+    final status = widget.status;
+    final onEdit = widget.onEdit;
+    final dates = journalWindowDays(widget.day ?? todayLabel(), _days);
+    final series = [for (final date in dates) () {
+      final value = widget.history[date]?.value;
+      return value != null && value.isFinite && value >= 0 && value <= 100
+          ? value.roundToDouble() : null;
+    }()];
+    final known = series.whereType<double>().toList();
+    final largest = known.fold<double>(0, math.max);
+    final axis = AxisSpec(min: 0, max: math.max(2, (largest / 2).ceil() * 2).toDouble(),
+        format: (v) => v.round().toString());
     final p = P.of(c);
     final detail = status ?? (count == null ? 'Not logged for this day'
         : lastMinute == null || count == 0 ? 'Self-reported'
-        : 'Last logged ${formatMinuteOfDay(lastMinute!)} · self-reported');
+        : 'Last logged ${formatMinuteOfDay(lastMinute)} · self-reported');
     return Surface(
-      onTap: onEdit,
       semanticLabel: 'Cigarettes: ${count ?? 'not logged'}. $detail. Edit in journal',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -269,10 +288,28 @@ class CigaretteLogCard extends StatelessWidget {
         ]),
         const SizedBox(height: S.x2),
         Text(detail, style: F.cap.copyWith(color: p.ink3)),
-        if (onEdit != null) ...[
-          const SizedBox(height: S.x1),
-          Text('Edit in journal', style: F.cap.copyWith(color: p.on(C.blue))),
-        ],
+        const SizedBox(height: S.x3),
+        SubTabs(const ['7 days', '30 days'], _days == 7 ? 0 : 1,
+            (i) => setState(() => _days = i == 0 ? 7 : 30), color: C.blue),
+        const SizedBox(height: S.x2),
+        ChartFrame(title: 'Daily cigarettes', unit: 'cigarettes',
+          series: series, yAxis: axis,
+          xLabels: [dates.first.substring(5), dates.last.substring(5)],
+          empty: known.isEmpty ? NoData(message: status ?? 'No recorded days yet') : null,
+          footnote: '${known.fold<double>(0, (sum, v) => sum + v).round()} recorded · '
+              '${known.length}/$_days days logged. Unlogged days are gaps.',
+          child: CustomPaint(size: Size.infinite,
+            painter: Bars(series, p.on(C.blue), highlight: series.length - 1, axis: axis))),
+        const SizedBox(height: S.x2),
+        Wrap(spacing: S.x4, runSpacing: S.x1, children: [
+          if (onEdit != null) Pressable(onTap: onEdit,
+            semanticLabel: 'Edit cigarette count in journal',
+            child: Text('Edit in journal', style: F.cap.copyWith(color: p.on(C.blue)))),
+          if (widget.onRemove != null && (count ?? 0) > 0)
+            Pressable(onTap: widget.onRemove,
+              semanticLabel: 'Remove one cigarette from this day',
+              child: Text('Remove one', style: F.cap.copyWith(color: p.on(C.red)))),
+        ]),
       ]),
     );
   }
@@ -288,17 +325,58 @@ class _CigaretteDashboard extends StatefulWidget {
 class _CigaretteDashboardState extends State<_CigaretteDashboard>
     with RevisionReload {
   JournalMetricValue? _value;
+  Map<String, JournalMetricValue> _history = const {};
   String? _status = 'Loading entries…';
+  bool _removing = false;
 
   @override
   void initState() { super.initState(); _load(); }
   @override
   void reload() => _load();
+
+  Future<void> _remove() async {
+    if (_removing) return;
+    final repo = repoOf(context);
+    if (repo == null) return;
+    final day = widget.date;
+    setState(() => _removing = true);
+    try {
+      final previous = await repo.adjustCigaretteCount(day, -1);
+      if (!mounted) return;
+      await _load();
+      if (!mounted || previous == null) return;
+      context.read<AppState>().bumpInsights();
+      var undone = false;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('One cigarette removed from $day'),
+        action: SnackBarAction(label: 'Undo', onPressed: () async {
+          if (undone) return;
+          undone = true;
+          try {
+            final restored = await repo.adjustCigaretteCount(day, 1,
+                restoreMinute: previous.atMinuteOfDay);
+            if (mounted) {
+              context.read<AppState>().bumpInsights();
+              await _load();
+              if (restored == null && mounted) setState(() => _status = 'Couldn’t undo. Edit the journal to correct the count.');
+            }
+          } catch (_) {
+            if (mounted) setState(() => _status = 'Couldn’t undo. Edit the journal to correct the count.');
+          }
+        }),
+      ));
+    } catch (_) {
+      if (mounted) setState(() => _status = 'Couldn’t remove the entry. Try again.');
+    } finally {
+      if (mounted) setState(() => _removing = false);
+    }
+  }
   @override
   void didUpdateWidget(covariant _CigaretteDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.date != widget.date) {
       _value = null;
+      _history = const {};
       _status = 'Loading entries…';
       _load();
     }
@@ -308,13 +386,15 @@ class _CigaretteDashboardState extends State<_CigaretteDashboard>
     final repo = repoOf(context);
     if (repo == null) return;
     try {
-      final values = await repo.getJournalMetrics(widget.date);
+      final day = widget.date;
+      final values = await repo.getJournalMetricHistory('cigarettes',
+          from: journalWindowDays(day, 30).first, through: day);
       if (stillNewest(#cigarettes, token)) {
-        setState(() { _value = values['cigarettes']; _status = null; });
+        setState(() { _history = values; _value = values[day]; _status = null; });
       }
     } catch (_) {
       if (stillNewest(#cigarettes, token)) {
-        setState(() { _value = null; _status = 'Couldn’t load cigarette entries'; });
+        setState(() { _history = const {}; _value = null; _status = 'Couldn’t load cigarette entries'; });
       }
     }
   }
@@ -323,12 +403,13 @@ class _CigaretteDashboardState extends State<_CigaretteDashboard>
     final AppState app;
     try { app = c.read<AppState>(); } catch (_) { return const SizedBox.shrink(); }
     return ListenableBuilder(listenable: app.gestureSettings, builder: (c, _) {
-      if (_value == null && app.gestureSettings.doubleTap != DeviceAction.logCigarette) {
+      if (_value == null && _history.isEmpty && app.gestureSettings.doubleTap != DeviceAction.logCigarette) {
         return const SizedBox.shrink();
       }
       return Padding(padding: const EdgeInsets.only(bottom: S.x2),
-        child: CigaretteLogCard(count: _value?.value.round(),
+        child: CigaretteLogCard(day: widget.date, history: _history, count: _value?.value.round(),
           lastMinute: _value?.atMinuteOfDay, status: _status,
+          onRemove: _removing ? null : _remove,
           onEdit: () async {
             await goto(c, JournalCompose(date: widget.date));
             if (mounted) { app.bumpInsights(); _load(); }

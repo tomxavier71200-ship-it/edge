@@ -14,6 +14,14 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'day_label.dart';
+
+/// Calendar buckets, including unlogged dates, ending at the selected day.
+List<String> journalWindowDays(String through, int days) {
+  final end = DateTime.parse(through);
+  return [for (var i = days - 1; i >= 0; i--)
+    dayLabelOf(DateTime(end.year, end.month, end.day - i))];
+}
 
 /// What a field measures, which decides how it is entered and read back.
 enum JournalFieldKind {

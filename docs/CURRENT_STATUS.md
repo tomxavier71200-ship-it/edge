@@ -2,6 +2,41 @@
 
 Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Local cigarette history and accidental-entry protection
+
+The cigarette dashboard card now includes 7-day and 30-day daily bar graphs,
+anchored to the selected day. Its total includes only recorded days and its
+coverage label states how many days were logged. Missing days remain gaps;
+explicit zero remains a baseline mark. A single indexed, bounded journal query
+loads the current reading and the last 30 calendar days together. No raw-sensor
+analysis or physiological calculation is added. The web Overview reads the same
+field, supports both graph windows and bar-to-day navigation, and retains reduced
+motion and accessible per-day descriptions.
+
+The iPhone app's card has Remove one and Undo. Removal changes only that day's
+cigarette field, keeps the band-event dedupe claim, and never reduces below zero.
+After removal the prior last-entry time is unknown, so it is cleared. Undo restores
+that time unless a newer wrist entry already has a later one. Concurrent newer
+entries and other journal fields are preserved. This corrects the daily total;
+there is still no individual timestamped-cigarette list. The web graph is read-only.
+
+An optional setting directly beneath the selected Log a cigarette action requires
+two separate double-taps (four taps total), with a brief pause and both within
+five seconds. Duplicate packets do not confirm a gesture; changing settings cancels
+a pending first gesture; both arrival and band timestamps enforce the window.
+The current protocol exposes double-tap, not individual/triple-tap events, so this
+must not be described as genuine triple-tap support. The setting defaults off and
+is saved locally. It still requires Koop to receive live BLE events on the iPhone.
+
+Focused checks cover graph gaps/zero/DST/leap days and historical bounds, range
+controls, removal/Undo/replayed packets/newer entries, confirmation expiry/config
+changes/delayed delivery, and iPhone-themed narrow/large-text presentation. A
+390x844 iPhone-sized render at 1.35 text scale was reviewed with sample data.
+Final validation: 63 focused Flutter tests and 15 dashboard tests passed; scoped
+analysis clean. This follow-up is not in the earlier Android test build 89.
+Physical iPhone band-event confirmation and Safari remain unverified. No schema,
+algorithm, dependency or release version changed; nothing pushed.
+
 ## Primary device and local follow-up
 
 The owner uses Koop primarily on iPhone through SideStore. Android is for

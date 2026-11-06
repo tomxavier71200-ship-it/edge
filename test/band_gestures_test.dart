@@ -12,6 +12,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openstrap_edge/gestures/device_action.dart';
 import 'package:openstrap_edge/gestures/gesture_dispatcher.dart';
 import 'package:openstrap_edge/gestures/gesture_settings.dart';
@@ -21,16 +22,19 @@ import 'package:openstrap_edge/ui2/ui2.dart';
 /// What `GestureSettings.bootstrap` builds on a phone whose native side
 /// answered: `none`, every in-app action, and the reported native ones.
 Set<DeviceAction> _supported(Set<DeviceAction> native) => {
-      DeviceAction.none,
-      ...DeviceAction.values.where((a) => a.isInApp),
-      ...native,
-    };
+  DeviceAction.none,
+  ...DeviceAction.values.where((a) => a.isInApp),
+  ...native,
+};
 
 Future<void> _pump(
   WidgetTester t, {
   required Set<DeviceAction> supported,
   DeviceAction chosen = DeviceAction.none,
   ValueChanged<DeviceAction>? onPick,
+  bool confirmCigarette = false,
+  VoidCallback? onToggleConfirmation,
+  TargetPlatform platform = TargetPlatform.iOS,
   double scale = 1,
   Brightness brightness = Brightness.light,
 }) async {
@@ -41,11 +45,13 @@ Future<void> _pump(
     MediaQuery(
       data: MediaQueryData(textScaler: TextScaler.linear(scale)),
       child: MaterialApp(
-        theme: buildTheme(brightness),
+        theme: buildTheme(brightness).copyWith(platform: platform),
         home: BandGesturesView(
           chosen: chosen,
           supported: supported,
           onPick: onPick,
+          confirmCigarette: confirmCigarette,
+          onToggleConfirmation: onToggleConfirmation,
         ),
       ),
     ),
@@ -55,11 +61,13 @@ Future<void> _pump(
 
 void main() {
   group('the picker renders', () {
-    testWidgets('an iPhone is offered ring and torch, never volume or Tasker',
-        (t) async {
-      await _pump(t,
-          supported:
-              _supported({DeviceAction.ringPhone, DeviceAction.torch}));
+    testWidgets('an iPhone is offered ring and torch, never volume or Tasker', (
+      t,
+    ) async {
+      await _pump(
+        t,
+        supported: _supported({DeviceAction.ringPhone, DeviceAction.torch}),
+      );
 
       expect(layoutFaults, isEmpty);
       expect(find.text('Ring my phone'), findsOneWidget);
@@ -74,17 +82,19 @@ void main() {
     });
 
     testWidgets('an Android phone gets the full native list', (t) async {
-      await _pump(t,
-          supported: _supported({
-            DeviceAction.mediaPlayPause,
-            DeviceAction.mediaNext,
-            DeviceAction.mediaPrev,
-            DeviceAction.volumeUp,
-            DeviceAction.volumeDown,
-            DeviceAction.ringPhone,
-            DeviceAction.torch,
-            DeviceAction.broadcastToTasker,
-          }));
+      await _pump(
+        t,
+        supported: _supported({
+          DeviceAction.mediaPlayPause,
+          DeviceAction.mediaNext,
+          DeviceAction.mediaPrev,
+          DeviceAction.volumeUp,
+          DeviceAction.volumeDown,
+          DeviceAction.ringPhone,
+          DeviceAction.torch,
+          DeviceAction.broadcastToTasker,
+        }),
+      );
 
       expect(layoutFaults, isEmpty);
       for (final label in const [
@@ -118,9 +128,11 @@ void main() {
 
     testWidgets('a tap reports the action it is drawn next to', (t) async {
       DeviceAction? picked;
-      await _pump(t,
-          supported: _supported({DeviceAction.ringPhone}),
-          onPick: (a) => picked = a);
+      await _pump(
+        t,
+        supported: _supported({DeviceAction.ringPhone}),
+        onPick: (a) => picked = a,
+      );
 
       await t.tap(find.text('Log water'));
       await t.pumpAndSettle();
@@ -133,19 +145,24 @@ void main() {
 
     testWidgets('nothing overflows at 3.1x, in either theme', (t) async {
       for (final b in Brightness.values) {
-        await _pump(t,
-            supported: _supported({DeviceAction.ringPhone, DeviceAction.torch}),
-            chosen: DeviceAction.logWater,
-            scale: 3.1,
-            brightness: b);
+        await _pump(
+          t,
+          supported: _supported({DeviceAction.ringPhone, DeviceAction.torch}),
+          chosen: DeviceAction.logWater,
+          scale: 3.1,
+          brightness: b,
+        );
         expect(layoutFaults, isEmpty, reason: '$b');
       }
     });
   });
 
   group('log water dispatches', () {
-    GestureDispatcher build(DeviceAction mapped, {required void Function() water,
-        void Function()? moment}) {
+    GestureDispatcher build(
+      DeviceAction mapped, {
+      required void Function() water,
+      void Function()? moment,
+    }) {
       final s = GestureSettings()..doubleTap = mapped;
       return GestureDispatcher(
         settings: s,
@@ -172,8 +189,10 @@ void main() {
 
     test('a tap drained from flash is too old to pour a glass', () {
       var n = 0;
-      build(DeviceAction.logWater, water: () => n++)
-          .onEvent(14, now() - 3600, '');
+      build(
+        DeviceAction.logWater,
+        water: () => n++,
+      ).onEvent(14, now() - 3600, '');
       expect(n, 0);
     });
 
@@ -193,15 +212,127 @@ void main() {
     final logged = <int>[];
     final dispatcher = GestureDispatcher(
       settings: GestureSettings()..doubleTap = DeviceAction.logCigarette,
-      onLogCigarette: (ts) async { logged.add(ts); },
+      onLogCigarette: (ts) async {
+        logged.add(ts);
+      },
     );
     for (final ts in [0, now - 20, now - 90000, now + 60]) {
       dispatcher.onEvent(14, ts, '');
     }
-    expect(logged, isEmpty, reason: 'old or untrustworthy taps cannot add entries');
+    expect(
+      logged,
+      isEmpty,
+      reason: 'old or untrustworthy taps cannot add entries',
+    );
     dispatcher.onEvent(14, now, '');
     dispatcher.onEvent(14, now, '');
     expect(logged, [now]);
+  });
+
+  test(
+    'confirmation requires distinct double-tap events and expires after 5 seconds',
+    () {
+      var at = DateTime(2026, 11, 6, 12);
+      final saved = <int>[];
+      var prompts = 0;
+      final dispatcher = GestureDispatcher(
+        settings: GestureSettings()
+          ..doubleTap = DeviceAction.logCigarette
+          ..confirmCigarette = true,
+        now: () => at,
+        onLogCigarette: (ts) async {
+          saved.add(ts);
+        },
+        onCigaretteConfirmationNeeded: () async {
+          prompts++;
+        },
+      );
+      void tap() =>
+          dispatcher.onEvent(14, at.millisecondsSinceEpoch ~/ 1000, '');
+      tap();
+      tap();
+      expect(saved, isEmpty);
+      expect(prompts, 1);
+      at = at.add(const Duration(seconds: 1));
+      tap();
+      tap();
+      expect(saved.length, 1);
+      expect(prompts, 1);
+      at = at.add(const Duration(seconds: 10));
+      tap();
+      at = at.add(const Duration(seconds: 6));
+      tap();
+      expect(saved.length, 1);
+      expect(prompts, 3);
+      at = at.add(const Duration(seconds: 1));
+      tap();
+      expect(saved.length, 2);
+    },
+  );
+
+  test(
+    'changing confirmation settings cancels a pending first gesture',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      var at = DateTime(2026, 11, 6, 12);
+      final settings = GestureSettings()..doubleTap = DeviceAction.logCigarette;
+      await settings.setConfirmCigarette(true);
+      var saved = 0;
+      final dispatcher = GestureDispatcher(
+        settings: settings,
+        now: () => at,
+        onLogCigarette: (_) async {
+          saved++;
+        },
+      );
+      void tap() =>
+          dispatcher.onEvent(14, at.millisecondsSinceEpoch ~/ 1000, '');
+      tap();
+      await settings.setConfirmCigarette(false);
+      await settings.setConfirmCigarette(true);
+      expect(
+        (await SharedPreferences.getInstance()).getBool(
+          'gesture_confirm_cigarette',
+        ),
+        isTrue,
+      );
+      at = at.add(const Duration(seconds: 1));
+      tap();
+      expect(saved, 0);
+      at = at.add(const Duration(seconds: 1));
+      tap();
+      expect(saved, 1);
+    },
+  );
+
+  test('delayed delivery cannot combine gestures over 5 seconds apart', () {
+    final at = DateTime(2026, 11, 6, 12);
+    final epoch = at.millisecondsSinceEpoch ~/ 1000;
+    var saved = 0;
+    final dispatcher = GestureDispatcher(
+      settings: GestureSettings()..doubleTap = DeviceAction.logCigarette..confirmCigarette = true,
+      now: () => at, onLogCigarette: (_) async { saved++; });
+    dispatcher.onEvent(14, epoch - 6, '');
+    dispatcher.onEvent(14, epoch, '');
+    expect(saved, 0);
+  });
+
+  testWidgets('cigarette confirmation option is explicit and fits large text', (
+    t,
+  ) async {
+    var toggles = 0;
+    await _pump(
+      t,
+      supported: _supported({}),
+      chosen: DeviceAction.logCigarette,
+      scale: 3.1,
+      onToggleConfirmation: () => toggles++,
+    );
+    expect(layoutFaults, isEmpty);
+    expect(find.text('Confirm with another double-tap'), findsOneWidget);
+    await t.ensureVisible(find.text('Confirm with another double-tap'));
+    await t.tap(find.text('Confirm with another double-tap'));
+    expect(toggles, 1);
   });
 }
 

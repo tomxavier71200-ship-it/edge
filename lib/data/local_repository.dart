@@ -297,9 +297,18 @@ abstract class LocalRepository {
   Future<Map<String, JournalMetricValue>> getJournalMetrics(String date) =>
       throw UnimplementedError('re-layer: getJournalMetrics');
 
+  /// Recorded values only, bounded by inclusive local calendar dates.
+  Future<Map<String, JournalMetricValue>> getJournalMetricHistory(String field,
+      {required String from, required String through}) =>
+      throw UnimplementedError('re-layer: getJournalMetricHistory');
+
   /// Atomically add one cigarette for a live band event, once per event.
   Future<bool> recordCigarette(int eventTs) =>
       throw UnimplementedError('re-layer: recordCigarette');
+
+  Future<JournalMetricValue?> adjustCigaretteCount(String date, int delta,
+      {int? restoreMinute}) =>
+      throw UnimplementedError('re-layer: adjustCigaretteCount');
 
   /// Replace one day's numeric fields. A field absent from [fields] is cleared
   /// for that day — the map IS the day, not a patch on it.

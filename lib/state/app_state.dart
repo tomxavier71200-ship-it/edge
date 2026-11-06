@@ -1372,6 +1372,7 @@ class AppState extends ChangeNotifier {
       onWorkoutToggle: _toggleWorkoutFromGesture,
       onLogWater: _logWaterFromGesture,
       onLogCigarette: _logCigaretteFromGesture,
+      onCigaretteConfirmationNeeded: _cigaretteConfirmationNeeded,
     );
     engine = BleEngine(
       onRecord: _onRecord,
@@ -1516,6 +1517,7 @@ class AppState extends ChangeNotifier {
       onWorkoutToggle: _toggleWorkoutFromGesture,
       onLogWater: _logWaterFromGesture,
       onLogCigarette: _logCigaretteFromGesture,
+      onCigaretteConfirmationNeeded: _cigaretteConfirmationNeeded,
     );
     this.engine = engine ??
         BleEngine(
@@ -7233,6 +7235,11 @@ class AppState extends ChangeNotifier {
     } finally {
       _writingWaterFromGesture = false;
     }
+  }
+
+  Future<void> _cigaretteConfirmationNeeded() async {
+    _log('[gesture] double-tap again within 5 seconds to confirm cigarette');
+    try { await HapticFeedback.selectionClick(); } catch (_) {}
   }
 
   /// Count and dedupe the wrist event in one durable database transaction.

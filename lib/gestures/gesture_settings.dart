@@ -11,6 +11,9 @@ import 'device_action.dart';
 
 class GestureSettings extends ChangeNotifier {
   static const _kDoubleTap = 'gesture_double_tap';
+  static const _kConfirmCigarette = 'gesture_confirm_cigarette';
+  bool confirmCigarette = false;
+  int revision = 0;
 
   /// What a double-tap currently does. Defaults to nothing — opt-in, so we never
   /// surprise a user (or pay the iOS bg keep-alive cost) until they pick an action.
@@ -24,6 +27,8 @@ class GestureSettings extends ChangeNotifier {
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     doubleTap = DeviceActionX.fromId(prefs.getString(_kDoubleTap)) ?? DeviceAction.none;
+    confirmCigarette = prefs.getBool(_kConfirmCigarette) ?? false;
+    revision++;
 
     final caps = await DeviceActions.capabilities();
     supported = {
@@ -47,8 +52,19 @@ class GestureSettings extends ChangeNotifier {
   Future<void> setDoubleTap(DeviceAction action) async {
     if (action == doubleTap) return;
     doubleTap = action;
+    revision++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kDoubleTap, action.id);
+    notifyListeners();
+  }
+
+  /// Optional protection against a single accidental double-tap.
+  Future<void> setConfirmCigarette(bool value) async {
+    if (confirmCigarette == value) return;
+    confirmCigarette = value;
+    revision++;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kConfirmCigarette, value);
     notifyListeners();
   }
 

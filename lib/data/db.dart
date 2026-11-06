@@ -10595,6 +10595,33 @@ class LocalDb {
     });
   }
 
+  /// Correct a count without replaying/deleting band events or replacing other
+  /// journal fields. Return the prior reading so the UI can offer Undo.
+  static Future<JournalMetricValue?> adjustCigaretteCount(String date, int delta,
+      {int? restoreMinute}) async {
+    if (delta != -1 && delta != 1) throw ArgumentError.value(delta, 'delta');
+    final db = await instance;
+    return db.transaction((txn) async {
+      final rows = await txn.query('journal_metric',
+          where: 'date = ? AND field = ?', whereArgs: [date, 'cigarettes']);
+      if (rows.isEmpty) return null;
+      final count = (rows.first['value'] as num).toDouble();
+      final minute = (rows.first['at_min'] as num?)?.toInt();
+      if (!count.isFinite || count + delta < 0 || count + delta > 100) return null;
+      // Removing the latest count leaves its predecessor's time unknown.
+      // Undo restores the removed time unless a newer entry already has one.
+      final restored = restoreMinute != null && restoreMinute >= 0 && restoreMinute < 1440
+          ? restoreMinute : null;
+      final nextMinute = delta < 0 ? null : minute == null ? restored
+          : restored != null && restored > minute ? restored : minute;
+      await txn.update('journal_metric', {
+        'value': count + delta, 'at_min': nextMinute,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      }, where: 'date = ? AND field = ?', whereArgs: [date, 'cigarettes']);
+      return JournalMetricValue(count, atMinuteOfDay: minute);
+    });
+  }
+
   /// One day's numeric fields, or an empty map when nothing was recorded.
   static Future<Map<String, JournalMetricValue>> journalMetricsForDay(
     String date,
@@ -10612,6 +10639,18 @@ class LocalDb {
           atMinuteOfDay: (r['at_min'] as num?)?.toInt(),
         ),
     };
+  }
+
+  /// One field's recorded values in an inclusive local-calendar window.
+  static Future<Map<String, JournalMetricValue>> journalMetricHistory(String field,
+      {required String from, required String through}) async {
+    final db = await instance;
+    final rows = await db.query('journal_metric',
+        where: 'field = ? AND date >= ? AND date <= ?',
+        whereArgs: [field, from, through], orderBy: 'date ASC');
+    return {for (final row in rows)
+      row['date'] as String: JournalMetricValue((row['value'] as num).toDouble(),
+          atMinuteOfDay: (row['at_min'] as num?)?.toInt())};
   }
 
   /// Numeric journal fields per day, oldest first, for the correlation pass.

@@ -354,8 +354,12 @@ Map<String, Widget> goldenCases() => {
       ),
       'settings_switch': SetRow.toggle(LucideIcons.watch, C.blue,
           'Band alerts', value: true, onTap: () {}),
-      'cigarette_log': CigaretteLogCard(count: 3, lastMinute: 840,
-          onEdit: () {}),
+      'cigarette_log': CigaretteLogCard(day: '2026-08-16', count: 3, lastMinute: 840,
+          history: const {
+            '2026-08-10': JournalMetricValue(2), '2026-08-11': JournalMetricValue(0),
+            '2026-08-13': JournalMetricValue(4), '2026-08-15': JournalMetricValue(1),
+            '2026-08-16': JournalMetricValue(3),
+          }, onEdit: () {}, onRemove: () {}),
       // The stepper every single-day screen wears. Shot mid-history, where
       // both arrows are live and the middle opens the calendar — the state a
       // user spends all their time in once there is more than a week on disk.

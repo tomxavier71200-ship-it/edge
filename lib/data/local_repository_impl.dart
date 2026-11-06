@@ -3517,7 +3517,17 @@ class LocalRepositoryImpl extends LocalRepository {
       LocalDb.journalMetricsForDay(date);
 
   @override
+  Future<Map<String, JournalMetricValue>> getJournalMetricHistory(String field,
+      {required String from, required String through}) =>
+      LocalDb.journalMetricHistory(field, from: from, through: through);
+
+  @override
   Future<bool> recordCigarette(int eventTs) => LocalDb.recordCigarette(eventTs);
+
+  @override
+  Future<JournalMetricValue?> adjustCigaretteCount(String date, int delta,
+      {int? restoreMinute}) =>
+      LocalDb.adjustCigaretteCount(date, delta, restoreMinute: restoreMinute);
 
   @override
   Future<void> postJournalMetrics(

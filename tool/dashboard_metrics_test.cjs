@@ -33,18 +33,36 @@ test('cigarette journal is date-specific, safely missing in older backups, and k
   assert.equal(context.cigarettesOn('2026-11-05'),null);
 });
 
-test('cigarette card follows the selected day and clears when leaving day view', () => {
-  const nodes={'cigarette-log':{},'cigarette-summary':{}};
-  let selected;
-  const context={range:1,tab:'overview',focus:null,day:'2026-11-05',nice:x=>x,
-    document:{getElementById:id=>nodes[id]},
-    cigarettesOn:d=>{selected=d;return {count:2,minute:840}}};
+test('cigarette graph keeps calendar gaps, true zero and the selected end date', () => {
+  const context={shift:(d,n)=>{const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10)},
+    liveDb:{exec(sql,args){assert.match(sql,/SELECT date,value FROM journal_metric/);
+      assert.deepEqual(Array.from(args),['2026-10-31','2026-11-06']);
+      return [{values:[['2026-11-04',0],['2026-11-06',3],['2026-11-07',99],['2026-11-05',-1]]}];}}};
+  vm.runInNewContext(section('function cigaretteHistoryOn(end,n){','function cigarettesOn(d){'),context);
+  const series=context.cigaretteHistoryOn('2026-11-06',7);
+  assert.equal(series.dates.length,7);assert.equal(series.dates[6],'2026-11-06');
+  assert.deepEqual(Array.from(series.values),[null,null,null,null,0,null,3]);
+  context.liveDb={exec(){throw new Error('old backup')}};
+  assert.equal(context.cigaretteHistoryOn('2026-11-06',7).values.every(v=>v===null),true);
+});
+
+test('cigarette graph switches range, updates data, and clears on leaving Overview', () => {
+  const node=()=>({classList:{toggle(){}},setAttribute(){}});
+  const nodes=Object.fromEntries(['cigarette-log','cigarette-summary','cigarette-coverage','cigarette-7','cigarette-30','cigarette-chart'].map(id=>[id,node()]));
+  let selected,period,chart;
+  const context={tab:'overview',focus:null,day:'2026-11-05',nice:x=>x,cigaretteDays:7,cigaretteChart:null,
+    document:{getElementById:id=>nodes[id]},css:()=> '#00f',chartAnimation:()=>false,setRange(){},
+    Chart:class {constructor(canvas,config){this.data=config.data;this.options=config.options;chart=this}update(){}destroy(){this.destroyed=true}},
+    cigaretteHistoryOn:(d,n)=>{selected=d;period=n;return {dates:[d],values:[2]}},
+    cigarettesOn:()=>({count:2,minute:840})};
   vm.runInNewContext(section('function renderCigarettes(){','function render(){'),context);
   context.renderCigarettes();
   assert.equal(selected,'2026-11-05');assert.equal(nodes['cigarette-log'].hidden,false);
   assert.match(nodes['cigarette-summary'].textContent,/2 cigarettes.*14:00/);
-  context.range=7;context.renderCigarettes();
-  assert.equal(nodes['cigarette-log'].hidden,true);
+  assert.equal(chart.options.scales.y.beginAtZero,true);
+  nodes['cigarette-30'].onclick();assert.equal(period,30);
+  context.tab='strain';context.renderCigarettes();
+  assert.equal(nodes['cigarette-log'].hidden,true);assert.equal(chart.destroyed,true);
   assert.equal(nodes['cigarette-summary'].textContent,'');
 });
 

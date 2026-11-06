@@ -39,6 +39,8 @@ class BandGestures extends StatelessWidget {
         chosen: g.doubleTap,
         supported: g.supported,
         onPick: g.setDoubleTap,
+        confirmCigarette: g.confirmCigarette,
+        onToggleConfirmation: () => g.setConfirmCigarette(!g.confirmCigarette),
       ),
     );
   }
@@ -51,12 +53,16 @@ class BandGesturesView extends StatelessWidget {
   final Set<DeviceAction> supported;
 
   final ValueChanged<DeviceAction>? onPick;
+  final bool confirmCigarette;
+  final VoidCallback? onToggleConfirmation;
 
   const BandGesturesView({
     super.key,
     required this.chosen,
     required this.supported,
     this.onPick,
+    this.confirmCigarette = false,
+    this.onToggleConfirmation,
   });
 
   @override
@@ -98,12 +104,22 @@ class BandGesturesView extends StatelessWidget {
                   ),
                 ),
                 settingsGroup(c, l?.gesturesItDoesTitle ?? 'It does', [
-                  for (final a in offered)
+                  for (final a in offered) ...[
                     _ActionRow(
                       action: a,
                       selected: a == chosen,
                       onTap: onPick == null ? null : () => onPick!(a),
                     ),
+                    if (a == DeviceAction.logCigarette && a == chosen)
+                      SetRow.toggle(LucideIcons.shieldCheck, C.blue,
+                          'Confirm with another double-tap',
+                          value: confirmCigarette,
+                          sub: 'Two separate double-taps (four taps total). '
+                              'Pause briefly between them and complete both '
+                              'within 5 seconds. One double-tap will not log '
+                              'a cigarette when this is on.',
+                          onTap: onToggleConfirmation),
+                  ],
                 ]),
                 if (noPhoneActions) ...[
                   const SizedBox(height: S.x5),

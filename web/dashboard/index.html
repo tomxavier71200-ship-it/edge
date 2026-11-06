@@ -179,6 +179,12 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 <section id="workout-reviews" hidden aria-label="Workout reviews"></section>
 <section id="cigarette-log" class="stats" hidden aria-label="Cigarette journal">
   <h3>Cigarettes</h3><div id="cigarette-summary" class="vs"></div>
+  <div class="ranges" role="group" aria-label="Cigarette graph period">
+    <button id="cigarette-7" type="button" aria-pressed="true">7 days</button>
+    <button id="cigarette-30" type="button" aria-pressed="false">30 days</button>
+  </div>
+  <div style="position:relative;height:180px;margin-top:16px"><canvas id="cigarette-chart" role="img" aria-label="Daily cigarettes"></canvas></div>
+  <p id="cigarette-coverage" class="vs"></p>
   <p>Self-reported in Koop. Correct entries in the phone’s journal.</p>
 </section>
 <section class="scrub"><div class="scrubin"><div class="scr"><button class="sarrow" id="sprev" aria-label="Previous day">‹</button><div class="smid"><canvas id="scrub" aria-label="Seven days of heart rate; click a day to open it"></canvas><div class="slabels" id="slabels"></div></div><button class="sarrow" id="snext" aria-label="Next day">›</button></div></div></section>
@@ -607,6 +613,15 @@ function strip(){const today=iso(new Date());let end=shift(day,1);if(end>today)e
   document.getElementById("slabels").innerHTML=scrubDays.map(d=>`<button data-d="${d}" class="${d===day?"sel":""}">${new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</button>`).join("");
   document.getElementById("snext").disabled=day>=today;}
 
+let cigaretteChart=null,cigaretteDays=7;
+function cigaretteHistoryOn(end,n){
+  const dates=[];for(let i=n-1;i>=0;i--)dates.push(shift(end,-i));
+  const saved=new Map();
+  try{const r=liveDb?.exec("SELECT date,value FROM journal_metric WHERE field='cigarettes' AND date>=? AND date<=? ORDER BY date",[dates[0],end]);
+    for(const [d,v] of r?.[0]?.values||[]){if(Number.isFinite(v)&&v>=0&&v<=100)saved.set(d,Math.round(v));}
+  }catch{}
+  return {dates,values:dates.map(d=>saved.has(d)?saved.get(d):null)};
+}
 function cigarettesOn(d){
   if(!liveDb)return null;
   try{const r=liveDb.exec("SELECT value,at_min FROM journal_metric WHERE date=? AND field='cigarettes'",[d]);
@@ -615,16 +630,32 @@ function cigarettesOn(d){
   }catch{return null;}
 }
 function renderCigarettes(){
-  const box=document.getElementById("cigarette-log"),entry=range===1&&tab==="overview"&&!focus?cigarettesOn(day):null;
-  box.hidden=entry===null;if(!entry){document.getElementById("cigarette-summary").textContent="";return;}
-  const last=entry.count>0&&entry.minute!==null?` · last logged ${String(Math.floor(entry.minute/60)).padStart(2,"0")}:${String(entry.minute%60).padStart(2,"0")}`:"";
-  document.getElementById("cigarette-summary").textContent=`${entry.count} cigarette${entry.count===1?"":"s"} · ${nice(day)}${last}`;
+  const box=document.getElementById("cigarette-log");
+  const series=tab==="overview"&&!focus?cigaretteHistoryOn(day,cigaretteDays):null;
+  const entry=series?cigarettesOn(day):null;
+  const known=series?series.values.filter(v=>v!==null):[];
+  box.hidden=!series||known.length===0;
+  if(box.hidden){cigaretteChart?.destroy();cigaretteChart=null;document.getElementById("cigarette-summary").textContent="";return;}
+  const last=entry&&entry.count>0&&entry.minute!==null?` · last logged ${String(Math.floor(entry.minute/60)).padStart(2,"0")}:${String(entry.minute%60).padStart(2,"0")}`:"";
+  document.getElementById("cigarette-summary").textContent=entry?`${entry.count} cigarette${entry.count===1?"":"s"} · ${nice(day)}${last}`:`Not logged · ${nice(day)}`;
+  const total=known.reduce((sum,v)=>sum+v,0);
+  document.getElementById("cigarette-coverage").textContent=`${total} recorded · ${known.length}/${cigaretteDays} days logged. Unlogged days are gaps.`;
+  for(const n of [7,30]){const button=document.getElementById(`cigarette-${n}`);button.classList.toggle("on",n===cigaretteDays);button.setAttribute("aria-pressed",String(n===cigaretteDays));button.onclick=()=>{cigaretteDays=n;renderCigarettes();};}
+  const canvas=document.getElementById("cigarette-chart");
+  canvas.setAttribute("aria-label",`Daily cigarettes. ${series.dates.map((d,i)=>`${d}: ${series.values[i]===null?"not logged":series.values[i]}`).join("; ")}`);
+  const data={labels:series.dates.map(d=>d.slice(5)),datasets:[{label:"Cigarettes",data:series.values,backgroundColor:css("--strain"),minBarLength:2}]};
+  const options={responsive:true,maintainAspectRatio:false,animation:chartAnimation(200),
+    onClick:(e,items)=>{if(items[0]){day=series.dates[items[0].index];setRange(1);}},
+    plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,suggestedMax:2,ticks:{precision:0,maxTicksLimit:5}},x:{grid:{display:false},ticks:{maxTicksLimit:7}}}};
+  if(cigaretteChart){cigaretteChart.data=data;cigaretteChart.options=options;cigaretteChart.update();}
+  else cigaretteChart=new Chart(canvas,{type:"bar",data,options});
 }
-function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();renderReviews();renderCigarettes();
+function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();renderReviews();
   document.getElementById("chartbox").hidden=false;document.getElementById("mcards").hidden=true;
   document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
   Chart.defaults.font.family=css("--num");Chart.defaults.font.size=12;Chart.defaults.color=css("--ink2");Chart.defaults.elements.bar.borderRadius=4;
   Object.assign(Chart.defaults.plugins.tooltip,{backgroundColor:"#1b2026",titleColor:"#fff",bodyColor:"#d6dde3",padding:10,cornerRadius:8,displayColors:false,titleFont:{weight:"600"}});
+  renderCigarettes();
   const dw=document.getElementById("donutwrap");dw.hidden=!(t.donut&&range===1);
   if(tab==="strain"&&range===1&&workout>=0&&sess[workout])return workoutView(sess[workout]);
   const prevLbl=range===1?nice(prev):`previous ${range} days`;

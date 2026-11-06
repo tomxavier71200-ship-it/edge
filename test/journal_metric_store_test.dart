@@ -106,6 +106,35 @@ void main() {
         const JournalMetricValue(3, atMinuteOfDay: 720));
   });
 
+  test('remove and undo preserve newer entries and band-event deduplication', () async {
+    final ts = DateTime(2026, 11, 6, 12).millisecondsSinceEpoch ~/ 1000;
+    await LocalDb.putJournalMetrics('2026-11-06', {
+      'cigarettes': const JournalMetricValue(1, atMinuteOfDay: 600),
+      'mood': const JournalMetricValue(4),
+    });
+    await LocalDb.recordCigarette(ts);
+    final removed = await LocalDb.adjustCigaretteCount('2026-11-06', -1);
+    expect(removed, const JournalMetricValue(2, atMinuteOfDay: 720));
+    expect((await LocalDb.journalMetricsForDay('2026-11-06'))['cigarettes'],
+        const JournalMetricValue(1));
+    expect(await LocalDb.recordCigarette(ts), isFalse,
+        reason: 'Deleting a count must not make its band packet replayable');
+    await LocalDb.recordCigarette(ts + 60);
+    await LocalDb.adjustCigaretteCount('2026-11-06', 1,
+        restoreMinute: removed!.atMinuteOfDay);
+    final values = await LocalDb.journalMetricsForDay('2026-11-06');
+    expect(values['cigarettes'], const JournalMetricValue(3, atMinuteOfDay: 721));
+    expect(values['mood'], const JournalMetricValue(4));
+  });
+
+  test('remove leaves a real zero and never creates or decrements an unknown day', () async {
+    expect(await LocalDb.adjustCigaretteCount('2026-11-06', -1), isNull);
+    await LocalDb.putJournalMetrics('2026-11-06', {'cigarettes': const JournalMetricValue(1)});
+    await LocalDb.adjustCigaretteCount('2026-11-06', -1);
+    expect(await LocalDb.adjustCigaretteCount('2026-11-06', -1), isNull);
+    expect((await LocalDb.journalMetricsForDay('2026-11-06'))['cigarettes']!.value, 0);
+  });
+
   test('a day round-trips, time included', () async {
     await LocalDb.putJournalMetrics('2026-06-01', {
       'mood': const JournalMetricValue(4),
@@ -116,6 +145,31 @@ void main() {
     expect(back['mood'], const JournalMetricValue(4));
     expect(back['caffeine_mg']!.value, 200);
     expect(back['caffeine_mg']!.atMinuteOfDay, 855);
+  });
+
+  test('journal graph history is bounded and preserves zero and missing days', () async {
+    await LocalDb.putJournalMetrics('2026-11-04', {
+      'cigarettes': const JournalMetricValue(0), 'mood': const JournalMetricValue(4),
+    });
+    await LocalDb.putJournalMetrics('2026-11-06', {
+      'cigarettes': const JournalMetricValue(2, atMinuteOfDay: 600),
+    });
+    await LocalDb.putJournalMetrics('2026-11-07', {
+      'cigarettes': const JournalMetricValue(9),
+    });
+    final history = await LocalDb.journalMetricHistory('cigarettes',
+        from: '2026-11-04', through: '2026-11-06');
+    expect(history.keys.toList(), ['2026-11-04', '2026-11-06']);
+    expect(history['2026-11-04']!.value, 0);
+    expect(history['2026-11-06']!.atMinuteOfDay, 600);
+    expect(history.containsKey('2026-11-05'), isFalse);
+  });
+
+  test('calendar graph windows keep DST and leap days as distinct buckets', () {
+    expect(journalWindowDays('2026-10-26', 3),
+        ['2026-10-24', '2026-10-25', '2026-10-26']);
+    expect(journalWindowDays('2028-03-01', 3),
+        ['2028-02-28', '2028-02-29', '2028-03-01']);
   });
 
   test('a zero is stored as a real reading', () async {

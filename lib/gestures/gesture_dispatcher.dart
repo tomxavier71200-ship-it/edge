@@ -23,6 +23,8 @@ class GestureDispatcher {
   final Future<void> Function()? onWorkoutToggle;
   final Future<void> Function()? onLogWater;
   final Future<void> Function(int eventTs)? onLogCigarette;
+  final Future<void> Function()? onCigaretteConfirmationNeeded;
+  final DateTime Function() now;
 
   GestureDispatcher({
     required this.settings,
@@ -31,7 +33,9 @@ class GestureDispatcher {
     this.onWorkoutToggle,
     this.onLogWater,
     this.onLogCigarette,
-  });
+    this.onCigaretteConfirmationNeeded,
+    DateTime Function()? now,
+  }) : now = now ?? DateTime.now;
 
   static const int _doubleTapEventId = 14; // EventId.doubleTap
   static const int _recencyWindowSec = 6; // older than this = a drained/historical tap
@@ -39,15 +43,30 @@ class GestureDispatcher {
   static const int _debounceMs = 2000;
 
   int _lastFiredMs = 0;
+  int? _pendingCigaretteMs;
+  int? _pendingCigaretteTs;
+  int _lastCigaretteEventTs = 0;
+  int _settingsRevision = -1;
 
   /// Feed every live event here (id, band timestamp seconds, raw hex). Cheap to call
   /// for non-gesture events — it returns immediately.
   void onEvent(int eventId, int tsEpoch, String hex) {
     if (eventId != _doubleTapEventId) return;
     final action = settings.doubleTap;
+    if (_settingsRevision != settings.revision) {
+      _pendingCigaretteMs = null;
+      _pendingCigaretteTs = null;
+      _settingsRevision = settings.revision;
+    }
+    if (action != DeviceAction.logCigarette || !settings.confirmCigarette) {
+      _pendingCigaretteMs = null;
+      _pendingCigaretteTs = null;
+    }
     if (action == DeviceAction.none) return;
 
-    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final at = now();
+    final nowMs = at.millisecondsSinceEpoch;
+    final nowSec = nowMs ~/ 1000;
     final age = nowSec - tsEpoch;
     // A counted journal entry needs a trustworthy occurrence time. Unlike
     // phone/media commands, never turn an unset clock or a historical tap
@@ -55,6 +74,27 @@ class GestureDispatcher {
     if (action == DeviceAction.logCigarette &&
         (tsEpoch <= 0 || age.abs() > _recencyWindowSec)) {
       log?.call('[gesture] cigarette tap ignored: timestamp is not live');
+      return;
+    }
+
+    if (action == DeviceAction.logCigarette && settings.confirmCigarette) {
+      // Firmware sends double-tap events, not individual taps. Require two
+      // distinct events; a repeated packet must never confirm its own entry.
+      if (tsEpoch <= _lastCigaretteEventTs) return;
+      _lastCigaretteEventTs = tsEpoch;
+      final pending = _pendingCigaretteMs;
+      if (pending == null || nowMs - pending < 0 || nowMs - pending > 5000 ||
+          _pendingCigaretteTs == null || tsEpoch - _pendingCigaretteTs! > 5) {
+        _pendingCigaretteMs = nowMs;
+        _pendingCigaretteTs = tsEpoch;
+        log?.call('[gesture] double-tap again within 5 seconds to log cigarette');
+        onCigaretteConfirmationNeeded?.call();
+      } else {
+        _pendingCigaretteMs = null;
+        _pendingCigaretteTs = null;
+        _lastFiredMs = nowMs;
+        onLogCigarette?.call(tsEpoch);
+      }
       return;
     }
     // Stale only when the ts is plausibly a real (recent-ish but past) historical
@@ -65,7 +105,6 @@ class GestureDispatcher {
       return;
     }
 
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
     if (nowMs - _lastFiredMs < _debounceMs) return;
     _lastFiredMs = nowMs;
 
