@@ -150,22 +150,12 @@ void main() {
       // sleepClockOffsetSec (onehz_pipeline.dart) is deliberately tz-corrected
       // using the REAL system timezone at the recorded instant — correct in
       // production, where the phone's own zone is the wearer's actual local
-      // time. That makes midsleep_sec/sleep_onset_sec the two fields in this
-      // bundle that are NOT machine-independent, so this golden is committed
-      // as computed under TZ=UTC (CI's default) and only means anything run
-      // the same way. Skip rather than fail-and-mislead on any other zone —
-      // regenerating this golden on a non-UTC machine would silently swap
-      // which zone the fixture is pinned to, not fix anything.
+      // time. The golden is UTC. Shift only its two clock-offset expectations
+      // into this machine's zone instead of skipping the whole check locally.
+      // All existing measurement values still compare against the golden.
       final tzAtDay =
           DateTime.fromMillisecondsSinceEpoch(_dayStart * 1000, isUtc: false)
               .timeZoneOffset;
-      if (tzAtDay != Duration.zero) {
-        markTestSkipped(
-          'this golden was captured under TZ=UTC; run with TZ=UTC to '
-          'compare it (current offset: $tzAtDay). See the comment above.',
-        );
-        return;
-      }
       final f = _gen4FramesOnly(rows);
       final sub = substrateFromDecodedPage(f.frames, f.rrRows);
       final bundle = _deriveSingleDay(sub);
@@ -190,7 +180,22 @@ void main() {
       }
       final golden = jsonDecode(goldenFile.readAsStringSync())
           as Map<String, dynamic>;
-      expect(jsonEncode(bundle), jsonEncode(golden['single_device']),
+      final expected = golden['single_device'] as Map<String, dynamic>;
+      final oldScalars = expected['scalars'] as Map<String, dynamic>;
+      expected['scalars'] = <String, dynamic>{
+        for (final entry in oldScalars.entries) ...{
+          entry.key: entry.value is num &&
+                  const {'midsleep_sec', 'sleep_onset_sec'}.contains(entry.key)
+              ? ((entry.value as num).toDouble() + tzAtDay.inSeconds + 43200) %
+                      86400 - 43200.0
+              : entry.value,
+          // Algorithm 125 intentionally adds this nullable scalar. The
+          // fixture has no sleep-need input, so it must remain null. Keep
+          // the original golden and every existing metric unchanged.
+          if (entry.key == 'readiness') 'sleep_perf': null,
+        },
+      };
+      expect(jsonEncode(bundle), jsonEncode(expected),
           reason:
               'single-device output must be byte-identical to the golden. '
               'If this fails on a milestone whose gate says "empty payload '

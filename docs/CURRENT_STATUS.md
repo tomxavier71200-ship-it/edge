@@ -2,6 +2,23 @@
 
 Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Published build 80 verification
+
+App a811a03f and analytics c620705 are pushed. The iPhone workflow published
+0.10.80/80 successfully; the downloaded IPA's Info.plist, release asset and
+SideStore manifest agree on version, build, URL and size. The clean Android
+release build against the exact remote dependency also passed.
+
+The full CI suite passed 4,562 tests, skipped 663 and failed one old
+single-device golden comparison. A parsed comparison found one difference:
+the intentional nullable scalars.sleep_perf field. No existing metric changed
+in that fixture. The local follow-up explicitly expects that new null field
+without regenerating the golden, and adjusts only the two clock expectations
+to the machine's timezone so the check also runs locally instead of skipping.
+All seven fixture/score tests and scoped analysis pass. That test-only
+follow-up still requires approval before pushing. The simulator workflow was
+still running at this verification point.
+
 ## Fragmented-night correction prepared (algorithm 125)
 
 Analytics c620705 fixes an observed accounting defect: main-sleep detection
