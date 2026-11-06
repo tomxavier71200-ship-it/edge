@@ -1,6 +1,6 @@
 # Koop development status
 
-Updated 2026-11-05. Read this with `AGENTS.md`, then only the files relevant to the task.
+Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
 
 ## Fragmented-night correction prepared (algorithm 125)
 
@@ -28,8 +28,8 @@ qualified baseline components, a separate issue from the sleep-duration defect.
 The opt-in retained replay reads KOOP_SLEEP_REPLAY_DB/KOOP_SLEEP_REPLAY_DAYS;
 no personal recordings are committed. Analytics checks passed 91 tests with one
 missing-fixture skip. App regression checks passed 68 tests, plus the retained
-seven-night acceptance replay (October 29–November 4). Publication still
-requires owner approval.
+seven-night acceptance replay (October 29–November 4). Publication was
+approved by the owner on November 6; final CI/distribution verification is pending.
 
 Android build 85 verified November 4 Home changing from 3h 57m to 5h 03m
 after automatic version-124 processing. It also exposed a second defect:
@@ -47,7 +47,8 @@ Android build 86 (algorithm 125) verified automatic historical processing:
 November 4 Home now displays 5h 03m asleep and 46% sleep performance instead
 of 3h 57m and 34%. Its time-in-bed window remains 23:17–04:52. The phone's
 other settings and saved data were preserved. This is a local device build;
-the analytics and app commits have not been pushed.
+analytics c620705 was pushed on November 6; the approved app release is being
+validated against that exact remote dependency before publication.
 
 ## Follow-up prepared after build 79
 
@@ -64,7 +65,7 @@ window includes 1h 39m classified awake (rounded independently). UI labels now
 explicitly distinguish time asleep from time in bed on Home, My Day and the
 stage table. No sleep measurements or staging rules changed. Whether those
 awake estimates match real wakefulness is still unverified. This follow-up
-requires the owner's approval before another push.
+was approved for publication with the sleep correction on November 6.
 
 The shared preflight guard also checks the internal analytics/protocol
 fingerprints before Flutter runs. Executable regressions verify matching pins
