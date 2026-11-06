@@ -439,12 +439,11 @@ class P {
 /// the golden tests render the same shapes the design was drawn in rather than
 /// silently landing on Roboto.
 class F {
-  // Montserrat: the closest open face to WHOOP's Proxima Nova. It sets about
-  // 12% wider than SF, so each step is drawn one notch smaller to keep the
-  // footprint every row was laid out for, and a little tighter. Line heights
-  // are the SF ramp's, unchanged, so vertical rhythm does not move.
-  static const _f = 'Montserrat';
-  static const _fb = ['Manrope'];
+  // Rounded text and a separate Barlow numeral ramp, informed by the owner's
+  // populated WHOOP screens. Use bundled faces consistently on both phones;
+  // this approximates the reference without depending on its private fonts.
+  static const _f = 'Manrope';
+  static const _fb = ['Montserrat'];
   static const _tab = [FontFeature.tabularFigures()];
 
   // The 7 steps.
@@ -479,14 +478,14 @@ class F {
   static const body = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 13.5,
-      height: 22 / 13.5,
+      fontSize: 14.5,
+      height: 22 / 14.5,
       letterSpacing: -.1);
   static const cap = TextStyle(
       fontFamily: _f,
       fontFamilyFallback: _fb,
-      fontSize: 11.5,
-      height: 18 / 11.5,
+      fontSize: 12,
+      height: 18 / 12,
       letterSpacing: -.05);
   static const over = TextStyle(
       fontFamily: _f,
@@ -709,7 +708,30 @@ AnimationStyle? sheetMotion(BuildContext c) =>
 /// can no longer be one line. The number is not a device class — it is where
 /// `label · value · unit` stops fitting a phone's width — and it is shared so
 /// that every card that has to restack does it at the same moment.
-bool bigText(BuildContext c) => MediaQuery.textScalerOf(c).scale(1) > 1.3;
+bool bigText(BuildContext c) => textScaleFor(c, F.body.fontSize!) > 1.3;
+
+/// Nonlinear accessibility scaling must be measured at the text's actual size.
+double textScaleFor(BuildContext c, double fontSize) =>
+    MediaQuery.textScalerOf(c).scale(fontSize) / fontSize;
+
+/// Apply Customize's multiplier without flattening the system's font curve.
+TextScaler adjustedTextScaler(TextScaler system, double preference) =>
+    preference == 1 ? system : _PreferenceTextScaler(system, preference);
+
+class _PreferenceTextScaler extends TextScaler {
+  final TextScaler system;
+  final double preference;
+  const _PreferenceTextScaler(this.system, this.preference);
+  @override
+  double scale(double fontSize) => system.scale(fontSize) * preference;
+  @override
+  double get textScaleFactor => scale(14) / 14;
+  @override
+  bool operator ==(Object other) => other is _PreferenceTextScaler &&
+      other.system == system && other.preference == preference;
+  @override
+  int get hashCode => Object.hash(system, preference);
+}
 
 /// Reduced motion has to reach the NAVIGATOR, not only the widgets inside it.
 /// `TransitionRoute` builds its controller straight from `transitionDuration`

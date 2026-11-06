@@ -55,6 +55,55 @@ void main() {
     final db = await LocalDb.instance;
     await db.delete('journal_metric');
     await db.delete('journal_field_def');
+    await db.delete('notif_fired', where: 'key LIKE ?',
+        whereArgs: ['cigarette_gesture:%']);
+  });
+
+  test('cigarette logging preserves other fields and dedupes across reopen', () async {
+    final at = DateTime(2026, 11, 6, 14, 25);
+    final ts = at.millisecondsSinceEpoch ~/ 1000;
+    await LocalDb.putJournalMetrics('2026-11-06', {
+      'mood': const JournalMetricValue(4),
+      'caffeine_mg': const JournalMetricValue(100, atMinuteOfDay: 600),
+    });
+    expect(await LocalDb.recordCigarette(ts), isTrue);
+    await LocalDb.close();
+    expect(await LocalDb.recordCigarette(ts), isFalse);
+    final fields = await LocalDb.journalMetricsForDay('2026-11-06');
+    expect(fields['mood'], const JournalMetricValue(4));
+    expect(fields['caffeine_mg'], const JournalMetricValue(100, atMinuteOfDay: 600));
+    expect(fields['cigarettes'], const JournalMetricValue(1, atMinuteOfDay: 865));
+  });
+
+  test('overlapping cigarette writes are atomic and stay on their local day', () async {
+    final at = DateTime(2026, 11, 6, 23, 59, 55);
+    final ts = at.millisecondsSinceEpoch ~/ 1000;
+    await Future.wait([for (var i = 0; i < 10; i++) LocalDb.recordCigarette(ts + i)]);
+    expect((await LocalDb.journalMetricsForDay('2026-11-06'))['cigarettes'],
+        const JournalMetricValue(5, atMinuteOfDay: 1439));
+    expect((await LocalDb.journalMetricsForDay('2026-11-07'))['cigarettes'],
+        const JournalMetricValue(5, atMinuteOfDay: 0));
+  });
+
+  test('failed cigarette write rolls back its dedupe claim for retry', () async {
+    final ts = DateTime(2026, 11, 6, 12).millisecondsSinceEpoch ~/ 1000;
+    final db = await LocalDb.instance;
+    await db.execute("CREATE TRIGGER reject_cigarette BEFORE INSERT ON journal_metric "
+        "WHEN NEW.field='cigarettes' BEGIN SELECT RAISE(ABORT, 'test write failure'); END");
+    try { await expectLater(LocalDb.recordCigarette(ts), throwsA(isA<DatabaseException>())); }
+    finally { await db.execute('DROP TRIGGER reject_cigarette'); }
+    expect(await LocalDb.recordCigarette(ts), isTrue);
+    expect((await LocalDb.journalMetricsForDay('2026-11-06'))['cigarettes']!.value, 1);
+  });
+
+  test('manual cigarette correction is the base for the next wrist entry', () async {
+    await LocalDb.putJournalMetrics('2026-11-06', {
+      'cigarettes': const JournalMetricValue(2, atMinuteOfDay: 600),
+    });
+    final ts = DateTime(2026, 11, 6, 12).millisecondsSinceEpoch ~/ 1000;
+    expect(await LocalDb.recordCigarette(ts), isTrue);
+    expect((await LocalDb.journalMetricsForDay('2026-11-06'))['cigarettes'],
+        const JournalMetricValue(3, atMinuteOfDay: 720));
   });
 
   test('a day round-trips, time included', () async {

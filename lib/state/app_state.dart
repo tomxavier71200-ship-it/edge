@@ -1371,6 +1371,7 @@ class AppState extends ChangeNotifier {
       onMarkMoment: _markMomentFromGesture,
       onWorkoutToggle: _toggleWorkoutFromGesture,
       onLogWater: _logWaterFromGesture,
+      onLogCigarette: _logCigaretteFromGesture,
     );
     engine = BleEngine(
       onRecord: _onRecord,
@@ -1514,6 +1515,7 @@ class AppState extends ChangeNotifier {
       onMarkMoment: _markMomentFromGesture,
       onWorkoutToggle: _toggleWorkoutFromGesture,
       onLogWater: _logWaterFromGesture,
+      onLogCigarette: _logCigaretteFromGesture,
     );
     this.engine = engine ??
         BleEngine(
@@ -7230,6 +7232,23 @@ class AppState extends ChangeNotifier {
       _log('[gesture] log water failed: $e');
     } finally {
       _writingWaterFromGesture = false;
+    }
+  }
+
+  /// Count and dedupe the wrist event in one durable database transaction.
+  Future<void> _logCigaretteFromGesture(int eventTs) async {
+    final r = repo;
+    if (r == null) return;
+    try {
+      if (!await r.recordCigarette(eventTs)) {
+        _log('[gesture] cigarette not added: duplicate or entry limit');
+        return;
+      }
+      bumpInsights();
+      _log('[gesture] one cigarette logged');
+      await HapticFeedback.mediumImpact();
+    } catch (e) {
+      _log('[gesture] log cigarette failed: $e');
     }
   }
 

@@ -10561,6 +10561,40 @@ class LocalDb {
     });
   }
 
+  /// Record a live wrist cigarette entry without replacing other journal
+  /// fields. The existing durable claim ledger and count commit together:
+  /// reconnects/restarts cannot count the same band event twice. Historical
+  /// taps are rejected by the dispatcher before reaching this method.
+  static Future<bool> recordCigarette(int eventTs,
+      {String deviceId = kPrimaryDeviceId}) async {
+    final at = DateTime.fromMillisecondsSinceEpoch(eventTs * 1000);
+    final date = dayLabelOf(at);
+    final spec = kJournalFieldsByKey['cigarettes']!;
+    final db = await instance;
+    return db.transaction((txn) async {
+      await txn.rawInsert(
+        'INSERT OR IGNORE INTO notif_fired(key, fired_at) VALUES(?, ?)',
+        ['cigarette_gesture:$deviceId:$eventTs',
+          DateTime.now().millisecondsSinceEpoch],
+      );
+      final claimed = Sqflite.firstIntValue(await txn.rawQuery('SELECT changes()'));
+      if (claimed != 1) return false;
+      final rows = await txn.query('journal_metric',
+          where: 'date = ? AND field = ?', whereArgs: [date, spec.key]);
+      final previous = rows.isEmpty ? 0.0 : (rows.first['value'] as num).toDouble();
+      if (!previous.isFinite || previous >= spec.max) return false;
+      final oldMinute = rows.isEmpty ? null : rows.first['at_min'] as int?;
+      final minute = at.hour * 60 + at.minute;
+      await txn.insert('journal_metric', {
+        'date': date, 'field': spec.key,
+        'value': (previous + 1).clamp(0, spec.max).toDouble(),
+        'at_min': oldMinute == null || minute > oldMinute ? minute : oldMinute,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      return true;
+    });
+  }
+
   /// One day's numeric fields, or an empty map when nothing was recorded.
   static Future<Map<String, JournalMetricValue>> journalMetricsForDay(
     String date,

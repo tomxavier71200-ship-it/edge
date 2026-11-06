@@ -33,6 +33,7 @@ enum DeviceAction {
   markMoment,
   workoutToggle,
   logWater,
+  logCigarette,
   // Native broadcast — sends an Android broadcast intent for Tasker to subscribe
   // to (see NativeChannels.kt). Only offered on Android.
   broadcastToTasker,
@@ -65,6 +66,8 @@ extension DeviceActionX on DeviceAction {
         return 'workout_toggle';
       case DeviceAction.logWater:
         return 'log_water';
+      case DeviceAction.logCigarette:
+        return 'log_cigarette';
       case DeviceAction.broadcastToTasker:
         return 'broadcast_to_tasker';
     }
@@ -95,6 +98,8 @@ extension DeviceActionX on DeviceAction {
         return 'Start / stop workout';
       case DeviceAction.logWater:
         return 'Log water';
+      case DeviceAction.logCigarette:
+        return 'Log a cigarette';
       case DeviceAction.broadcastToTasker:
         return 'Broadcast to Tasker';
     }
@@ -126,6 +131,9 @@ extension DeviceActionX on DeviceAction {
       case DeviceAction.logWater:
         return 'Add a glass to today\'s water, same step as the + on the '
             'nutrition screen.';
+      case DeviceAction.logCigarette:
+        return 'Record one cigarette and its time. Requires a live band '
+            'connection; correct entries in the journal.';
       case DeviceAction.broadcastToTasker:
         return 'Fire a broadcast intent so Tasker can trigger any automation.';
     }
@@ -160,6 +168,8 @@ extension DeviceActionX on DeviceAction {
         return l?.deviceActionWorkoutToggleLabel ?? label;
       case DeviceAction.logWater:
         return l?.deviceActionLogWaterLabel ?? label;
+      case DeviceAction.logCigarette:
+        return label;
       case DeviceAction.broadcastToTasker:
         return l?.deviceActionBroadcastToTaskerLabel ?? label;
     }
@@ -191,6 +201,8 @@ extension DeviceActionX on DeviceAction {
         return l?.deviceActionWorkoutToggleBlurb ?? blurb;
       case DeviceAction.logWater:
         return l?.deviceActionLogWaterBlurb ?? blurb;
+      case DeviceAction.logCigarette:
+        return blurb;
       case DeviceAction.broadcastToTasker:
         return l?.deviceActionBroadcastToTaskerBlurb ?? blurb;
     }
@@ -201,7 +213,8 @@ extension DeviceActionX on DeviceAction {
   bool get isInApp =>
       this == DeviceAction.markMoment ||
       this == DeviceAction.workoutToggle ||
-      this == DeviceAction.logWater;
+      this == DeviceAction.logWater ||
+      this == DeviceAction.logCigarette;
 
   bool get isNative => this != DeviceAction.none && !isInApp;
 

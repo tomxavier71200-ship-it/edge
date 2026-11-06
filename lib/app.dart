@@ -167,8 +167,7 @@ class _OpenStrapAppState extends State<OpenStrapApp> with WidgetsBindingObserver
             ? child!
             : MediaQuery(
                 data: mq.copyWith(
-                    textScaler: TextScaler.linear(
-                        mq.textScaler.scale(1) * Look.textScale)),
+                    textScaler: adjustedTextScaler(mq.textScaler, Look.textScale)),
                 child: child!);
         return ThemeSwitchOverlay(key: themeSwitchKey, child: scaled);
       },

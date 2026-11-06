@@ -124,6 +124,61 @@ void main() {
     );
   });
 
+  testWidgets('iPhone safe areas and larger text keep the day centered', (
+    t,
+  ) async {
+    P.skin = Skin.whoop;
+    phone(t, 390);
+    await t.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(
+          Brightness.dark,
+        ).copyWith(platform: TargetPlatform.iOS),
+        builder: (c, child) => MediaQuery(
+          data: MediaQuery.of(c).copyWith(
+            padding: const EdgeInsets.only(top: 59, bottom: 34),
+            viewPadding: const EdgeInsets.only(top: 59, bottom: 34),
+            textScaler: TextScaler.linear(1.35),
+          ),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(S.x4),
+              child: Column(
+                children: [
+                  HomeHeader(
+                    sideWidth: 108,
+                    leading: Pressable(
+                      onTap: () {},
+                      child: const Icon(Icons.person),
+                    ),
+                    trailing: WhoopBandBadge(
+                      paired: true,
+                      connected: true,
+                      battery: (78, false),
+                      onTap: () {},
+                    ),
+                    day: DayNav(
+                      day: '2026-08-16',
+                      days: const ['2026-08-16', '2026-08-15'],
+                      onDay: (_) {},
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(t.takeException(), isNull);
+    expect(t.getRect(find.byType(HomeHeader)).top, greaterThanOrEqualTo(59));
+    expect(t.getCenter(find.text('TODAY')).dx, closeTo(195, .1));
+    expect(t.getRect(find.byType(DayNav)).bottom, lessThan(900 - 34));
+  });
+
   testWidgets('switch label, thumb and accessibility action each toggle once', (
     t,
   ) async {

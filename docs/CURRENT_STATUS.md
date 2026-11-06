@@ -2,6 +2,54 @@
 
 Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Primary device and local follow-up
+
+The owner uses Koop primarily on iPhone through SideStore. Android is for
+WHOOP reference. Prioritize iOS; Android verification is not iPhone verification.
+This is also recorded in AGENTS.md for subsequent work.
+
+The local follow-up adds an opt-in Settings > Automation > Double-tap > Log a
+cigarette action. A live, recent band event atomically increments the event's
+local day's `journal_metric.cigarettes` total and last-entry time, with a durable
+claim preventing repeat counts after reconnect/restart. Old/untrustworthy taps
+are ignored. Other journal fields and manually corrected totals are preserved.
+No claim is made that taps recorded while Koop cannot receive BLE are captured.
+
+Home's dashboard reloads on writes and day changes, shows self-reported counts
+and last-entry time, and opens the existing journal for corrections. The web
+Overview reads the same journal field from the encrypted backup. An unlogged
+past day stays unlogged. This stores a daily total and latest time, not a complete
+per-cigarette timeline or nicotine dose. No schema or physiological algorithm changed.
+
+Typography uses bundled Manrope text and Barlow numbers, informed by populated
+WHOOP history on October 15. Body/caption text is slightly larger. Custom text
+size now composes with system scaling without flattening nonlinear scaling;
+large-text layout decisions use actual body/label sizes instead of a 1pt probe.
+Web hover effects are mouse-only and chart/ring motion respects reduced motion.
+The user's existing app-style selection is preserved.
+
+Installed and reviewed: mobile-ios-design, Emil's apple-design and
+emil-design-eng, Anthropic frontend-design, and Vercel vercel-react-native-skills.
+Framework-specific React Native rules are not applied as Flutter code. The
+current work uses the relevant typography, accessibility, restrained motion,
+state-update and visual-review guidance.
+
+Focused Flutter checks passed for gestures, atomic storage/dedupe, local dates,
+journal correction, selected-day dashboard refresh, encrypted backup/restore,
+font scaling, narrow/large-text layouts, existing navigation/gallery, tokens and
+contrast. New font-scaling/layout/token batch: 34 pass (overlaps earlier UI checks).
+An additional iPhone safe-area/large-text case passed; the final iPhone layout
+and nonlinear-scaling batch passed 23 checks. Dashboard JavaScript: 14 pass;
+scoped analysis clean. Android release build 89
+built and installed over build 86/88 without clearing data. Home/Profile/Settings
+were inspected on Android; physical wrist logging is not verified (no paired
+band there). iPhone hardware and Safari verification remain pending. Nothing
+has been pushed or published for iPhone/web in this follow-up.
+
+The feature/design comparison is in WHOOP_FEATURE_COMPARISON.md. Journal CSV/import and mocked journal assistant compatibility checks also passed
+(25 tests). The UI review is in UI_REVIEW_2026_11_06.md. Screenshots and personal
+readings remain outside Git.
+
 ## Local Apple-guided UI improvements (not published)
 
 The community `wshobson/agents` mobile-ios-design skill is installed in the
@@ -27,22 +75,13 @@ Scoped analysis and whitespace checks passed. These are desktop widget checks;
 ADB found no connected Android device. Real-phone verification is pending.
 No calculation, schema, dependency pin or build number changed. No push made.
 
-## Published build 80 verification
+## Published baseline: iPhone build 81
 
-App a811a03f and analytics c620705 are pushed. The iPhone workflow published
-0.10.80/80 successfully; the downloaded IPA's Info.plist, release asset and
-SideStore manifest agree on version, build, URL and size. The clean Android
-release build against the exact remote dependency also passed.
-
-The full CI suite passed 4,562 tests, skipped 663 and failed one old
-single-device golden comparison. A parsed comparison found one difference:
-the intentional nullable scalars.sleep_perf field. No existing metric changed
-in that fixture. The local follow-up explicitly expects that new null field
-without regenerating the golden, and adjusts only the two clock expectations
-to the machine's timezone so the check also runs locally instead of skipping.
-All seven fixture/score tests and scoped analysis pass. That test-only
-follow-up still requires approval before pushing. The simulator workflow was
-still running at this verification point.
+App 9d964858 and analytics c620705 are published. The test, iPhone build 81 and
+iOS simulator workflows all completed successfully during the prior release
+verification. The downloaded IPA, release asset and SideStore manifest agreed
+on 0.10.81 / build 81. The local UI/cigarette/typography follow-up above has not
+been pushed and is not part of that published baseline.
 
 ## Fragmented-night correction prepared (algorithm 125)
 

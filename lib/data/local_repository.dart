@@ -297,6 +297,10 @@ abstract class LocalRepository {
   Future<Map<String, JournalMetricValue>> getJournalMetrics(String date) =>
       throw UnimplementedError('re-layer: getJournalMetrics');
 
+  /// Atomically add one cigarette for a live band event, once per event.
+  Future<bool> recordCigarette(int eventTs) =>
+      throw UnimplementedError('re-layer: recordCigarette');
+
   /// Replace one day's numeric fields. A field absent from [fields] is cleared
   /// for that day — the map IS the day, not a patch on it.
   Future<void> postJournalMetrics(

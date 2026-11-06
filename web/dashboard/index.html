@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src https://www.googleapis.com https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'none'">
 <title>Koop Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Montserrat:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Manrope:wght@400;600;700&display=swap">
 <style>
 /* Layout (WHOOP web style): dark header with the three scores as tabs, a light page below with
    a date switcher, statistics on the left and a chart in the middle, range buttons top right. */
@@ -17,7 +17,7 @@
   --ink:#1b2026; --ink2:#55606b; --ink3:#9aa3ad; --onhead:#f2f4f6;
   --recovery:#f5d000; --strain:#0093e7; --sleep:#7ba1bb; --up:#16b45d; --down:#e5262e; --today:#e5262e;
   --bar:#5a7383; --bar2:#c9cdd1;
-  --display:"Montserrat",system-ui,sans-serif; --num:"Barlow Semi Condensed",system-ui,sans-serif;
+  --display:"Manrope",system-ui,sans-serif; --num:"Barlow",system-ui,sans-serif;
   color-scheme:light;
 }
 *{box-sizing:border-box}
@@ -26,7 +26,7 @@ body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--displ
 .head{background:var(--head);color:var(--onhead)}
 .head .in{max-width:1100px;margin:0 auto;padding:24px 16px 0;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:center}
 .tab{background:none;border:0;color:var(--onhead);cursor:pointer;text-align:center;padding:0 8px 14px;position:relative;font:inherit;transition:transform .2s,opacity .2s;opacity:.78}
-.tab:hover{transform:translateY(-2px);opacity:1}.tab.on{opacity:1}
+@media (hover:hover) and (pointer:fine){.tab:hover{transform:translateY(-2px);opacity:1}}.tab.on{opacity:1}
 .ring circle{transition:stroke-dasharray .7s cubic-bezier(.2,.8,.2,1)}
 .tab .cap{font-size:16px;color:#c7ced6;margin-top:6px}
 .tab.on .cap{color:var(--accent,#fff);font-weight:700}
@@ -63,6 +63,7 @@ input,select{font:inherit;color:var(--ink);background:var(--card);border:1px sol
 .ranges button{border:0;background:none;padding:5px 12px;border-radius:999px;font:600 12px var(--display);cursor:pointer;color:var(--ink)}
 .ranges button.on{background:var(--today);color:#fff}
 main{max-width:1100px;margin:0 auto;padding:8px 16px 20px;display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px;align-items:start}
+#cigarette-log{max-width:1100px;margin:0 auto 20px;padding:20px 16px;box-sizing:border-box}
 #workout-reviews{max-width:1100px;margin:0 auto;padding:0 16px 20px;font-size:14px}
 #workout-reviews h3{font-size:16px}#workout-reviews p{color:var(--ink2);line-height:1.5;overflow-wrap:anywhere}
 main>section{background:none;padding:0}
@@ -76,14 +77,14 @@ body[data-tab=overview] main>.stats{display:none}
 .rem input{padding:0;accent-color:var(--strain)}
 .forget{border:0;background:none;color:var(--ink3);font:600 11px var(--display);cursor:pointer;text-decoration:underline}
 .filelink{font:600 12px var(--display);color:var(--ink2);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
-.filelink:hover{color:var(--ink)}
+@media (hover:hover) and (pointer:fine){.filelink:hover{color:var(--ink)}}
 button.filelink{background:none;border:0;padding:0}
 .open.google{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--ink);border:1px solid #d5d9dd;border-radius:999px;padding:7px 14px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
-.open.google:hover{background:#f8f9fa}
+@media (hover:hover) and (pointer:fine){.open.google:hover{background:#f8f9fa}}
 #status{max-width:1100px;margin:10px auto 0;padding:8px 16px;font-size:12px;color:var(--ink2)}
 .mcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-top:14px}
 .mcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;background:#fff;text-align:left;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
-.mcard:hover{border-color:#c9d0d6;box-shadow:0 4px 14px rgba(20,30,40,.07);transform:translateY(-1px)}
+@media (hover:hover) and (pointer:fine){.mcard:hover{border-color:#c9d0d6;box-shadow:0 4px 14px rgba(20,30,40,.07);transform:translateY(-1px)}}
 .mcard .l{font-size:12px;color:var(--ink2);font-weight:600}
 .mcard .v{font:600 30px var(--num);margin-top:2px;font-variant-numeric:tabular-nums}
 .mcard .d{font-size:12px;font-weight:700;margin-top:2px}
@@ -97,14 +98,14 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 .stats h3,.chart h3{font-size:14px;margin:16px 0 0}.stats .vs,.chart .vs{color:var(--ink3);font-size:12px;margin-bottom:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px 12px;text-align:center}
 .stat{border-radius:10px;padding:8px 4px;cursor:pointer;transition:background .15s,box-shadow .15s}
-.stat:hover{background:#f1f4f6}
+@media (hover:hover) and (pointer:fine){.stat:hover{background:#f1f4f6}}
 .stat.sel{background:#eaf4fc;box-shadow:inset 0 0 0 1px var(--strain)}
 .stat .l{font-size:12px}.stat .v{font:600 26px var(--num);color:var(--bar)}.stat .p{font-size:12px;color:var(--ink3)}
 .arrow{font-size:11px;margin-left:3px}
 .chart{min-width:0}.chartbox{position:relative;height:340px}
 .hint{font-size:11px;color:var(--ink3);margin-top:10px}
 .back{border:0;background:#eef1f3;border-radius:999px;padding:3px 10px;font:600 11px var(--display);cursor:pointer;margin-left:8px;color:var(--ink2)}
-.back:hover{background:#e2e7eb}
+@media (hover:hover) and (pointer:fine){.back:hover{background:#e2e7eb}}
 .today{border:0;background:none;color:var(--strain);font:700 12px var(--display);cursor:pointer}
 .donutwrap{display:flex;gap:18px;align-items:center;margin-top:18px;flex-wrap:wrap}
 .legend div{display:flex;justify-content:space-between;gap:18px;font-size:13px;padding:3px 0}
@@ -120,19 +121,19 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 .tl-seg{position:absolute;top:69px;height:3px;border-radius:2px}
 .tl-dot{position:absolute;top:67px;width:7px;height:7px;border-radius:50%;transform:translateX(-50%)}
 .tl-badge{position:absolute;top:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;background:none;border:0;padding:0;cursor:pointer;transition:transform .15s}
-.tl-badge:hover{transform:translateX(-50%) translateY(-2px)}
+@media (hover:hover) and (pointer:fine){.tl-badge:hover{transform:translateX(-50%) translateY(-2px)}}
 .tl-top{font:600 17px var(--num);height:20px;line-height:20px}.tl-top small{font-size:11px}
 .tl-ic{width:38px;height:34px;border-radius:4px;background:var(--c);display:grid;place-items:center;position:relative;margin-top:2px}
 .tl-ic::after{content:"";position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid var(--c)}
 .tl-below{position:absolute;top:78px;transform:translateX(-50%);font:600 17px var(--num)}
 .scr{display:flex;align-items:stretch;border:1px solid #1b2026;border-radius:3px;overflow:hidden;background:#eef0f2}
 .sarrow{width:38px;border:0;background:#e3e6e9;font-size:22px;color:var(--ink2);cursor:pointer}
-.sarrow:hover{background:#d7dbdf}.sarrow:disabled{opacity:.35;cursor:default}
+@media (hover:hover) and (pointer:fine){.sarrow:hover{background:#d7dbdf}}.sarrow:disabled{opacity:.35;cursor:default}
 .smid{flex:1;min-width:0;display:flex;flex-direction:column}
 #scrub{width:100%;height:96px;display:block;cursor:pointer;touch-action:pan-y;user-select:none}
 .slabels{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid #c9cdd1;background:#fff}
 .slabels button{border:0;border-left:1px solid #e3e6e9;background:none;font:600 11px var(--display);color:var(--ink);padding:7px 2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.slabels button:hover{background:#f4f6f7}.slabels button.sel{color:#c3c9cf;background:#fafbfb}
+@media (hover:hover) and (pointer:fine){.slabels button:hover{background:#f4f6f7}}.slabels button.sel{color:#c3c9cf;background:#fafbfb}
 .zones{margin-top:14px}
 .zones div{display:grid;grid-template-columns:80px 1fr 70px;gap:10px;align-items:center;font-size:13px;padding:3px 0}
 .zones i{display:block;height:10px;border-radius:4px;background:var(--strain)}
@@ -142,9 +143,11 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
 .scrubhead{font-size:12px;color:var(--ink3);margin-bottom:6px}
 .strip{display:flex;gap:2px;align-items:flex-end;height:70px}
 .strip button{flex:1 1 0;border:0;border-radius:3px 3px 0 0;cursor:pointer;min-width:3px;padding:0;opacity:.6;transition:opacity .15s,transform .15s;transform-origin:bottom}
-.strip button:hover{opacity:1;transform:scaleY(1.04)}
+@media (hover:hover) and (pointer:fine){.strip button:hover{opacity:1;transform:scaleY(1.04)}}
 .strip button.sel{opacity:1;outline:2px solid var(--ink);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+@media (prefers-reduced-motion:reduce){.tab,.ring circle,.mcard,.hrtip,.stat,.tl-badge{transition:none!important}}
 </style>
 </head>
 <body>
@@ -174,6 +177,10 @@ button:focus-visible,.stat:focus-visible{outline:2px solid var(--strain);outline
     <div class="donutwrap" id="donutwrap" hidden><div class="legend" id="legend"></div><div style="width:180px;height:180px"><canvas id="donut"></canvas></div></div></section>
 </main>
 <section id="workout-reviews" hidden aria-label="Workout reviews"></section>
+<section id="cigarette-log" class="stats" hidden aria-label="Cigarette journal">
+  <h3>Cigarettes</h3><div id="cigarette-summary" class="vs"></div>
+  <p>Self-reported in Koop. Correct entries in the phone’s journal.</p>
+</section>
 <section class="scrub"><div class="scrubin"><div class="scr"><button class="sarrow" id="sprev" aria-label="Previous day">‹</button><div class="smid"><canvas id="scrub" aria-label="Seven days of heart rate; click a day to open it"></canvas><div class="slabels" id="slabels"></div></div><button class="sarrow" id="snext" aria-label="Next day">›</button></div></div></section>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
@@ -420,6 +427,9 @@ function ring(id,frac,color,text){const svg=document.getElementById(id),r=56,c=2
 // One chart on the page, updated IN PLACE when the new view has the same shape (same
 // type, same x-axis kind, same number of series), so lines and bars move to the new
 // day instead of the canvas being thrown away and redrawn from zero.
+function chartAnimation(duration){
+  return typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches?false:{duration};
+}
 function mk(cfg){const el=document.getElementById("chart"),sig=c=>[c.type,c.options?.scales?.x?.type||"category",c.data.datasets.length].join("|");
   if(chart&&chart._sig===sig(cfg)){chart.data=cfg.data;chart.options=cfg.options;chart.update();return chart;}
   chart?.destroy();const c=new Chart(el,cfg);c._sig=sig(cfg);return c;}
@@ -453,7 +463,7 @@ const TABS={
 const val=(k,d)=>k==="sri"?(d===sriDay&&sri!=null?sri:null):get(k,d);
 function fmt(k,v,dp,u){if(v==null)return "—";if(u==="h")return hm(v);if(u==="m")return Math.round(v)+" min";return (+v).toFixed(dp)+(u==="%"?"%":"");}
 const recColor=x=>x>=67?css("--up"):x>=34?css("--recovery"):css("--down");
-const lineOpts=y=>({responsive:true,maintainAspectRatio:false,animation:{duration:350},interaction:{mode:"index",intersect:false},
+const lineOpts=y=>({responsive:true,maintainAspectRatio:false,animation:chartAnimation(350),interaction:{mode:"index",intersect:false},
   plugins:{legend:{display:false},tooltip:{displayColors:false,filter:i=>i.raw!=null,callbacks:{title:i=>i[0]?.label??"",label:i=>`${i.dataset.label?i.dataset.label+": ":""}${i.raw} bpm`}}},scales:{y:{grid:{color:css("--line")},title:{display:true,text:"bpm"},...y},x:{ticks:{maxTicksLimit:12,autoSkip:true},grid:{display:false}}}});
 
 let focus=null; // a statistic picked to chart: {k,label,dp,u}
@@ -487,7 +497,7 @@ function drawCurve(pts,on,off,title,vs,ws=[],span=null){const wins=Array.isArray
   const ds=(label,f)=>({label,data:seg(f),borderColor:look[label][0],backgroundColor:look[label][1],fill:label==="Workout"?false:"origin",
     pointRadius:0,pointHoverRadius:4.5,pointHoverBorderWidth:2,pointHoverBorderColor:"#fff",pointHoverBackgroundColor:look[label][2],borderWidth:1,tension:0,spanGaps:false});
   chart=mk({type:"line",data:{datasets:[ds("Asleep",inSleep),ds("Awake",p=>!inSleep(p)&&!inW(p)),ds("Workout",p=>inW(p)&&!inSleep(p))]},
-    options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},interaction:{mode:"index",intersect:false},
+    options:{responsive:true,maintainAspectRatio:false,animation:chartAnimation(300),interaction:{mode:"index",intersect:false},
       plugins:{legend:{display:false},bands:{list:ws.map(s=>({a:s.start,b:s.end||s.start,c:"rgba(0,147,231,.10)"}))},
         // WHOOP's two-part box: the bpm on top, the time in a darker strip under it.
         tooltip:{enabled:false,filter:i=>i.raw?.y!=null,external:({chart:c,tooltip:tt})=>{let el=c.canvas.parentNode.querySelector(".hrtip");
@@ -543,7 +553,7 @@ function sleepDay(){const {pts,on,off}=dayCurve(day);const pad=30*60;
   if(on==null)document.getElementById("ch-vs").textContent=`${nice(day)} · no sleep window stored for this night`;
   const tib=get("inbed_min",day),tst=get("tst_min",day),awake=tib!=null&&tst!=null&&tib>=tst?tib-tst:null;
   const st=[["Awake",awake,"#e6e9ec"],["Light",get("light_min",day),"#c9d7e2"],["REM",get("rem_min",day),css("--sleep")],["SWS Deep",get("deep_min",day),"#2f3d4a"]];
-  donut?.destroy();donut=new Chart(document.getElementById("donut"),{type:"doughnut",data:{labels:st.map(s=>s[0]),datasets:[{data:st.map(s=>s[1]),backgroundColor:st.map(s=>s[2]),borderColor:"#fff",borderWidth:2,hoverOffset:8}]},options:{cutout:"70%",layout:{padding:8},onHover:(e,el)=>{document.querySelectorAll("#legend div").forEach((d,i)=>d.style.opacity=el.length&&el[0].index!==i?.4:1);},animation:{duration:350},plugins:{legend:{display:false}}}});
+  donut?.destroy();donut=new Chart(document.getElementById("donut"),{type:"doughnut",data:{labels:st.map(s=>s[0]),datasets:[{data:st.map(s=>s[1]),backgroundColor:st.map(s=>s[2]),borderColor:"#fff",borderWidth:2,hoverOffset:8}]},options:{cutout:"70%",layout:{padding:8},onHover:(e,el)=>{document.querySelectorAll("#legend div").forEach((d,i)=>d.style.opacity=el.length&&el[0].index!==i?.4:1);},animation:chartAnimation(350),plugins:{legend:{display:false}}}});
   document.getElementById("legend").innerHTML=st.map(s=>`<div><span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${s[2]};margin-right:6px"></i>${s[0]}</span><b>${hm(s[1])}</b></div>`).join("");}
 
 let workout=-1;
@@ -597,7 +607,20 @@ function strip(){const today=iso(new Date());let end=shift(day,1);if(end>today)e
   document.getElementById("slabels").innerHTML=scrubDays.map(d=>`<button data-d="${d}" class="${d===day?"sel":""}">${new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</button>`).join("");
   document.getElementById("snext").disabled=day>=today;}
 
-function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();renderReviews();
+function cigarettesOn(d){
+  if(!liveDb)return null;
+  try{const r=liveDb.exec("SELECT value,at_min FROM journal_metric WHERE date=? AND field='cigarettes'",[d]);
+    const row=r[0]?.values?.[0];if(!row||!Number.isFinite(row[0])||row[0]<0||row[0]>100)return null;
+    return {count:Math.round(row[0]),minute:Number.isInteger(row[1])&&row[1]>=0&&row[1]<1440?row[1]:null};
+  }catch{return null;}
+}
+function renderCigarettes(){
+  const box=document.getElementById("cigarette-log"),entry=range===1&&tab==="overview"&&!focus?cigarettesOn(day):null;
+  box.hidden=entry===null;if(!entry){document.getElementById("cigarette-summary").textContent="";return;}
+  const last=entry.count>0&&entry.minute!==null?` · last logged ${String(Math.floor(entry.minute/60)).padStart(2,"0")}:${String(entry.minute%60).padStart(2,"0")}`:"";
+  document.getElementById("cigarette-summary").textContent=`${entry.count} cigarette${entry.count===1?"":"s"} · ${nice(day)}${last}`;
+}
+function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab=range===1&&!focus&&workout<0?tab:"";header();subtabs();strip();renderReviews();renderCigarettes();
   document.getElementById("chartbox").hidden=false;document.getElementById("mcards").hidden=true;
   document.getElementById("bubbles").innerHTML="";document.getElementById("zones").hidden=true;
   Chart.defaults.font.family=css("--num");Chart.defaults.font.size=12;Chart.defaults.color=css("--ink2");Chart.defaults.elements.bar.borderRadius=4;
@@ -619,7 +642,7 @@ function render(){const t=TABS[tab],prev=shift(day,-1);document.body.dataset.tab
     const v=ds.map(d=>{const x=get(k,d);return x==null?null:k==="tst_min"?+(x/60).toFixed(2):x;});
     const col=k==="readiness"?v.map(x=>x==null?null:recColor(x)):css(k==="strain"?"--strain":"--bar");
     chart=mk({type:range>30?"line":"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[{label,data:v,backgroundColor:col,borderColor:css("--bar"),pointRadius:range>30?0:3,spanGaps:false}]},
-      options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},onClick:(e,el)=>{if(el[0]){day=ds[el[0].index];setRange(1);}},
+      options:{responsive:true,maintainAspectRatio:false,animation:chartAnimation(350),onClick:(e,el)=>{if(el[0]){day=ds[el[0].index];setRange(1);}},
         plugins:{legend:{display:false}},scales:{y:mm?{min:mm[0],max:mm[1]}:{beginAtZero:true},x:{grid:{display:false}}}}});}
 }
 // The day's metrics as cards — each on its own scale (a bar chart of HRV in ms next to
@@ -655,7 +678,7 @@ function focusView(){const {k,label,dp,u}=focus,n=range===1?30:range,ds=[];for(l
   chart=mk({type:"bar",data:{labels:ds.map(d=>d.slice(5)),datasets:[
       {label,data:v,backgroundColor:col,borderRadius:4,maxBarThickness:26},
       ...(avg==null?[]:[{type:"line",label:"Average",data:ds.map(()=>avg),borderColor:css("--ink3"),borderDash:[5,4],borderWidth:1.2,pointRadius:0}])]},
-    options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},interaction:{mode:"index",intersect:false},
+    options:{responsive:true,maintainAspectRatio:false,animation:chartAnimation(350),interaction:{mode:"index",intersect:false},
       onClick:(e,el)=>{if(el[0])goDay(ds[el[0].index],true);},onHover:(e,el)=>{e.native.target.style.cursor=el.length?"pointer":"default";},
       plugins:{legend:{display:false},tooltip:{filter:i=>i.raw!=null,callbacks:{title:i=>nice(ds[i[0].dataIndex]),label:i=>`${i.dataset.label}: ${show(i.raw)}`}}},
       scales:{y:{beginAtZero:k!=="rhr"&&k!=="resp_rate",grid:{color:css("--line")},ticks:{callback:x=>u==="h"?x+"h":u==="%"?x+"%":x}},x:{grid:{display:false},ticks:{maxTicksLimit:10,maxRotation:0}}}}});}

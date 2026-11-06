@@ -20,6 +20,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/day_label.dart';
+import '../../data/journal_fields.dart' show JournalMetricValue, formatMinuteOfDay;
+import '../../gestures/device_action.dart';
 import '../../notify/notification_center.dart';
 import '../../notify/notification_prefs.dart';
 import '../../state/app_state.dart';
@@ -41,7 +43,7 @@ import 'stress_monitor.dart' show StressDay, StressMonitorScreen;
 import 'strength_screen.dart' show StrengthScreen;
 import 'overview_screen.dart' show OverviewScreen;
 import 'vo2max_screen.dart' show Vo2maxScreen, vo2Points;
-import '../profile/profile.dart' show ProfileHome;
+import '../profile/profile.dart' show ProfileHome, goto;
 import '../../data/local_repository.dart' show LocalRepository;
 import '../../data/db.dart' show LocalDb;
 import 'sleep_detail.dart';
@@ -208,13 +210,18 @@ Widget dashboardCard(BuildContext c, HomeData d, VoidCallback onEdit) {
   final shown = dashMetrics().where((m) => m.on).toList();
   // One card per metric, WHOOP's dashboard: a stack, not rows in one box.
   if (shown.isEmpty) {
-    return Surface(
-      onTap: onEdit,
-      child: Text('No metrics picked. Tap Edit to add some.',
-          style: F.body.copyWith(color: p.ink3)),
-    );
+    return Column(children: [
+      _CigaretteDashboard(date: d.pastDay ?? todayLabel()),
+      const SizedBox(height: S.x2),
+      Surface(
+        onTap: onEdit,
+        child: Text('No metrics picked. Tap Edit to add some.',
+            style: F.body.copyWith(color: p.ink3)),
+      ),
+    ]);
   }
   return Column(children: [
+    _CigaretteDashboard(date: d.pastDay ?? todayLabel()),
     for (var i = 0; i < shown.length; i++) ...[
       if (i > 0) const SizedBox(height: S.x2),
       if (shown[i].id == 'stress_graph')
@@ -232,6 +239,103 @@ Widget dashboardCard(BuildContext c, HomeData d, VoidCallback onEdit) {
             d.dayId ?? todayLabel()),
     ],
   ]);
+}
+
+/// A self-reported count, kept separate from sensor measurements and scores.
+class CigaretteLogCard extends StatelessWidget {
+  final int? count, lastMinute;
+  final String? status;
+  final VoidCallback? onEdit;
+  const CigaretteLogCard({super.key, this.count, this.lastMinute,
+      this.status, this.onEdit});
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final detail = status ?? (count == null ? 'Not logged for this day'
+        : lastMinute == null || count == 0 ? 'Self-reported'
+        : 'Last logged ${formatMinuteOfDay(lastMinute!)} · self-reported');
+    return Surface(
+      onTap: onEdit,
+      semanticLabel: 'Cigarettes: ${count ?? 'not logged'}. $detail. Edit in journal',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(LucideIcons.cigarette, size: 20, color: p.ink3),
+          const SizedBox(width: S.x3),
+          Expanded(child: Text('CIGARETTES', style: F.over.copyWith(
+              color: p.ink, letterSpacing: 1.6, fontWeight: FontWeight.w700))),
+          const SizedBox(width: S.x2),
+          Text(count?.toString() ?? '—', style: F.n34.copyWith(color: p.ink)),
+        ]),
+        const SizedBox(height: S.x2),
+        Text(detail, style: F.cap.copyWith(color: p.ink3)),
+        if (onEdit != null) ...[
+          const SizedBox(height: S.x1),
+          Text('Edit in journal', style: F.cap.copyWith(color: p.on(C.blue))),
+        ],
+      ]),
+    );
+  }
+}
+
+class _CigaretteDashboard extends StatefulWidget {
+  final String date;
+  const _CigaretteDashboard({required this.date});
+  @override
+  State<_CigaretteDashboard> createState() => _CigaretteDashboardState();
+}
+
+class _CigaretteDashboardState extends State<_CigaretteDashboard>
+    with RevisionReload {
+  JournalMetricValue? _value;
+  String? _status = 'Loading entries…';
+
+  @override
+  void initState() { super.initState(); _load(); }
+  @override
+  void reload() => _load();
+  @override
+  void didUpdateWidget(covariant _CigaretteDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.date != widget.date) {
+      _value = null;
+      _status = 'Loading entries…';
+      _load();
+    }
+  }
+  Future<void> _load() async {
+    final token = beginRead(#cigarettes);
+    final repo = repoOf(context);
+    if (repo == null) return;
+    try {
+      final values = await repo.getJournalMetrics(widget.date);
+      if (stillNewest(#cigarettes, token)) {
+        setState(() { _value = values['cigarettes']; _status = null; });
+      }
+    } catch (_) {
+      if (stillNewest(#cigarettes, token)) {
+        setState(() { _value = null; _status = 'Couldn’t load cigarette entries'; });
+      }
+    }
+  }
+  @override
+  Widget build(BuildContext c) {
+    final AppState app;
+    try { app = c.read<AppState>(); } catch (_) { return const SizedBox.shrink(); }
+    return ListenableBuilder(listenable: app.gestureSettings, builder: (c, _) {
+      if (_value == null && app.gestureSettings.doubleTap != DeviceAction.logCigarette) {
+        return const SizedBox.shrink();
+      }
+      return Padding(padding: const EdgeInsets.only(bottom: S.x2),
+        child: CigaretteLogCard(count: _value?.value.round(),
+          lastMinute: _value?.atMinuteOfDay, status: _status,
+          onEdit: () async {
+            await goto(c, JournalCompose(date: widget.date));
+            if (mounted) { app.bumpInsights(); _load(); }
+          }),
+      );
+    });
+  }
 }
 
 Widget _dashRow(

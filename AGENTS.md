@@ -2,6 +2,13 @@
 
 ## Active workflow
 
+The owner's primary daily Koop device is **iPhone (SideStore)**. Android is
+primarily a reference device for inspecting the WHOOP app. Prioritize iPhone
+layout, Dynamic Type, safe areas, BLE/background behavior and iOS distribution.
+Label Android-only checks separately; they do not verify iPhone behavior. Do
+not treat the reference Android's unpaired band or older received data as the
+state of the owner's primary iPhone. Preserve data and ask before every push.
+
 Read `docs/CURRENT_STATUS.md` next, then inspect only the source and supporting
 docs relevant to the requested change. Protect existing uncommitted work. Use
 focused searches/diffs, reuse existing components, and run targeted regressions

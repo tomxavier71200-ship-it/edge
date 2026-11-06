@@ -6,6 +6,48 @@ const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../web/dashboard/index.html'), 'utf8');
 const section = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 
+test('dashboard charts respect reduced motion, keeping normal timing otherwise', () => {
+  const context={matchMedia:q=>{assert.equal(q,'(prefers-reduced-motion: reduce)');return {matches:true}}};
+  vm.runInNewContext(section('function chartAnimation(duration){','function mk(cfg){'),context);
+  assert.equal(context.chartAnimation(350),false);
+  context.matchMedia=()=>({matches:false});
+  assert.equal(context.chartAnimation(350).duration,350);
+  delete context.matchMedia;
+  assert.equal(context.chartAnimation(300).duration,300);
+});
+
+test('cigarette journal is date-specific, safely missing in older backups, and keeps explicit zero', () => {
+  let result = [{values:[[3,840]]}];
+  const context={liveDb:{exec(sql,args){
+    assert.match(sql,/journal_metric WHERE date=\? AND field='cigarettes'/);
+    assert.deepEqual(Array.from(args),['2026-11-05']);
+    return result;
+  }}};
+  vm.runInNewContext(section('function cigarettesOn(d){','function renderCigarettes(){'),context);
+  assert.equal(context.cigarettesOn('2026-11-05').count,3);
+  assert.equal(context.cigarettesOn('2026-11-05').minute,840);
+  result=[{values:[[0,null]]}];
+  assert.equal(context.cigarettesOn('2026-11-05').count,0);
+  result=[];assert.equal(context.cigarettesOn('2026-11-05'),null);
+  context.liveDb={exec(){throw new Error('older schema')}};
+  assert.equal(context.cigarettesOn('2026-11-05'),null);
+});
+
+test('cigarette card follows the selected day and clears when leaving day view', () => {
+  const nodes={'cigarette-log':{},'cigarette-summary':{}};
+  let selected;
+  const context={range:1,tab:'overview',focus:null,day:'2026-11-05',nice:x=>x,
+    document:{getElementById:id=>nodes[id]},
+    cigarettesOn:d=>{selected=d;return {count:2,minute:840}}};
+  vm.runInNewContext(section('function renderCigarettes(){','function render(){'),context);
+  context.renderCigarettes();
+  assert.equal(selected,'2026-11-05');assert.equal(nodes['cigarette-log'].hidden,false);
+  assert.match(nodes['cigarette-summary'].textContent,/2 cigarettes.*14:00/);
+  context.range=7;context.renderCigarettes();
+  assert.equal(nodes['cigarette-log'].hidden,true);
+  assert.equal(nodes['cigarette-summary'].textContent,'');
+});
+
 test('reviews follow the selected day and exclude answered, saved and invalid windows', () => {
   const row={start_ts:100,end_ts:700,dismissed:0,sport:'cycling'};
   assert.deepEqual(m.workoutReviews([row],[],0,1000),[row]);

@@ -59,7 +59,8 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/home_sections.dart'
-    show CoachBubble, DayInReviewCard, MonitorTiles, StressDashRow, WeekPlanCard;
+    show CoachBubble, DayInReviewCard, MonitorTiles, StressDashRow, WeekPlanCard,
+        CigaretteLogCard;
 import 'app_health.dart' show HealthChecksCard, appHealthChecks;
 import '../screens/records_screen.dart' show RecordTile;
 import '../screens/blood_pressure_screen.dart' show BpLatestCard, BpRow, DoorRowLite;
@@ -353,6 +354,8 @@ Map<String, Widget> goldenCases() => {
       ),
       'settings_switch': SetRow.toggle(LucideIcons.watch, C.blue,
           'Band alerts', value: true, onTap: () {}),
+      'cigarette_log': CigaretteLogCard(count: 3, lastMinute: 840,
+          onEdit: () {}),
       // The stepper every single-day screen wears. Shot mid-history, where
       // both arrows are live and the middle opens the calendar — the state a
       // user spends all their time in once there is more than a week on disk.

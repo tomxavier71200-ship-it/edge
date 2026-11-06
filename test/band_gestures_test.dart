@@ -65,6 +65,7 @@ void main() {
       expect(find.text('Ring my phone'), findsOneWidget);
       expect(find.text('Flashlight'), findsOneWidget);
       expect(find.text('Log water'), findsOneWidget);
+      expect(find.text('Log a cigarette'), findsOneWidget);
       expect(find.text('Do nothing'), findsOneWidget);
       // Not offerable on iOS, so not drawn.
       expect(find.text('Volume up'), findsNothing);
@@ -183,6 +184,24 @@ void main() {
       expect(DeviceAction.logWater.id, 'log_water');
       expect(DeviceActionX.fromId('log_water'), DeviceAction.logWater);
     });
+  });
+
+  test('cigarette mapping is stable, in-app and dispatches one live event', () {
+    expect(DeviceActionX.fromId('log_cigarette'), DeviceAction.logCigarette);
+    expect(DeviceAction.logCigarette.isInApp, isTrue);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final logged = <int>[];
+    final dispatcher = GestureDispatcher(
+      settings: GestureSettings()..doubleTap = DeviceAction.logCigarette,
+      onLogCigarette: (ts) async { logged.add(ts); },
+    );
+    for (final ts in [0, now - 20, now - 90000, now + 60]) {
+      dispatcher.onEvent(14, ts, '');
+    }
+    expect(logged, isEmpty, reason: 'old or untrustworthy taps cannot add entries');
+    dispatcher.onEvent(14, now, '');
+    dispatcher.onEvent(14, now, '');
+    expect(logged, [now]);
   });
 }
 

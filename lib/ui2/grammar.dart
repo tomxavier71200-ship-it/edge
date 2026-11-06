@@ -2479,8 +2479,9 @@ class HomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext c) => LayoutBuilder(
     builder: (c, constraints) {
-      final minimumDayWidth = MediaQuery.textScalerOf(c).scale(S.tap * 4);
-      final reservedSide = MediaQuery.textScalerOf(c).scale(sideWidth)
+      final labelScale = textScaleFor(c, F.label.fontSize!);
+      final minimumDayWidth = S.tap * 4 * labelScale;
+      final reservedSide = (sideWidth * labelScale)
           .clamp(sideWidth, double.infinity);
       if (constraints.maxWidth - reservedSide * 2 < minimumDayWidth) {
         return Column(

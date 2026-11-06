@@ -184,6 +184,15 @@ const kJournalFields = <JournalFieldSpec>[
     hasTime: true,
   ),
   JournalFieldSpec(
+    key: 'cigarettes',
+    label: 'Cigarettes',
+    kind: JournalFieldKind.dose,
+    unit: 'cigarettes',
+    max: 100,
+    step: 1,
+    hasTime: true,
+  ),
+  JournalFieldSpec(
     key: 'screens_min',
     label: 'Screens before bed',
     kind: JournalFieldKind.duration,

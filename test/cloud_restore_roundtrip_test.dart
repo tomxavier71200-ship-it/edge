@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/data/db.dart';
+import 'package:openstrap_edge/data/journal_fields.dart';
 import 'package:openstrap_edge/import/backup_crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -80,6 +81,10 @@ void main() {
       'partial': 0,
     });
     await LocalDb.putMetricSeriesValue(day, 'rmssd', 66.2);
+    await LocalDb.putJournalMetrics(day, {
+      'cigarettes': const JournalMetricValue(2, atMinuteOfDay: 840),
+      'mood': const JournalMetricValue(4),
+    });
     final enc = await encryptedCopy('correct horse');
 
     await fresh(receiveDb);
@@ -94,6 +99,9 @@ void main() {
     expect(rows, hasLength(1));
     expect(rows.first['payload_json'], '{"scalars":{"rhr":58.1,"rmssd":66.2}}');
     expect(await LocalDb.metricValueOn(day, 'rmssd'), 66.2);
+    final journal = await LocalDb.journalMetricsForDay(day);
+    expect(journal['cigarettes'], const JournalMetricValue(2, atMinuteOfDay: 840));
+    expect(journal['mood'], const JournalMetricValue(4));
   });
 
   test('the wrong passphrase restores nothing and leaves no plaintext', () async {

@@ -22,6 +22,7 @@ class GestureDispatcher {
   final Future<void> Function()? onMarkMoment;
   final Future<void> Function()? onWorkoutToggle;
   final Future<void> Function()? onLogWater;
+  final Future<void> Function(int eventTs)? onLogCigarette;
 
   GestureDispatcher({
     required this.settings,
@@ -29,6 +30,7 @@ class GestureDispatcher {
     this.onMarkMoment,
     this.onWorkoutToggle,
     this.onLogWater,
+    this.onLogCigarette,
   });
 
   static const int _doubleTapEventId = 14; // EventId.doubleTap
@@ -47,6 +49,14 @@ class GestureDispatcher {
 
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final age = nowSec - tsEpoch;
+    // A counted journal entry needs a trustworthy occurrence time. Unlike
+    // phone/media commands, never turn an unset clock or a historical tap
+    // into a new cigarette record.
+    if (action == DeviceAction.logCigarette &&
+        (tsEpoch <= 0 || age.abs() > _recencyWindowSec)) {
+      log?.call('[gesture] cigarette tap ignored: timestamp is not live');
+      return;
+    }
     // Stale only when the ts is plausibly a real (recent-ish but past) historical
     // record. A wildly-off ts from an unset RTC is treated as "can't tell" → allow,
     // and rely on debounce + the live-only wiring.
@@ -70,6 +80,9 @@ class GestureDispatcher {
           break;
         case DeviceAction.logWater:
           onLogWater?.call();
+          break;
+        case DeviceAction.logCigarette:
+          onLogCigarette?.call(tsEpoch);
           break;
         default:
           // isInApp said yes and there is no case for it — an action that is
