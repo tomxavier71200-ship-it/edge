@@ -238,7 +238,7 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
       Text('The eye shows or hides an item. Press and hold an item, then '
           'drag it up or down — or use the arrows.',
           style: F.cap.copyWith(color: p.ink3)),
-    ]);
+    ], showCoach: false);
   }
 
   String _ringName(HomeRingKind k) => switch (k) {
@@ -308,35 +308,44 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
 
   /// One pick in a row of swatches: the swatch, ringed when chosen, and its
   /// name under it.
-  Widget _choice(BuildContext c, String label, bool on, VoidCallback onTap,
-      Widget swatch) {
+  Widget _choice(
+    BuildContext c,
+    String label,
+    bool on,
+    VoidCallback onTap,
+    Widget swatch,
+  ) {
     final p = P.of(c);
+    final largeLabel = textScaleFor(c, F.over.fontSize!) > 1.3;
     return Pressable(
-      semanticLabel: on ? '$label, selected' : label,
+      selected: on,
       onTap: onTap,
       child: SizedBox(
-        width: 64,
-        child: Column(children: [
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              borderRadius: R.rLg,
-              border: Border.all(color: on ? p.ink : p.line, width: 2),
+        width: largeLabel ? S.tap * 3 : 64,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                borderRadius: R.rLg,
+                border: Border.all(color: on ? p.ink : p.line, width: 2),
+              ),
+              child: swatch,
             ),
-            child: swatch,
-          ),
-          const SizedBox(height: S.x1),
-          // One line, shrunk to fit: four swatches fill a phone width, and a
-          // wrapped "Midnigh-t" under one of them reads as a bug.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(label,
-                maxLines: 1,
-                style: F.over.copyWith(
-                    color: on ? p.ink : p.ink3,
-                    fontWeight: on ? FontWeight.w600 : FontWeight.w500)),
-          ),
-        ]),
+            const SizedBox(height: S.x1),
+            // Grow and wrap at accessibility sizes instead of shrinking the
+            // enlarged text back down inside a fixed-width swatch.
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: largeLabel ? null : 2,
+              style: F.over.copyWith(
+                color: on ? p.ink : p.ink3,
+                fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

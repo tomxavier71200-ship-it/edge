@@ -2,6 +2,38 @@
 
 Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Local Apple design audit follow-up (not pushed)
+
+Audited shared interaction/header primitives and their Home, Profile, Settings,
+Customize and metric-detail consumers against Apple's design-principles guidance.
+The full before/after review is in `UI_REVIEW_2026_11_06.md`.
+
+- Customize swatch labels now grow/wrap with accessibility text instead of being
+  scaled back down. Selected choices expose selection on their actionable node.
+- Screen, navigation and section titles expose heading semantics and retain their
+  full text at accessibility sizes. The WHOOP screen title's info-button spacer
+  now balances the actual 44pt button, correcting a 6pt centering offset.
+- Metric and bottom-navigation tabs expose selected state; unavailable metric
+  tabs expose disabled state and remain inert.
+- Shared Pressable controls support Tab, Enter and Space with a visible focus
+  indicator. Reduce Motion uses a static press highlight instead of scaling.
+- Disabling a control during a press no longer calls setState from a recognizer
+  cancellation while the widget tree is locked, and clears its pressed state.
+- Customize opts out of the floating coach action that could cover its controls.
+
+Before changes, eight focused acceptance checks reproduced clipping, missing
+semantic state, missing keyboard activation, unwanted reduced-motion scaling,
+and the pressed-control framework assertion. After fixes, all 272 focused checks
+passed. The older two-line structural assertion was replaced by an observable
+no-clipping assertion while retaining its centering check. Six-file scoped
+analysis is clean. Real Customize renders at 390x844 with iPhone safe-area insets,
+standard and 2x text were visually reviewed outside Git. Old untracked golden
+images were preserved and not used to claim pixel-regression coverage.
+
+This is source/widget verification on Windows. Physical iPhone VoiceOver,
+Full Keyboard Access, touch feel and frame performance remain unverified.
+No physiological calculation, data schema or release version changed. No push.
+
 ## Local typography and customization follow-up (not pushed)
 
 The owner reviewed bundled-font specimens and selected **Montserrat text with

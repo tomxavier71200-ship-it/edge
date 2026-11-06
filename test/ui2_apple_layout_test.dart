@@ -1,6 +1,6 @@
 import 'dart:ui' show Tristate;
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:openstrap_edge/state/locale_controller.dart';
@@ -357,7 +357,7 @@ void main() {
     await t.pumpWidget(frame(const NavBar('Notification settings'), scale: 2));
     final title = find.text('Notification settings');
     expect(t.takeException(), isNull);
-    expect(t.widget<Text>(title).maxLines, 2);
+    expect(t.renderObject<RenderParagraph>(title).didExceedMaxLines, isFalse);
     expect(t.getCenter(title).dx, closeTo(160, .1));
   });
 }

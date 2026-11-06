@@ -251,42 +251,41 @@ class _Tab extends StatelessWidget {
   Widget build(BuildContext c) {
     final p = P.of(c);
     final ink = on ? p.ink : p.ink3;
-    return Semantics(
+    return Pressable(
       selected: on,
-      child: Pressable(
-        onTap: onTap,
-        semanticLabel: domain.barLabel,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedScale(
-              scale: on ? 1.08 : 1,
-              duration: motion(c, Motion.base),
-              child: Icon(domain.barIcon, size: 22, color: ink),
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedScale(
+            scale: on ? 1.08 : 1,
+            duration: motion(c, Motion.base),
+            child: Icon(domain.barIcon, size: 22, color: ink),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            domain.barLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: F.over.copyWith(
+              color: ink,
+              letterSpacing: 0,
+              fontWeight: on ? FontWeight.w600 : FontWeight.w500,
             ),
-            const SizedBox(height: 4),
-            Text(
-              domain.barLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: F.over.copyWith(
-                color: ink,
-                letterSpacing: 0,
-                fontWeight: on ? FontWeight.w600 : FontWeight.w500,
-              ),
+          ),
+          const SizedBox(height: 3),
+          // The accent mark under the lit tab — the one place the accent
+          // picked in Customize shows on every screen.
+          AnimatedContainer(
+            duration: motion(c, Motion.base),
+            width: on ? 4 : 0,
+            height: 4,
+            decoration: BoxDecoration(
+              color: on ? p.accent : p.card,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 3),
-            // The accent mark under the lit tab — the one place the accent
-            // picked in Customize shows on every screen.
-            AnimatedContainer(
-              duration: motion(c, Motion.base),
-              width: on ? 4 : 0,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: on ? p.accent : p.card, shape: BoxShape.circle),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

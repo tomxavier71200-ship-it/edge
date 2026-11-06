@@ -1908,11 +1908,12 @@ Widget detailScaffold(BuildContext c, String title, List<Widget> body,
     Widget? trailing,
     String? info,
     Widget? center,
+    bool showCoach = true,
     bool coachBubble = false}) {
   final p = P.of(c);
   // WHOOP mode: WHOOP's Sleep screen floats its coach line across the foot
   // of the page; the others float the round coach disc.
-  final line = Look.whoop && coachBubble ? coachLine(c) : null;
+  final line = showCoach && Look.whoop && coachBubble ? coachLine(c) : null;
   return Scaffold(
     backgroundColor: p.bg,
     // WHOOP mode: WHOOP's coach disc floats in the corner of its screens.
@@ -1921,7 +1922,7 @@ Widget detailScaffold(BuildContext c, String title, List<Widget> body,
         : null,
     floatingActionButton: line != null
         ? SizedBox(width: MediaQuery.sizeOf(c).width - 2 * S.x4, child: line)
-        : Look.whoop
+        : showCoach && Look.whoop
         ? CoachDisc(
             size: 56,
             onTap: () => Navigator.of(c).push(MaterialPageRoute<void>(

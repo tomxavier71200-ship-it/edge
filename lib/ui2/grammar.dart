@@ -55,6 +55,9 @@ class Pressable extends StatefulWidget {
   /// Screen-reader label. Required for anything whose child is not plain text
   /// (an icon-only control), optional otherwise.
   final String? semanticLabel;
+  /// Selection belongs on the actionable node, rather than a separate parent
+  /// that VoiceOver might announce independently from the button's label.
+  final bool? selected;
 
   // There is no `expand: false`. It used to exist, documented as "the hit area
   // is still expanded via the parent's slop" — no such mechanism was ever in
@@ -69,6 +72,7 @@ class Pressable extends StatefulWidget {
     required this.child,
     this.onTap,
     this.semanticLabel,
+    this.selected,
   });
 
   @override
@@ -77,6 +81,23 @@ class Pressable extends StatefulWidget {
 
 class _PressableState extends State<Pressable> {
   bool _down = false;
+  bool _focusHighlight = false;
+
+  @override
+  void didUpdateWidget(covariant Pressable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.onTap == null) {
+      _down = false;
+      _focusHighlight = false;
+    }
+  }
+
+  void _pressed(bool value) {
+    // Disabling a pressed control removes its recognizer during build. Its
+    // cancellation must not call setState while the widget tree is locked.
+    if (!mounted || widget.onTap == null || _down == value) return;
+    setState(() => _down = value);
+  }
 
   @override
   Widget build(BuildContext c) {
@@ -94,23 +115,65 @@ class _PressableState extends State<Pressable> {
       ),
     );
     if (widget.onTap == null) {
-      return widget.semanticLabel == null
+      return widget.semanticLabel == null && widget.selected == null
           ? out
-          : Semantics(label: widget.semanticLabel, child: out);
+          : Semantics(
+              label: widget.semanticLabel,
+              selected: widget.selected,
+              button: widget.selected != null,
+              enabled: widget.selected == null ? null : false,
+              child: out,
+            );
     }
-    return Semantics(
-      button: true,
-      label: widget.semanticLabel,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        onTapDown: (_) => setState(() => _down = true),
-        onTapUp: (_) => setState(() => _down = false),
-        onTapCancel: () => setState(() => _down = false),
-        child: AnimatedScale(
-          scale: _down ? .975 : 1,
-          duration: motion(c, Motion.fast),
-          child: out,
+    final reduceMotion = !Motion.enabled(c);
+    final p = P.of(c);
+    return FocusableActionDetector(
+      // Keep one accessible button node; a separate Focus node would split
+      // selected/enabled state from the label supplied by a parent control.
+      includeFocusSemantics: false,
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap?.call();
+            return null;
+          },
+        ),
+      },
+      onShowFocusHighlight: (value) {
+        if (mounted && widget.onTap != null && _focusHighlight != value) {
+          setState(() => _focusHighlight = value);
+        }
+      },
+      child: Semantics(
+        button: true,
+        focusable: true,
+        selected: widget.selected,
+        enabled: true,
+        label: widget.semanticLabel,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          onTapDown: (_) => _pressed(true),
+          onTapUp: (_) => _pressed(false),
+          onTapCancel: () => _pressed(false),
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              borderRadius: R.rMd,
+              border: _focusHighlight || (_down && reduceMotion)
+                  ? Border.all(color: p.on(p.accent), width: 2)
+                  : null,
+            ),
+            child: AnimatedScale(
+              scale: _down && !reduceMotion ? .975 : 1,
+              duration: motion(c, Motion.fast),
+              child: out,
+            ),
+          ),
         ),
       ),
     );
@@ -269,7 +332,11 @@ class Section extends StatelessWidget {
       children: [
         Padding(
           padding: EdgeInsets.fromLTRB(
-              S.x1, Look.compact ? S.x3 : S.x5, S.x1, S.x2),
+            S.x1,
+            Look.compact ? S.x3 : S.x5,
+            S.x1,
+            S.x2,
+          ),
           child: Row(
             // spaceBetween owns the gap, so the action sits on the right edge
             // however short the title is. Previously the title was Expanded
@@ -281,11 +348,16 @@ class Section extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
-                child: Text(
-                  title,
-                  style: F.section.copyWith(color: p.ink),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    title,
+                    style: F.section.copyWith(color: p.ink),
+                    maxLines: bigText(c) ? null : 2,
+                    overflow: bigText(c)
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               if (action != null)
@@ -1759,11 +1831,8 @@ class SubTabs extends StatelessWidget {
             final off = disabled.contains(i);
             final on = i == index && !off;
             return Pressable(
+              selected: on,
               onTap: off ? null : () => onTap(i),
-              // `Pressable` drops `Semantics(button: true)` when `onTap` is
-              // null, so without this a screen reader announced a disabled
-              // pill exactly like a working one.
-              semanticLabel: off ? '${items[i]}, unavailable' : null,
               child: AnimatedContainer(
                 duration: motion(c, Motion.base),
                 constraints: const BoxConstraints(minWidth: S.tap),
@@ -1781,8 +1850,8 @@ class SubTabs extends StatelessWidget {
                   color: off
                       ? p.card2
                       : on
-                          ? p.wash(color)
-                          : const Color(0x00000000),
+                      ? p.wash(color)
+                      : const Color(0x00000000),
                   borderRadius: R.rPill,
                 ),
                 child: Text(
@@ -1820,17 +1889,25 @@ class ScreenTitle extends StatelessWidget {
           // WHOOP mode: a tab's name centred in spaced capitals ("HEALTH"),
           // balanced by an empty slot as wide as the ⓘ.
           if (Look.whoop && info != null && trailing == null)
-            const SizedBox(width: S.x2 + 32),
+            const SizedBox(width: S.x2 + S.tap),
           Expanded(
-            child: Text(
-              Look.whoop ? title.toUpperCase() : title,
-              textAlign: Look.whoop ? TextAlign.center : TextAlign.start,
-              style: Look.whoop
-                  ? F.label.copyWith(
-                      color: p.ink, letterSpacing: 2, fontWeight: FontWeight.w700)
-                  : F.t1.copyWith(color: p.ink),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Semantics(
+              header: true,
+              child: Text(
+                Look.whoop ? title.toUpperCase() : title,
+                textAlign: Look.whoop ? TextAlign.center : TextAlign.start,
+                style: Look.whoop
+                    ? F.label.copyWith(
+                        color: p.ink,
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w700,
+                      )
+                    : F.t1.copyWith(color: p.ink),
+                maxLines: bigText(c) ? null : 1,
+                overflow: bigText(c)
+                    ? TextOverflow.visible
+                    : TextOverflow.ellipsis,
+              ),
             ),
           ),
           ?trailing,
@@ -2564,32 +2641,40 @@ class NavBar extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: center ?? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // WHOOP mode: WHOOP's spaced capitals ("HEALTH MONITOR").
-                Text(
-                  Look.whoop ? title.toUpperCase() : title,
-                  style: Look.whoop
-                      ? F.label.copyWith(
-                          color: p.ink,
-                          letterSpacing: 2,
-                          fontWeight: FontWeight.w700)
-                      : F.head.copyWith(color: p.ink),
-                  maxLines: bigText(c) ? 2 : 1,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
+            child:
+                center ??
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // WHOOP mode: WHOOP's spaced capitals ("HEALTH MONITOR").
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        Look.whoop ? title.toUpperCase() : title,
+                        style: Look.whoop
+                            ? F.label.copyWith(
+                                color: p.ink,
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.w700,
+                              )
+                            : F.head.copyWith(color: p.ink),
+                        maxLines: bigText(c) ? null : 1,
+                        textAlign: TextAlign.center,
+                        overflow: bigText(c)
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (sub.isNotEmpty)
+                      Text(
+                        sub,
+                        style: F.over.copyWith(color: p.ink3),
+                        maxLines: bigText(c) ? 2 : 1,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
                 ),
-                if (sub.isNotEmpty)
-                  Text(
-                    sub,
-                    style: F.over.copyWith(color: p.ink3),
-                    maxLines: bigText(c) ? 2 : 1,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
           ),
           SizedBox(
             width: trailingWidth,
