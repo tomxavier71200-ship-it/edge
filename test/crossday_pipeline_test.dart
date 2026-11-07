@@ -609,6 +609,26 @@ void _wiredFamilies() {
       return v is Map ? (v['pct'] as num?)?.toDouble() : null;
     }
 
+    test('canonical nightly performance survives the current regularity rollup', () {
+      final days = _synthDays(30);
+      days.last
+        ..['is_today'] = true
+        ..['sleep_perf'] = 72.123456;
+      // Recovery already used this night's exact TST and prior consistency.
+      // A newly calculated SRI (or rounded TST) must not produce a second score.
+      expect(perfOf(buildCrossDayBundle(days, const {}, lastNightNeedMin: 450)),
+          72.123456);
+    });
+
+    test('an explicitly absent nightly performance stays absent', () {
+      final days = _synthDays(30);
+      days.last
+        ..['is_today'] = true
+        ..['sleep_perf'] = null;
+      expect(perfOf(buildCrossDayBundle(days, const {}, lastNightNeedMin: 450)),
+          isNull);
+    });
+
     test('the stored last-night need is the divisor, not tonight\'s', () {
       final days = _synthDays(30);
       days.last['is_today'] = true;

@@ -18,6 +18,27 @@ void main() {
       });
 
   test(
+    'compact cross-day records carry exact nightly performance and absence',
+    () {
+      for (final performance in [72.123456, null]) {
+        final rec = DerivationEngine.crossDayRecord(
+          {'day_id': '2026-01-02'},
+          {
+            'scalars': {'sleep_perf': performance},
+          },
+        )!;
+        expect(rec.containsKey('sleep_perf'), isTrue);
+        expect(rec['sleep_perf'], performance);
+      }
+      final legacy = DerivationEngine.crossDayRecord(
+        {'day_id': '2026-01-02'},
+        {'scalars': {}},
+      )!;
+      expect(legacy.containsKey('sleep_perf'), isFalse);
+    },
+  );
+
+  test(
     'recalculating a night fans its performance out with its measured duration',
     () {
       final shorter = score(240), longer = score(360);

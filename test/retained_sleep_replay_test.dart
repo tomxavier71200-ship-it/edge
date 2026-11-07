@@ -37,9 +37,17 @@ void main() {
       });
       SharedPreferences.setMockInitialValues({});
       final db = await LocalDb.instance;
+      // A sport-only correction protects the sport, not an automatically
+      // detected window. Explicit timing edits and non-detector sessions protect
+      // their boundaries too. Reanalysis may legitimately refine auto timings.
       Future<List<Map<String, Object?>>> edited() => db.rawQuery(
-        'SELECT id,type,start_ts,end_ts,status,window_edited,type_edited_at '
-        'FROM sessions WHERE window_edited=1 OR type_edited_at>0 ORDER BY id',
+        'SELECT id,type,status,window_edited,type_edited_at, '
+        "CASE WHEN window_edited=1 OR source NOT IN ('auto','detected') "
+        'THEN start_ts END AS start_ts, '
+        "CASE WHEN window_edited=1 OR source NOT IN ('auto','detected') "
+        'THEN end_ts END AS end_ts '
+        'FROM sessions WHERE window_edited=1 OR type_edited_at>0 '
+        "OR source NOT IN ('auto','detected') ORDER BY id",
       );
       final edits = await edited();
       final before = {
@@ -75,7 +83,19 @@ void main() {
           final oldWindow = jsonDecode(prior['window_json'] as String) as Map;
           final newWindow = jsonDecode(row['window_json'] as String) as Map;
           expect(newWindow['onset_ms'], oldWindow['onset_ms']);
-          expect(newWindow['offset_ms'], oldWindow['offset_ms']);
+          final env = Platform.environment;
+          final referenceDay = env['KOOP_SLEEP_REPLAY_DAY'];
+          final lower = env['KOOP_SLEEP_WAKE_AFTER'];
+          final upper = env['KOOP_SLEEP_WAKE_BEFORE'];
+          if (day == referenceDay && lower != null && upper != null) {
+            final wake = DateTime.fromMillisecondsSinceEpoch(
+              (newWindow['offset_ms'] as num).round(),
+            );
+            expect(wake.isAfter(DateTime.parse(lower)), isTrue);
+            expect(wake.isBefore(DateTime.parse(upper)), isTrue);
+          } else {
+            expect(newWindow['offset_ms'], oldWindow['offset_ms']);
+          }
           final previous = jsonDecode(prior['payload_json'] as String) as Map;
           final old = previous['sleep']['accounting']['value'] as Map;
           // These values describe software replay, not independently labelled sleep.
@@ -84,6 +104,7 @@ void main() {
             ' -> ${minutes.toStringAsFixed(1)} min; '
             'awake ${((old['wake_sec'] as num) / 60).toStringAsFixed(1)}'
             ' -> ${((accounting['wake_sec'] as num) / 60).toStringAsFixed(1)} min; '
+            'wake=${DateTime.fromMillisecondsSinceEpoch((newWindow['offset_ms'] as num).round())}; '
             'recovery=${home.readiness.value}',
           );
         }

@@ -1916,7 +1916,11 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // Analytics c620705 keeps the boundaries and unobserved-data protections.
 // 124 → 125: persist each recalculated night's sleep performance in the same
 // scalar fan-out as its duration, so historical scores cannot stay stale.
-const int kAlgoVersion = 125;
+// 125 -> 126: retain an observed overnight continuation when the arm-angle
+// sleep opportunity spans a noisy gravity-delta interruption (analytics 656e280).
+// Keep the exact nightly sleep performance through the cross-day rollup instead
+// of overwriting it using rounded duration and a newly calculated consistency.
+const int kAlgoVersion = 126;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2092,7 +2096,7 @@ const int kStrainRhrCarryDays = 7;
 //
 // Koop analytics @ 610e56f — workout boundary refinement described in the
 // v116 changelog above. Must match pubspec.yaml exactly.
-const String kAnalyticsPin = 'c62070540212a5a97df75795c6a48fa640dafbb7';
+const String kAnalyticsPin = '656e280fd3c22f788e51d603687bcf40d0c7c41d';
 // Repinned to analytics main's tip, which carries BOTH PR #72 (hrv_freq
 // Welch gap guard) and PR #73 (overreachingConjunction rhr quantum guard) —
 // the two independent kAlgoVersion bumps above (93 and 94). Verified both
@@ -6038,6 +6042,9 @@ class DerivationEngine {
       'onset_sec': onsetMs == null ? null : (onsetMs / 1000).round(),
       'wake_sec': offsetMs == null ? null : (offsetMs / 1000).round(),
       'tst_min': tstSec == null ? null : (tstSec / 60).round(),
+      // Preserve the exact score recovery used, including explicit absence.
+      // Older/imported bundles without the key retain their legacy read path.
+      if (scalars.containsKey('sleep_perf')) 'sleep_perf': sc('sleep_perf'),
       // Fraction of the night we actually watched — wall-clock in-bed minus the
       // seconds nobody observed, over in-bed. TS-11 drops a morning whose night
       // is under half observed: a resting HR from two hours of contact is not a

@@ -400,10 +400,21 @@ Map<String, dynamic> buildCrossDayBundle(
   // night: `_lastNum` walked back to the last night it could find, scoring an
   // unrecorded night with an old one.
   final lastTstMin = _todayNum(days, 'tst_min');
-  final perfPct = (lastNightNeedMin != null && lastTstMin != null)
-      ? calibratedSleepPerformance(lastTstMin, lastNightNeedMin,
-          sri.present ? sri.value!.sri : null)
-      : null;
+  // Modern per-day bundles already scored the exact night, using the prior
+  // consistency that also fed recovery. Re-scoring rounded minutes with the
+  // NEW SRI here changed Home/trends after the day pass while recovery retained
+  // the original score. Explicit null is authoritative too. Keep the legacy
+  // calculation only for older/imported records without this field.
+  final today = days.where((d) => d['is_today'] == true).lastOrNull;
+  final hasNightScore = today?.containsKey('sleep_perf') ?? false;
+  final perfPct = lastTstMin == null
+      ? null
+      : hasNightScore
+          ? _numOrNull(today!['sleep_perf'])
+          : (lastNightNeedMin != null
+              ? calibratedSleepPerformance(lastTstMin, lastNightNeedMin,
+                  sri.present ? sri.value!.sri : null)
+              : null);
   final perf = perfPct != null
       ? ana.Metric<ana.SleepPerformance>(
           value: ana.SleepPerformance(perfPct),
@@ -423,7 +434,7 @@ Map<String, dynamic> buildCrossDayBundle(
               : (lastNightNeedMin == null
                   ? 'needs the sleep need set for last night, stored the day '
                       'before; it starts once one day has passed'
-                  : null),
+                  : (hasNightScore ? 'nightly sleep performance unavailable' : null)),
         );
   // typical wake clock-minute + efficiency from recent days (medians).
   final wakeMins = <double>[

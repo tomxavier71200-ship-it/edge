@@ -2,6 +2,40 @@
 
 Updated 2026-11-07. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Local sleep continuation and score consistency — not pushed
+
+Algorithm 126 pins analytics `656e280fd3c22f788e51d603687bcf40d0c7c41d`.
+An overnight gravity-delta split could leave a later qualifying sleep session
+outside the selected main night. Long-gap reconciliation now requires one
+continuous arm-angle sleep opportunity, paired HR/gravity coverage, no long
+unobserved gap, overnight timing, sleep-band HR and the existing 16-hour cap.
+The canonical whole-window stager still measures wake and excludes missing data;
+this does not turn the joined gap into assumed sleep or change stage formulas.
+
+The cross-day rollup also overwrote the exact nightly sleep-performance score
+using rounded duration and a newly calculated consistency. Compact records now
+carry the canonical nightly score, including explicit absence, so recovery,
+Home, detail and historical scalars use the same nightly input. Legacy records
+without that field keep their existing compatibility path.
+
+Validation: 110 focused analytics checks passed (one optional short-capture
+fixture skipped). 63 focused Flutter checks passed, including read-only boundary
+replay and full derivation on a disposable copy of ten retained nights. Nine
+existing windows remained unchanged; the affected night retained its supported
+morning continuation. Home/detail/scalars agreed after the cross-day pass;
+explicit timing edits, manual sessions and sport corrections survived. Auto
+boundaries may still be refined when only the sport was edited. Scoped analysis
+is clean. Personal recordings/reference times remain outside Git.
+
+Both dependency manifests and the runtime pin agree on the exact local analytics
+commit; the temporary path override was removed. The dependency was resolved
+from the local Git repository for validation, not from a published GitHub commit.
+The analytics commit must be published before the app push. Validate the clean
+checkout with published dependencies and the iPhone build/SideStore artifact
+after approval. No phone installation or independent sleep-stage validation is
+claimed. Algorithm 126 uses the existing historical reanalysis scheduler; days
+without retained inputs cannot acquire newly measured timings from this update.
+
 ## Local incremental cloud follow-up — not pushed
 
 Baseline `cc0e1c9d` is published as iPhone 0.10.84 (84); its full test workflow
@@ -21,11 +55,10 @@ checkpoint edit produced a 10,013-byte gzip patch versus a 56,118,885-byte full
 gzip. SQL.js cross-runtime reconstruction and source preservation passed. These
 are Windows fixture results, not actual iPhone performance.
 
-A new sleep-timing complaint remains unverified pending fresh recordings from
-the primary iPhone. The available local diagnostics predate that night. Browser
-control was stopped with Escape after reading the displayed result; no further
-computer input was issued. Personal times are kept outside tracked documentation.
-No sleep formula or algorithm version has been changed for this complaint.
+The fresh primary-iPhone recording subsequently reproduced the sleep-window
+defect; see the local algorithm-126 follow-up above. Browser control was stopped
+with Escape after reading the displayed result; no further computer input was
+issued. Personal times are kept outside tracked documentation.
 
 ## Local Apple design audit follow-up (not pushed)
 
