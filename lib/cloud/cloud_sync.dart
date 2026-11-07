@@ -2,15 +2,14 @@
 // the person's OWN Google Drive. There is no Koop server.
 //
 // THE MODEL. One phone has the band; it SENDS. Every other phone RECEIVES. A
-// send is the existing backup pipeline end to end — `LocalDb.exportCopy`
-// (VACUUM INTO), gzip, then the passphrase encryption in backup_crypto.dart —
-// uploaded over the one file in Drive's "Koop" folder. A receive downloads that
-// file, decrypts it, and hands it to `importEdgeBackup`, the restore path the
+// sender keeps a complete encrypted daily checkpoint and uploads cumulative
+// encrypted changes between checkpoints. A receiver authenticates and rebuilds
+// a standalone database before handing it to `importEdgeBackup`, the restore path the
 // Data screen already uses: a MERGE, so running it again with a newer copy adds
 // what is new rather than duplicating what is there.
 //
 // WHY ONE DIRECTION. Two phones both writing the same file would each overwrite
-// the other's copy; a merge-on-both-sides scheme needs a server to arbitrate.
+// the other's copy; this protocol deliberately assumes one sending device.
 // The band pairs with one phone at a time anyway, so the phone holding it is the
 // only one with anything new to say.
 //
@@ -19,12 +18,14 @@
 // opened — the same contract as the encrypted backup, for the same reason.
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:http/http.dart' show ClientException;
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:ui' show IsolateNameServer;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -35,6 +36,7 @@ import '../import/backup_crypto.dart';
 import '../state/prefs.dart';
 import '../sync/file_log.dart';
 import 'drive_api.dart';
+import 'cloud_transfer.dart';
 
 /// OAuth client ids from the Google Cloud project. Empty means Koop Cloud is
 /// not set up in this build, and the screen says exactly that instead of
@@ -68,9 +70,17 @@ const kCloudWifiOnlyKey = 'cloud.wifi_only';
 const kCloudLastUpKey = 'cloud.last_up'; // epoch ms, our clock
 const kCloudLastCheckKey = 'cloud.last_check'; // epoch ms, our clock
 const kCloudRemoteSeenKey = 'cloud.remote_seen'; // Drive modifiedTime, ISO
+const kCloudRemoteRevisionKey = 'cloud.remote_revision'; // full/delta identity
 const _kPassKey = 'cloud.passphrase';
 
-/// WHOOP-like: the sending phone uploads the full copy as soon as a band sync
+/// Call only after a successful upload/import. Keep the user-facing timestamp
+/// separate from the compound revision used to avoid redundant transfers.
+void rememberCloudCopy(CloudTransferResult copy) {
+  Prefs.setString(kCloudRemoteSeenKey, copy.remote.modified.toIso8601String());
+  Prefs.setString(kCloudRemoteRevisionKey, copy.revision);
+}
+
+/// The sending phone uploads changes as soon as a band sync
 /// has brought something new ([dirty]), no more often than [kCloudSendGap] so
 /// a burst of drains costs one upload; with nothing new it still re-sends once
 /// a day ([kCloudSendEvery]) as a safety copy. A receiving phone checks every
@@ -152,7 +162,7 @@ class CloudSync extends ChangeNotifier {
   }
 
   /// Off by default: uploads go over mobile data too. The person asked for
-  /// that; the row on the Data screen says each upload is a full copy.
+  /// that; the Data screen describes changes and encrypted daily checkpoints.
   bool get wifiOnly => Prefs.getBool(kCloudWifiOnlyKey, false);
   DateTime? get lastUp => _at(kCloudLastUpKey);
 
@@ -223,6 +233,7 @@ class CloudSync extends ChangeNotifier {
     Prefs.setBool(kCloudOnKey, false);
     Prefs.setString(kCloudEmailKey, '');
     Prefs.setString(kCloudRemoteSeenKey, '');
+    Prefs.setString(kCloudRemoteRevisionKey, '');
     Prefs.setString(kCloudRoleKey, '');
     Prefs.setString(kCloudUpMarkKey, '');
     Prefs.setInt(kCloudLastUpKey, 0);
@@ -491,57 +502,47 @@ class CloudSync extends ChangeNotifier {
     }
   }
 
+  Future<CloudTransfer> _transfer(DriveApi api, String pass) async {
+    final tmp = await getTemporaryDirectory();
+    final account = sha256.convert(
+      utf8.encode(Prefs.getString(kCloudEmailKey, '')),
+    );
+    return CloudTransfer(
+      api: api,
+      cache: Directory('${tmp.path}/koop-cloud-cache-$account'),
+      passphrase: pass,
+      snapshot: LocalDb.exportCopy,
+    );
+  }
+
   Future<CloudOutcome> _sendLocked(DriveApi api, String pass) async {
     final gen = _dirtyGen;
-    // Taken BEFORE the export: data landing during it moves the mark again,
-    // so the next pass still sends it.
+    // A mark taken before the snapshot leaves later arrivals dirty for retry.
     final mark = await LocalDb.cloudDataMark();
-    final timing = Stopwatch()..start();
-    final plain = await LocalDb.exportCopy();
-    final enc = '$plain.kbak';
+    final folder = await api.folder();
+    final sent = await (await _transfer(api, pass)).send(folder);
+    unawaited(
+      FileLog.write(
+        '[cloud] backup mode=${sent.mode} bytes=${sent.bytes} '
+        'snapshot_ms=${sent.snapshotMs} prepare_ms=${sent.prepareMs} '
+        'upload_ms=${sent.uploadMs}',
+      ),
+    );
     try {
-      final snapshotMs = timing.elapsedMilliseconds;
-      // gzip + PBKDF2 + AES-GCM over the whole database: seconds of CPU, so
-      // off the UI isolate. Neither step touches a plugin.
-      await Isolate.run(() async {
-        final gz = '$plain.gz';
-        await File(plain).openRead().transform(gzip.encoder).pipe(File(gz).openWrite());
-        try {
-          await encryptBackupFile(File(gz), File(enc), pass);
-        } finally {
-          await File(gz).delete();
-        }
-      });
-      final folder = await api.folder();
-      final existing = await api.find(kDriveFileName, parent: folder);
-      final uploadStartMs = timing.elapsedMilliseconds;
-      final bytes = await File(enc).length();
-      final up = await api.upload(File(enc), folder, existingId: existing?.id);
-      unawaited(FileLog.write(
-        '[cloud] backup bytes=$bytes snapshot_ms=$snapshotMs '
-        'prepare_ms=${uploadStartMs - snapshotMs} '
-        'upload_ms=${timing.elapsedMilliseconds - uploadStartMs}',
-      ));
-      // The diagnostics log rides along — best effort, never failing the data.
-      try {
-        await _uploadLog(api, folder, pass);
-      } catch (e) {
-        debugPrint('[cloud] log upload skipped: $e');
-      }
-      Prefs.setInt(kCloudLastUpKey, DateTime.now().millisecondsSinceEpoch);
-      if (gen == _dirtyGen) Prefs.setBool(kCloudDirtyKey, false);
-      Prefs.setString(kCloudUpMarkKey, mark);
-      // This phone wrote it, so it has "seen" it — switching this phone to
-      // receive later must not re-import its own data.
-      Prefs.setString(kCloudRemoteSeenKey, up.modified.toIso8601String());
-      return const CloudOutcome(true, 'Uploaded to your Google Drive.');
-    } finally {
-      for (final f in [plain, enc]) {
-        try {
-          await File(f).delete();
-        } catch (_) {}
-      }
+      await _uploadLog(api, folder, pass);
+    } catch (e) {
+      debugPrint('[cloud] log upload skipped: $e');
     }
+    Prefs.setInt(kCloudLastUpKey, DateTime.now().millisecondsSinceEpoch);
+    if (gen == _dirtyGen) Prefs.setBool(kCloudDirtyKey, false);
+    Prefs.setString(kCloudUpMarkKey, mark);
+    rememberCloudCopy(sent);
+    return CloudOutcome(
+      true,
+      sent.mode == 'delta'
+          ? 'Uploaded changes to your Google Drive.'
+          : 'Uploaded a full encrypted checkpoint to your Google Drive.',
+    );
   }
 
   /// Bytes of the log's newest end that go to Drive with each upload.
@@ -588,38 +589,28 @@ class CloudSync extends ChangeNotifier {
   ) async {
     Prefs.setInt(kCloudLastCheckKey, DateTime.now().millisecondsSinceEpoch);
     final folder = await api.find(kDriveFolderName, folder: true);
-    final remote = folder == null ? null : await api.find(kDriveFileName, parent: folder.id);
-    if (remote == null) {
-      return _fail('No Koop copy in this Google Drive yet. Sync the phone with the band first.');
+    if (folder == null) {
+      return _fail(
+        'No Koop copy in this Google Drive yet. Sync the phone with the band first.',
+      );
     }
-    if (!cloudRemoteNewer(remote.modified, Prefs.getString(kCloudRemoteSeenKey, '').ifEmptyNull)) {
-      return const CloudOutcome(true, 'Up to date.');
-    }
-    final tmp = await getTemporaryDirectory();
-    final stamp = DateTime.now().millisecondsSinceEpoch;
-    final enc = File('${tmp.path}/cloud-$stamp.kbak');
-    final plain = File('${tmp.path}/cloud-$stamp.db.gz');
     try {
-      await api.download(remote.id, enc);
-      try {
-        await Isolate.run(() => decryptBackupFile(enc, plain, pass));
-      } catch (_) {
-        return _fail('Could not open the cloud copy. Is the passphrase the same as on the other phone?');
-      }
-      final days = await importBackup(plain.path);
-      Prefs.setString(kCloudRemoteSeenKey, remote.modified.toIso8601String());
-      return CloudOutcome(true, 'Updated from your Google Drive ($days days).');
-    } finally {
-      // The decrypted copy is the whole health record in plaintext.
-      for (final f in [enc, plain]) {
-        try {
-          if (await f.exists()) await f.delete();
-        } catch (_) {}
-      }
+      final received = await (await _transfer(api, pass)).receive(
+        folder.id,
+        Prefs.getString(kCloudRemoteRevisionKey, ''),
+        importBackup,
+      );
+      if (received == null) return const CloudOutcome(true, 'Up to date.');
+      // Advance only after a complete, authenticated reconstruction imports.
+      rememberCloudCopy(received);
+      return CloudOutcome(
+        true,
+        'Updated from your Google Drive (${received.days} days).',
+      );
+    } on BackupFormatException {
+      return _fail(
+        'Could not open the cloud copy. Is the passphrase the same as on the other phone?',
+      );
     }
   }
-}
-
-extension on String {
-  String? get ifEmptyNull => isEmpty ? null : this;
 }

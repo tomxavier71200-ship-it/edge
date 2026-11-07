@@ -226,7 +226,7 @@ class _DataScreenState extends State<DataScreen> {
                   : () => cs.setRole(send ? CloudRole.receive : CloudRole.send)),
         if (send)
           SetRow(LucideIcons.wifi, C.purple, 'Upload on Wi-Fi only',
-              sub: 'Each upload is a full copy of your data',
+              sub: 'Changes sync between full encrypted daily checkpoints',
               value: cs.wifiOnly ? 'On' : 'Off',
               onTap: () => cs.setWifiOnly(!cs.wifiOnly)),
         SetRow(LucideIcons.clock, C.n500, send ? 'Last upload' : 'Last update',

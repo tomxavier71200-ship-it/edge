@@ -1,6 +1,31 @@
 # Koop development status
 
-Updated 2026-11-06. Read this with `AGENTS.md`, then only the files relevant to the task.
+Updated 2026-11-07. Read this with `AGENTS.md`, then only the files relevant to the task.
+
+## Local incremental cloud follow-up — not pushed
+
+Baseline `cc0e1c9d` is published as iPhone 0.10.84 (84); its full test workflow
+and iPhone artifact/SideStore manifest were verified. Earlier local UI notes
+below describe work that is now in build 84.
+
+The current follow-up integrates the existing snapshot-delta prototype with
+phone sending/receiving and the web dashboard. Full encrypted checkpoints remain
+restorable; cumulative changes avoid chains of missed updates, and readers use
+an encrypted checkpoint cache. Reconstruction occurs before the existing guarded
+backup merge. Timestamp display, failed/replayed transfers and manual edits are
+covered by focused checks. See `CLOUD_SYNC_PROTOCOL.md` for compatibility,
+measurement, rollout and device-validation limits.
+
+This reduces transfer payloads, not all local preparation: a controlled retained
+checkpoint edit produced a 10,013-byte gzip patch versus a 56,118,885-byte full
+gzip. SQL.js cross-runtime reconstruction and source preservation passed. These
+are Windows fixture results, not actual iPhone performance.
+
+A new sleep-timing complaint remains unverified pending fresh recordings from
+the primary iPhone. The available local diagnostics predate that night. Browser
+control was stopped with Escape after reading the displayed result; no further
+computer input was issued. Personal times are kept outside tracked documentation.
+No sleep formula or algorithm version has been changed for this complaint.
 
 ## Local Apple design audit follow-up (not pushed)
 
