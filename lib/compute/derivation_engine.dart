@@ -1920,7 +1920,10 @@ import 'workout_autolog.dart' show kAutoLogWorkoutsKey;
 // sleep opportunity spans a noisy gravity-delta interruption (analytics 656e280).
 // Keep the exact nightly sleep performance through the cross-day rollup instead
 // of overwriting it using rounded duration and a newly calculated consistency.
-const int kAlgoVersion = 126;
+// 126 -> 127: compare median HR on both sides of an observed overnight
+// continuation (analytics 41f8d61), avoiding rejection from transient pulse
+// elevations against a median baseline. Existing signal/awake guards remain.
+const int kAlgoVersion = 127;
 
 /// How far back a measured nocturnal resting HR may anchor a day's strain
 /// when that day's own night was not recorded.
@@ -2096,7 +2099,7 @@ const int kStrainRhrCarryDays = 7;
 //
 // Koop analytics @ 610e56f — workout boundary refinement described in the
 // v116 changelog above. Must match pubspec.yaml exactly.
-const String kAnalyticsPin = '656e280fd3c22f788e51d603687bcf40d0c7c41d';
+const String kAnalyticsPin = '41f8d6134d6ed08abdb4e520c83d98fd930c45fd';
 // Repinned to analytics main's tip, which carries BOTH PR #72 (hrv_freq
 // Welch gap guard) and PR #73 (overreachingConjunction rhr quantum guard) —
 // the two independent kAlgoVersion bumps above (93 and 94). Verified both

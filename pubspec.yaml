@@ -510,7 +510,7 @@ dependencies:
       # The ten-minute minimum retains longer supported activity windows.
       # Fragmented main sleep is staged over its full selected window; observed
       # gaps are scored from their readings instead of assumed awake.
-      ref: 656e280fd3c22f788e51d603687bcf40d0c7c41d
+      ref: 41f8d6134d6ed08abdb4e520c83d98fd930c45fd
 
   # BLE — flutter_blue_plus is the maintained cross-platform GATT client.
   flutter_blue_plus: ^1.36.8

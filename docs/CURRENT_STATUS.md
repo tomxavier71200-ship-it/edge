@@ -2,6 +2,24 @@
 
 Updated 2026-11-08. Read this with `AGENTS.md`, then only the files relevant to the task.
 
+## Sleep-only continuation correction — algorithm 127
+
+Verified iPhone baseline: 0.10.87, app commit `263db909`; all three workflows
+passed and the IPA/SideStore manifests matched. Private Drive report access and
+hourly input downloads have now been verified without manual data uploads.
+
+Algorithm 127 pins analytics `41f8d6134d6ed08abdb4e520c83d98fd930c45fd`.
+The long-gap continuation gate now compares median HR to a median baseline,
+so transient elevations do not discard an otherwise supported fragmented night.
+Signal coverage, arm-angle opportunity, overnight timing, duration cap and
+sustained-wake guards remain. No staging formulas, UI or sync behavior changed.
+Validation: 72 focused analytics checks passed (one optional fixture skipped),
+two real recording window replays passed, and scoped analysis is clean. The new
+night becomes present; the previously corrected night's boundaries are retained.
+Personal inputs and reference times remain outside Git. The existing upgrade
+scheduler recalculates retained inputs and preserves explicit manual windows.
+The owner approved publishing this sleep-only correction.
+
 ## Published baseline and private diagnostic follow-up
 
 App commit `f508908b` and analytics `656e280` were published as iPhone 0.10.85
