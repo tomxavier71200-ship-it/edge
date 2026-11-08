@@ -65,6 +65,11 @@ and verifies the original file is unchanged. One Windows debug fixture produced
 48 parts totalling 5,605,717 gzip bytes in 1,818 ms. This measures local fixture
 generation, not phone performance, Google transfer time or detection accuracy.
 
+Worker encoding uses top-level callbacks with plain report data. A regression
+attaches active UI listeners and an unsendable consent-callback context: the
+original worker closure failed this check, and the explicit callback passes.
+Build 86 was stopped before publication when this check exposed the problem.
+
 Real iPhone upload, connector access, background suspension and runtime cost
 remain to be verified after installation and the owner's consent. This feature
 does not fix a new sleep recording until that recording has been inspected.

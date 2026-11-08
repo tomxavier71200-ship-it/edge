@@ -16,7 +16,7 @@ independent of encrypted backups and their completion state. It remains off unti
 explicit in-app consent. No Google files have been created during development.
 See `PRIVATE_DRIVE_DIAGNOSTICS.md` for access, data, retry and verification limits.
 
-Validation: 47 focused checks passed, including a read-only retained-recording
+Validation: 48 focused checks passed, including a read-only retained-recording
 replay; eleven-file scoped analysis is clean. The owner chose the private readable
 report and will use the same Google account in Koop and the connected chat.
 Real iPhone upload and connector readback still need installation and a one-time
@@ -25,7 +25,13 @@ report link before end-to-end access can be claimed.
 A new sleep complaint has reference times but still needs its actual recording
 before any detector change. Available retained exports predate that night. Current
 Drive searches found no Koop files. No physiology, schema or dependency pin has
-changed in this follow-up. Nothing in this follow-up has been pushed.
+changed in this follow-up. Diagnostic source `b2b37185` was pushed with approval,
+but build 86 and its simulator job were deliberately cancelled before SideStore
+publication. An additional active-listener regression exposed worker-closure
+capture of unsendable UI state. Top-level compute callbacks now pass only plain
+report data to the worker; the failure was reproduced before the change and the
+regression passes afterward. This small runtime correction is local and needs
+push approval. SideStore remains on verified build 85.
 
 ## Local sleep continuation and score consistency — not pushed
 

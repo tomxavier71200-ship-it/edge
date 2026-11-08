@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/cloud/diagnostic_share.dart';
@@ -193,6 +194,22 @@ void main() {
       );
   Future<void> enable() async =>
       expect(await sharing.setEnabled(account, true), isTrue);
+
+  test(
+    'publishing with active UI listeners does not capture the UI into an isolate',
+    () async {
+      final port = ReceivePort();
+      addTearDown(port.close);
+      void listener() {
+        port.hashCode;
+      }
+
+      sharing.addListener(listener);
+      addTearDown(() => sharing.removeListener(listener));
+      await enable();
+      expect(await publish(allowed: () => port.hashCode != 0), isTrue);
+    },
+  );
 
   test('recorded transfer timings omit credentials and remote identity', () {
     rememberCloudCopy(

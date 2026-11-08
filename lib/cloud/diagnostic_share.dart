@@ -4,7 +4,6 @@
 // database again, and a failed upload never invalidates the previous index.
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -72,6 +71,19 @@ Object? _json(String? text) {
   } catch (_) {
     return null;
   }
+}
+
+// Top-level callbacks keep UI listeners, consent closures, database handles and
+// HTTP clients out of worker messages. A closure inside publish can capture
+// their shared lexical context even when it only mentions the summary.
+String _encodeDiagnosticIndex(Map<String, Object?> summary) =>
+    jsonEncode(summary);
+
+({List<int> bytes, String digest}) _compressDiagnosticHour(
+  Map<String, Object?> payload,
+) {
+  final plain = utf8.encode(jsonEncode(payload));
+  return (bytes: gzip.encode(plain), digest: sha256.convert(plain).toString());
 }
 
 /// Narrow allow-list: no account address, device identifiers, credentials,
@@ -212,14 +224,7 @@ Future<({List<int> bytes, String digest})?> buildDiagnosticHour(
         [for (final c in diagnosticBeatColumns) _finite(r[c])],
     ],
   };
-  return Isolate.run(() {
-    // Hash the content, not gzip headers that can vary between runtimes.
-    final plain = utf8.encode(jsonEncode(payload));
-    return (
-      bytes: gzip.encode(plain),
-      digest: sha256.convert(plain).toString(),
-    );
-  });
+  return compute(_compressDiagnosticHour, payload);
 }
 
 class DiagnosticShare extends ChangeNotifier {
@@ -351,7 +356,7 @@ class DiagnosticShare extends ChangeNotifier {
       // complete new set, even if a request or the process stops mid-transfer.
       summary['recordings'] = recordings;
       final index = File('${work.path}/report.json');
-      final text = await Isolate.run(() => jsonEncode(summary));
+      final text = await compute(_encodeDiagnosticIndex, summary);
       await index.writeAsString(text);
       final prior = existing[kDiagnosticReportName];
       check();
