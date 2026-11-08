@@ -170,13 +170,68 @@ class DriveApi {
     return (jsonDecode(r.body) as Map)['id'] as String;
   }
 
+  /// A private child folder. Inherits the parent's existing permissions; this
+  /// does not create links, change sharing, or request broader Drive access.
+  Future<String> childFolder(String name, String parent) async {
+    final found = await find(name, parent: parent, folder: true);
+    if (found != null) return found.id;
+    final r = await _c.post(Uri.parse('$_api?fields=id'),
+        headers: {..._auth, 'Content-Type': 'application/json'},
+        body: jsonEncode({'name': name, 'mimeType': _folderMime, 'parents': [parent]}))
+        .timeout(kDriveCallTimeout);
+    _check(r, r.body);
+    return (jsonDecode(r.body) as Map)['id'] as String;
+  }
+
+  /// Readable diagnostics must not inherit public/team sharing from a folder
+  /// the owner previously shared for encrypted backups. Never change its ACL.
+  Future<bool> isOwnerOnly(String id) async {
+    final uri = Uri.parse('$_api/$id').replace(queryParameters: {
+      'fields': 'ownedByMe,shared,permissions(type,role)',
+    });
+    final r = await _c.get(uri, headers: _auth).timeout(kDriveCallTimeout);
+    _check(r, r.body);
+    final f = jsonDecode(r.body) as Map;
+    final permissions = f['permissions'];
+    return f['ownedByMe'] == true && f['shared'] != true &&
+        permissions is List && permissions.isNotEmpty &&
+        permissions.every((p) => p['type'] == 'user' && p['role'] == 'owner');
+  }
+
+  /// Only this app's explicitly tagged diagnostic files, never arbitrary files
+  /// placed in the folder. Complete pagination is required before cleanup.
+  Future<Map<String, DriveFile>> diagnosticFiles(String parent) async {
+    final out = <String, DriveFile>{};
+    String? page;
+    do {
+      final uri = Uri.parse(_api).replace(queryParameters: {
+        'q': "'$parent' in parents and trashed = false and "
+            "appProperties has { key='koop_support' and value='v1' }",
+        'fields': 'nextPageToken,files(id,name,modifiedTime,size)',
+        'pageSize': '1000', 'orderBy': 'modifiedTime desc',
+        'pageToken': ?page,
+      });
+      final r = await _c.get(uri, headers: _auth).timeout(kDriveCallTimeout);
+      _check(r, r.body);
+      final body = jsonDecode(r.body) as Map;
+      for (final f in (body['files'] as List? ?? const [])) {
+        out.putIfAbsent(f['name'] as String, () => DriveFile(f['id'] as String,
+            DateTime.parse(f['modifiedTime'] as String), int.tryParse('${f['size']}')));
+      }
+      page = body['nextPageToken'] as String?;
+    } while (page != null);
+    return out;
+  }
+
   /// Upload [src] as [kDriveFileName] in [parent], REPLACING the existing copy
   /// when there is one ([existingId]) — so the folder holds one backup, not a
   /// pile. Resumable protocol: a session is opened with the metadata, then the
   /// bytes are STREAMED from disk in one PUT. The file is the whole database;
   /// it is never read into memory.
   Future<DriveFile> upload(File src, String parent,
-      {String? existingId, String name = kDriveFileName}) async {
+      {String? existingId, String name = kDriveFileName,
+      String contentType = 'application/octet-stream',
+      Map<String, String>? appProperties}) async {
     final len = await src.length();
     final start = existingId == null
         ? http.Request('POST', Uri.parse('$_upload?uploadType=resumable&fields=id,modifiedTime,size'))
@@ -184,11 +239,13 @@ class DriveApi {
     start.headers.addAll({
       ..._auth,
       'Content-Type': 'application/json; charset=UTF-8',
-      'X-Upload-Content-Type': 'application/octet-stream',
+      'X-Upload-Content-Type': contentType,
       'X-Upload-Content-Length': '$len',
     });
     start.body = jsonEncode({
       'name': name,
+      'mimeType': contentType,
+      'appProperties': ?appProperties,
       if (existingId == null) 'parents': [parent],
     });
     final opened = await _c.send(start)

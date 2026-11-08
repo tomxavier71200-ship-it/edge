@@ -1,6 +1,31 @@
 # Koop development status
 
-Updated 2026-11-07. Read this with `AGENTS.md`, then only the files relevant to the task.
+Updated 2026-11-08. Read this with `AGENTS.md`, then only the files relevant to the task.
+
+## Published baseline and private diagnostic follow-up
+
+App commit `f508908b` and analytics `656e280` were published as iPhone 0.10.85
+(build 85). All four workflows passed: tests, iPhone build, simulator build and
+web deployment. The published IPA, workflow artifact and both SideStore manifests
+matched; the widget was present. Web files matched the approved commit. The older
+"local/not pushed" sections below describe work now published in build 85.
+
+The current local follow-up adds optional account-bound readable private Drive
+diagnostics. It includes a compact report and immutable hourly replay recordings,
+independent of encrypted backups and their completion state. It remains off until
+explicit in-app consent. No Google files have been created during development.
+See `PRIVATE_DRIVE_DIAGNOSTICS.md` for access, data, retry and verification limits.
+
+Validation: 47 focused checks passed, including a read-only retained-recording
+replay; eleven-file scoped analysis is clean. The owner chose the private readable
+report and will use the same Google account in Koop and the connected chat.
+Real iPhone upload and connector readback still need installation and a one-time
+report link before end-to-end access can be claimed.
+
+A new sleep complaint has reference times but still needs its actual recording
+before any detector change. Available retained exports predate that night. Current
+Drive searches found no Koop files. No physiology, schema or dependency pin has
+changed in this follow-up. Nothing in this follow-up has been pushed.
 
 ## Local sleep continuation and score consistency — not pushed
 

@@ -17,6 +17,7 @@ import 'dart:isolate';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -26,6 +27,7 @@ import '../../data/csv_export.dart';
 import '../../data/db.dart';
 import '../../import/backup_crypto.dart';
 import '../../cloud/cloud_sync.dart';
+import '../../cloud/diagnostic_share.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../activity/share.dart' show shareOrigin;
@@ -40,6 +42,7 @@ import '../screens/home_screen.dart' show dbRebuiltCard;
 import '../ui2.dart';
 import 'phone_import.dart';
 import 'profile.dart';
+import 'diagnostic_consent.dart';
 
 /// What an action has to say for itself: the line to show, and whether it is a
 /// failure. Without the second half every outcome rendered as "Done ✓".
@@ -153,7 +156,24 @@ class _DataScreenState extends State<DataScreen> {
   Future<_Note> _cloudNow(AppState app) async {
     final o = await CloudSync.instance
         .run(app.importEdgeBackup, importWhoop: app.importWhoopCsvs);
+    if (o.ok) unawaited(CloudSync.instance.syncDiagnostics());
     return (o.message, !o.ok);
+  }
+
+  Future<_Note> _diagnosticAccess() async {
+    final cs = CloudSync.instance;
+    final share = DiagnosticShare.instance;
+    final account = cs.email;
+    if (account == null) return ('Sign in with Google first.', true);
+    final enable = !share.enabledFor(account);
+    if (enable && !await askDiagnosticConsent(context)) return ('Diagnostics remain off.', false);
+    if (cs.email != account) return ('Google account changed. Choose again.', true);
+    if (!await share.setEnabled(account, enable)) {
+      return (share.lastError ?? 'Could not save your choice.', true);
+    }
+    if (!enable) return ('Diagnostic updates stopped. Existing copies remain in your Drive.', false);
+    final result = await cs.syncDiagnostics(interactive: true, force: true);
+    return (result.message, !result.ok);
   }
 
   /// A new passphrase. On the sending phone the Drive copy is re-uploaded
@@ -197,11 +217,15 @@ class _DataScreenState extends State<DataScreen> {
       ]);
     }
     return ListenableBuilder(
-      listenable: cs,
+      listenable: Listenable.merge([cs, DiagnosticShare.instance]),
       builder: (c, _) {
         // Read inside the builder so a role pick redraws the group.
         final send = cs.role == CloudRole.send;
         final last = send ? cs.lastUp : cs.remoteSeen;
+        final diagnostics = DiagnosticShare.instance;
+        final diagnosticOn = diagnostics.enabledFor(cs.email);
+        final diagnosticAt = diagnostics.lastSuccess(cs.email);
+        final reportUrl = diagnostics.reportUrl(cs.email);
         return settingsGroup(c, title, [
         SetRow(LucideIcons.user, C.blue, 'Google account',
             value: cs.email ?? '—', chevron: false),
@@ -235,6 +259,31 @@ class _DataScreenState extends State<DataScreen> {
             chevron: false),
         SetRow(LucideIcons.refreshCw, C.green, 'Sync now',
             onTap: _busy || cs.busy ? null : () => _run(() => _cloudNow(app))),
+        if (send) ...[
+          SetRow(LucideIcons.stethoscope, C.teal, 'Private diagnostics',
+              sub: 'Readable health report in your Drive. Encrypted backups stay protected',
+              value: diagnosticOn ? 'On' : 'Off',
+              onTap: _busy || cs.busy ? null : () => _run(_diagnosticAccess)),
+          if (diagnosticOn) ...[
+            SetRow(LucideIcons.clock, C.n500, 'Diagnostic report',
+                sub: diagnostics.busy
+                    ? 'Preparing recordings: ${diagnostics.completedHours}/$kDiagnosticHours hours'
+                    : (diagnostics.lastError ?? 'Updates after sync while Koop is open'),
+                value: diagnosticAt == null ? 'Not sent yet' : _stamp(diagnosticAt),
+                chevron: false),
+            SetRow(LucideIcons.refreshCw, C.green, 'Refresh diagnostics',
+                onTap: _busy || cs.busy || diagnostics.busy ? null : () => _run(() async {
+                  final result = await cs.syncDiagnostics(interactive: true, force: true);
+                  return (result.message, !result.ok);
+                })),
+            SetRow(LucideIcons.copy, C.blue, 'Copy diagnostics link',
+                sub: 'Paste once into your chat using the same Google account',
+                onTap: reportUrl == null ? null : () => _run(() async {
+                  await Clipboard.setData(ClipboardData(text: reportUrl));
+                  return ('Private report link copied. It does not make your data public.', false);
+                })),
+          ],
+        ],
         SetRow(LucideIcons.keyRound, C.orange, 'Change passphrase',
             sub: 'The cloud copy is locked with it',
             onTap: _busy || cs.busy ? null : () => _run(() => _cloudPass(app))),

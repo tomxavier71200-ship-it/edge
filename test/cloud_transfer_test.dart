@@ -31,6 +31,8 @@ class _Drive extends DriveApi {
     String parent, {
     String? existingId,
     String name = kDriveFileName,
+    String contentType = 'application/octet-stream',
+    Map<String, String>? appProperties,
   }) async {
     if (failUpload) throw const SocketException('interrupted transfer');
     clock = clock.add(const Duration(seconds: 1));

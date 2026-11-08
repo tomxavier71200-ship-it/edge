@@ -30,13 +30,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../data/db.dart';
+import '../compute/derivation_engine.dart' show kAlgoVersion, kAnalyticsPin, kProtocolPin;
 import '../import/backup_crypto.dart';
 import '../state/prefs.dart';
 import '../sync/file_log.dart';
 import 'drive_api.dart';
 import 'cloud_transfer.dart';
+import 'diagnostic_share.dart';
 
 /// OAuth client ids from the Google Cloud project. Empty means Koop Cloud is
 /// not set up in this build, and the screen says exactly that instead of
@@ -71,6 +74,7 @@ const kCloudLastUpKey = 'cloud.last_up'; // epoch ms, our clock
 const kCloudLastCheckKey = 'cloud.last_check'; // epoch ms, our clock
 const kCloudRemoteSeenKey = 'cloud.remote_seen'; // Drive modifiedTime, ISO
 const kCloudRemoteRevisionKey = 'cloud.remote_revision'; // full/delta identity
+const kCloudTransferMetricsKey = 'cloud.last_transfer_metrics';
 const _kPassKey = 'cloud.passphrase';
 
 /// Call only after a successful upload/import. Keep the user-facing timestamp
@@ -78,6 +82,10 @@ const _kPassKey = 'cloud.passphrase';
 void rememberCloudCopy(CloudTransferResult copy) {
   Prefs.setString(kCloudRemoteSeenKey, copy.remote.modified.toIso8601String());
   Prefs.setString(kCloudRemoteRevisionKey, copy.revision);
+  Prefs.setString(kCloudTransferMetricsKey, jsonEncode({
+    'mode': copy.mode, 'bytes': copy.bytes, 'snapshot_ms': copy.snapshotMs,
+    'prepare_ms': copy.prepareMs, 'upload_ms': copy.uploadMs,
+  }));
 }
 
 /// The sending phone uploads changes as soon as a band sync
@@ -293,10 +301,15 @@ class CloudSync extends ChangeNotifier {
     final check = r == CloudRole.send &&
         importWhoop != null &&
         cloudDue(CloudRole.receive, now, lastCheck: lastCheck);
-    if (!due && !check) return;
+    if (!due && !check) {
+      // Foreground-only optional diagnostics retries independently of backups.
+      unawaited(syncDiagnostics());
+      return;
+    }
     try {
       final outcome = await run(importBackup,
           importWhoop: importWhoop, interactive: false, upload: due);
+      if (outcome.ok) unawaited(syncDiagnostics());
       if (retryTransient && outcome.retryable) {
         _retry ??= Timer(kCloudCheckEvery + const Duration(seconds: 1), () {
           _retry = null;
@@ -306,6 +319,62 @@ class CloudSync extends ChangeNotifier {
       }
     } catch (_) {
       // `run` records the error for the screen; a resume hook must not throw.
+    }
+  }
+
+  /// Optional readable diagnostics use their own client and progress, after the
+  /// primary encrypted transfer. They cannot hold Home's cloud sync busy flag.
+  /// This hook is foreground-only; iOS may suspend a transfer when Koop closes.
+  Future<CloudOutcome> syncDiagnostics({bool interactive = false, bool force = false}) async {
+    final share = DiagnosticShare.instance;
+    final account = email;
+    bool allowed() => on && role == CloudRole.send && email == account &&
+        share.enabledFor(account);
+    if (account == null || !allowed()) {
+      return const CloudOutcome(false, 'Private diagnostics are off for this account.');
+    }
+    if (_busy || share.busy) return const CloudOutcome(false, 'A transfer is already running.');
+    final now = DateTime.now();
+    final last = share.lastSuccess(account);
+    if (!force && last != null && now.difference(last) < kDiagnosticInterval) {
+      return const CloudOutcome(true, 'Diagnostics are up to date.');
+    }
+    DriveApi? api;
+    try {
+      if (wifiOnly && !interactive) {
+        final net = await Connectivity().checkConnectivity();
+        if (!net.contains(ConnectivityResult.wifi) && !net.contains(ConnectivityResult.ethernet)) {
+          share.recordFailure('Diagnostics are waiting for Wi-Fi.');
+          return const CloudOutcome(false, 'Diagnostics are waiting for Wi-Fi.');
+        }
+      }
+      final token = await _token(interactive: interactive).timeout(
+          interactive ? const Duration(minutes: 3) : kDriveCallTimeout);
+      if (token == null || !allowed()) {
+        share.recordFailure('Sign in with Google again to update diagnostics.');
+        return const CloudOutcome(false, 'Sign in with Google again to update diagnostics.');
+      }
+      final info = await PackageInfo.fromPlatform();
+      api = DriveApi(token);
+      final ok = await share.publish(api: api, db: await LocalDb.instance,
+          account: account, temporaryDirectory: await getTemporaryDirectory(),
+          canUpload: allowed, now: now, force: force, metadata: {
+            'app_version': info.version, 'build_number': info.buildNumber,
+            'algorithm_version': kAlgoVersion, 'analytics_pin': kAnalyticsPin,
+            'protocol_pin': kProtocolPin, 'cloud_role': role?.name,
+            'cloud_last_upload_ms': lastUp?.millisecondsSinceEpoch,
+            'cloud_has_error': lastError != null, 'cloud_dirty': dirty,
+            'cloud_last_check_ms': lastCheck?.millisecondsSinceEpoch,
+            'last_cloud_transfer': jsonDecode(Prefs.getString(kCloudTransferMetricsKey, '{}')),
+          });
+      return CloudOutcome(ok, ok ? 'Private diagnostics updated in your Google Drive.'
+          : (share.lastError ?? 'Diagnostics could not be updated.'));
+    } catch (_) {
+      share.recordFailure('Diagnostics could not be updated. Retry diagnostics; '
+          'your encrypted backup is unaffected.');
+      return CloudOutcome(false, share.lastError!);
+    } finally {
+      api?.close();
     }
   }
 

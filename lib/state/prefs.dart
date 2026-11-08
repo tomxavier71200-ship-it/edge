@@ -82,6 +82,15 @@ class Prefs {
     }
   }
 
+  /// Atomic account-bound consent token, with durable-write acknowledgement.
+  static Future<bool> setStringAcked(String key, String value) async {
+    try {
+      return await _sp?.setString(key, value) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ── selection keys (one namespace; keep them disjoint) ──────────────────────
   static const String shellTab = 'ui.shell_tab';
 

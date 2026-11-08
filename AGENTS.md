@@ -9,6 +9,16 @@ Label Android-only checks separately; they do not verify iPhone behavior. Do
 not treat the reference Android's unpaired band or older received data as the
 state of the owner's primary iPhone. Preserve data and ask before every push.
 
+For fresh sleep/workout investigations, first check the owner's connected Google
+Drive for `koop-diagnostics-latest.json` (opt-in, readable private diagnostics).
+Use the same Google account as Koop, or the owner's one-time report link. Verify
+the report date, installed build and latest saved band timestamp before using it.
+The index references gzip JSON hourly replay inputs; fetch only relevant hours,
+verify the uncompressed SHA-256 and preserve null/invalid samples and beat times.
+Do not assume access, ask for a backup passphrase, or make files public. See
+`docs/PRIVATE_DRIVE_DIAGNOSTICS.md`. Missing access or stale data is not evidence
+of a detection defect. Store personal reports/replays outside Git.
+
 Read `docs/CURRENT_STATUS.md` next, then inspect only the source and supporting
 docs relevant to the requested change. Protect existing uncommitted work. Use
 focused searches/diffs, reuse existing components, and run targeted regressions
